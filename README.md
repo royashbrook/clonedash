@@ -12,7 +12,7 @@ Editor: choose Blocks, Spikes, or Portals, tap the grid to place. SELECT picks a
 
 Node 22+. `npm ci`, `npm test`, `npm run build`, `npm run dev` (localhost:4191).
 `npx playwright install chromium`, then `npm run test:browser`.
-`npm run deploy` uses Cloudflare Workers static assets. CI checks physics and all seven completion witnesses before publishing. Configure the repository's `CLOUDFLARE_API_TOKEN` secret for automated deploys.
+`npm run deploy` uses Cloudflare Workers static assets. Automatic deployment uses the configured `CLOUDFLARE_API_TOKEN` repository secret, only after main-branch physics and browser checks pass, and publishes that exact tested commit. Pull-request runs cannot deploy; superseded commits are refused. Manual deployment is main-only and repeats the checks.
 
 No runtime dependencies. Engine uses 120 Hz fixed steps in block units. Speed 2.5 blocks/sec, gravity 16 blocks/sec² and jump speed 8 blocks/sec give a two-block apex. Transformed polygons are shared by rendering and collision. Build IDs come from asset content, not a manually bumped version constant. Service worker uses network-first fetches with offline fallback and a live-shell update toast.
 
