@@ -10,7 +10,7 @@ Editor: choose Blocks, Spikes, or Portals, tap the grid to place. SELECT picks a
 
 ## Develop
 
-Node 22+. `npm ci`, `npm test`, `npm run build`, `npm run dev` (localhost:4190).
+Node 22+. `npm ci`, `npm test`, `npm run build`, `npm run dev` (localhost:4191).
 `npx playwright install chromium`, then `npm run test:browser`.
 `npm run deploy` uses Cloudflare Workers static assets. CI checks physics and all seven completion witnesses before publishing. Configure the repository's `CLOUDFLARE_API_TOKEN` secret for automated deploys.
 
