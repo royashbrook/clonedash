@@ -77,8 +77,11 @@ test('offline shell reopens and served-shell update appears without restarting',
 test('sound on starts actual menu music; seven original tracks have audible, distinct PCM', async ({ page }) => {
   await page.addInitScript(() => {
     window.audioStarts = [];
+    window.audioStops = 0;
     const original = AudioBufferSourceNode.prototype.start;
+    const originalStop = AudioBufferSourceNode.prototype.stop;
     AudioBufferSourceNode.prototype.start = function (...args) { if (this.buffer && this.loop) window.audioStarts.push({ duration: this.buffer.duration, length: this.buffer.length }); return original.apply(this, args); };
+    AudioBufferSourceNode.prototype.stop = function (...args) { if (this.buffer && this.loop) window.audioStops++; return originalStop.apply(this, args); };
   });
   await page.goto('/'); await page.getByRole('button', { name: 'Turn sound on', exact: true }).click();
   await expect.poll(() => page.evaluate(() => window.audioStarts.length)).toBeGreaterThan(0);
@@ -93,5 +96,29 @@ test('sound on starts actual menu music; seven original tracks have audible, dis
   });
   for (const t of result) { expect(t.duration).toBeCloseTo(25.6, 2); expect(t.rms).toBeGreaterThan(.03); expect(t.peak).toBeLessThan(1); }
   expect(new Set(result.map(t => t.signature)).size).toBe(7);
+  const stoppedBefore = await page.evaluate(() => window.audioStops);
+  await page.evaluate(() => { Object.defineProperty(document, 'hidden', { configurable: true, value: true }); document.dispatchEvent(new Event('visibilitychange')); });
+  expect(await page.evaluate(() => window.audioStops)).toBeGreaterThan(stoppedBefore);
+  await page.evaluate(() => { Object.defineProperty(document, 'hidden', { configurable: true, value: false }); document.dispatchEvent(new Event('visibilitychange')); });
   await page.getByRole('button', { name: 'Turn sound off', exact: true }).click();
+});
+test('touch anywhere triggers jump input and releases cleanly', async ({ browser }) => {
+  const context = await browser.newContext({ viewport: { width: 932, height: 430 }, hasTouch: true });
+  await context.addInitScript(() => {
+    window.playerPaintY = [];
+    const fill = CanvasRenderingContext2D.prototype.fillRect;
+    CanvasRenderingContext2D.prototype.fillRect = function (x, y, w, h) {
+      if (this.fillStyle === '#9aff6b' && w === h && w > 20 && w < 60) window.playerPaintY.push(this.getTransform().f);
+      return fill.call(this, x, y, w, h);
+    };
+  });
+  const page = await context.newPage(); await page.goto(process.env.GAME_URL || 'http://127.0.0.1:4190');
+  await page.getByRole('button', { name: 'Play First Spark', exact: true }).click();
+  await page.waitForTimeout(500); await expect(page.locator('#cue')).toBeVisible();
+  const ground = await page.evaluate(() => { const y = window.playerPaintY.at(-1); window.playerPaintY = []; return y; });
+  await page.touchscreen.tap(730, 220); await expect(page.locator('#cue')).toBeHidden();
+  await page.waitForTimeout(180); await page.screenshot({ path: 'test-results/touch-jump.png' });
+  expect(await page.evaluate(() => Math.min(...window.playerPaintY))).toBeLessThan(ground - 15);
+  await page.getByRole('button', { name: 'Pause', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Paused' })).toBeVisible(); await context.close();
 });

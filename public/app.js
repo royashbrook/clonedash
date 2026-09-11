@@ -25,7 +25,7 @@ function persist() {
 }
 let toastTimer;
 function toast(message) { $('notice').textContent = message; $('notice').hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => $('notice').hidden = true, 4200); }
-let mode = 'home', state, current = 0, custom = false, paused = false, held = false, attempt = 1, deathTime = 0, readyTime = 0, acc = 0, last = 0, camera = 0, view, learned = false;
+let mode = 'home', state, current = 0, custom = false, paused = false, held = false, jumpBuffer = 0, attempt = 1, deathTime = 0, readyTime = 0, acc = 0, last = 0, camera = 0, view, learned = false;
 let draft = structuredClone(save.draft), selected = -1, tool = 'block', tab = 'blocks';
 let audio;
 const music = new Soundtrack();
@@ -63,7 +63,7 @@ function start(index, isCustom = false) {
 }
 function resetRun() {
   music.stop();
-  state = createState(custom ? structuredClone(draft) : LEVELS[current]); deathTime = 0; readyTime = .4; held = false; acc = 0;
+  state = createState(custom ? structuredClone(draft) : LEVELS[current]); deathTime = 0; readyTime = .4; held = false; jumpBuffer = 0; acc = 0;
   $('level-name').textContent = state.level.name; $('attempt').textContent = `TRY ${attempt}`;
 }
 function record() {
@@ -87,7 +87,7 @@ $('sheet-close').onclick = closeSheet;
 $('sheet').addEventListener('cancel', event => { if (mode === 'play') { event.preventDefault(); if (state.status === 'playing') resume(); } });
 function pause() {
   if (mode !== 'play' || state.status === 'complete') return;
-  held = false; paused = true; acc = 0;
+  held = false; jumpBuffer = 0; paused = true; acc = 0; music.stop();
   sheet('Paused', 'Your run is right where you left it.', [['RESUME', resume, true], ['RESTART LEVEL', () => { closeSheet(); attempt++; resetRun(); paused = false; orientation(); }], [custom ? 'BACK TO EDITOR' : 'MAIN MENU', custom ? openEditor : home]], false);
 }
 function resume() { closeSheet(); paused = false; held = false; acc = 0; last = performance.now(); orientation(); }
@@ -95,12 +95,12 @@ $('pause').onclick = pause; $('menu').onclick = pause; $('rotate-menu').onclick 
 function orientation() {
   const narrow = innerHeight > innerWidth && mode !== 'home';
   $('rotate').hidden = !narrow;
-  if (narrow && mode === 'play') { held = false; paused = true; acc = 0; closeSheet(); }
+  if (narrow && mode === 'play') { held = false; paused = true; acc = 0; music.stop(); closeSheet(); }
   else if (mode === 'play' && paused && !$('sheet').open && state?.status === 'playing') pause();
 }
 addEventListener('resize', orientation);
-document.addEventListener('visibilitychange', () => { if (document.hidden) { pause(); held = false; audio?.suspend(); } });
-addEventListener('pagehide', () => { pause(); held = false; });
+document.addEventListener('visibilitychange', () => { if (document.hidden) { pause(); held = false; music.stop(); audio?.suspend(); } });
+addEventListener('pagehide', () => { pause(); held = false; music.stop(); });
 addEventListener('blur', () => { held = false; if (mode === 'play') pause(); });
 function complete() {
   record(); held = false; tone(784, .2); setTimeout(() => tone(1047, .3), 130);
@@ -109,7 +109,7 @@ function complete() {
 }
 function press() {
   if (mode !== 'play' || paused || !$('rotate').hidden || $('sheet').open) return;
-  held = true; learned = true; tone(440, .045, .018);
+  held = true; jumpBuffer = .12; learned = true; tone(440, .045, .018);
 }
 canvas.addEventListener('pointerdown', e => { if (mode === 'editor') { editAt(e); return; } e.preventDefault(); canvas.setPointerCapture(e.pointerId); press(); });
 for (const event of ['pointerup', 'pointercancel', 'lostpointercapture']) canvas.addEventListener(event, () => held = false);
@@ -131,7 +131,12 @@ function frame(now) {
     else if (readyTime > 0) readyTime -= dt;
     else {
       acc += dt;
-      while (acc >= STEP && state.status === 'playing') { step(state, held); acc -= STEP; }
+      while (acc >= STEP && state.status === 'playing') {
+        const grounded = state.grounded;
+        step(state, held || (state.mode === 'square' && jumpBuffer > 0));
+        jumpBuffer = grounded && !state.grounded ? 0 : Math.max(0, jumpBuffer - STEP);
+        acc -= STEP;
+      }
       if (state.status === 'dead') { deathTime = 0; held = false; record(); tone(90, .16); }
       if (state.status === 'complete') complete();
     }
