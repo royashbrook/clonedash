@@ -2,6 +2,18 @@ import { test, expect } from '@playwright/test';
 import http from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { resolve, extname } from 'node:path';
+async function startServer(change = (_file, data) => data) {
+  const types = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.png': 'image/png', '.svg': 'image/svg+xml' };
+  const server = http.createServer(async (req, res) => {
+    try {
+      const path = new URL(req.url, 'http://localhost').pathname, file = resolve('dist', `.${path === '/' ? '/index.html' : path}`);
+      if (!file.startsWith(resolve('dist') + '/')) { res.writeHead(403).end(); return; }
+      const data = change(file, await readFile(file)); res.writeHead(200, { 'content-type': types[extname(file)] || 'application/octet-stream', 'cache-control': 'no-store' }).end(data);
+    } catch { res.writeHead(404).end(); }
+  });
+  await new Promise(r => server.listen(0, '127.0.0.1', r));
+  return { url: `http://127.0.0.1:${server.address().port}/`, close: () => server.listening ? new Promise(r => { server.close(r); server.closeAllConnections(); }) : Promise.resolve() };
+}
 test('home is a seven-trail picker; play fills the screen; pause and rotate preserve progress', async ({ page }) => {
   const errors = []; page.on('pageerror', e => errors.push(e.message));
   await page.goto('/'); await expect(page.locator('.level-card')).toHaveCount(7);
@@ -65,37 +77,31 @@ test('blocked storage and malformed saves do not block play or overwrite the old
   await page.getByRole('button', { name: 'Play First Spark', exact: true }).click(); await expect(page.locator('#hud')).toBeVisible();
   expect(await page.evaluate(() => localStorage.getItem('clonedash.v1'))).toBe('{bad');
 });
-test('served-shell update appears without restarting', async ({ page }) => {
-  await page.goto('/'); await page.evaluate(() => navigator.serviceWorker.ready);
-  await page.reload(); await page.waitForFunction(() => !!navigator.serviceWorker.controller);
-  await page.route('**/*update-probe*', async route => {
-    const res = await route.fetch(); const body = (await res.text()).replace(/name="build" content="[^"]+"/, 'name="build" content="another-build"');
-    await route.fulfill({ response: res, body });
-  });
-  await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
-  await expect(page.locator('#update')).toBeVisible();
+test('served-shell update appears without restarting', async ({ browser }) => {
+  let changed = false;
+  const server = await startServer((file, data) => changed && file.endsWith('/index.html') ? Buffer.from(data.toString().replace(/name="build" content="[^"]+"/, 'name="build" content="another-build"')) : data);
+  const context = await browser.newContext(), page = await context.newPage();
+  try {
+    await page.goto(server.url); await page.evaluate(() => navigator.serviceWorker.ready);
+    await page.reload(); await page.waitForFunction(() => !!navigator.serviceWorker.controller);
+    changed = true;
+    await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+    await expect(page.locator('#update')).toBeVisible();
+  } finally { await context.close(); await server.close(); }
 });
 test('offline shell reopens after the actual server goes away', async ({ browser }) => {
   // WebKit setOffline rejects even a worker returning a constant Response without fetching.
   // Stop our own disposable server instead: real connection refusal, same shipped worker/assets.
-  const types = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.png': 'image/png', '.svg': 'image/svg+xml' };
-  const server = http.createServer(async (req, res) => {
-    try {
-      const path = new URL(req.url, 'http://localhost').pathname, file = resolve('dist', `.${path === '/' ? '/index.html' : path}`);
-      if (!file.startsWith(resolve('dist') + '/')) { res.writeHead(403).end(); return; }
-      const data = await readFile(file); res.writeHead(200, { 'content-type': types[extname(file)] || 'application/octet-stream' }).end(data);
-    } catch { res.writeHead(404).end(); }
-  });
-  await new Promise(r => server.listen(0, '127.0.0.1', r));
+  const server = await startServer();
   const context = await browser.newContext(), page = await context.newPage();
   try {
-    await page.goto(`http://127.0.0.1:${server.address().port}/`); await page.evaluate(() => navigator.serviceWorker.ready);
+    await page.goto(server.url); await page.evaluate(() => navigator.serviceWorker.ready);
     await page.reload(); await page.waitForFunction(() => !!navigator.serviceWorker.controller);
     expect(await page.evaluate(async () => !!(await caches.match('/index.html')))).toBe(true);
-    await new Promise(r => { server.close(r); server.closeAllConnections(); });
+    await server.close();
     await page.reload(); await expect(page.locator('.level-card')).toHaveCount(7);
     await page.getByRole('button', { name: 'Play First Spark', exact: true }).click(); await expect(page.locator('#hud')).toBeVisible();
-  } finally { await context.close(); if (server.listening) await new Promise(r => { server.close(r); server.closeAllConnections(); }); }
+  } finally { await context.close(); await server.close(); }
 });
 test('sound on starts actual menu music; seven original tracks have audible, distinct PCM', async ({ page }) => {
   await page.addInitScript(() => {
