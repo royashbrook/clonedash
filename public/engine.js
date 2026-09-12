@@ -1,12 +1,13 @@
 // Quarter-block clearance makes a two-block ledge landable, not just reachable at one instant.
 export const SPEED = 5, GRAVITY = 16, JUMP = Math.sqrt(2 * GRAVITY * 2.25), SIZE = .64, STEP = 1 / 120;
-export const BLOCKS = ['block', 'grid', 'black'];
-export const SPIKES = ['spike', 'half', 'small'];
-export const PORTALS = ['plane', 'square', 'wheel', 'gravity-up', 'gravity-down'];
+export const BLOCKS = ['block', 'grid', 'black', 'outline'];
+export const SPIKES = ['spike', 'half', 'small', 'quarter'];
+export const PORTALS = ['plane', 'square', 'wheel', 'jumper', 'gravity-up', 'gravity-down'];
 export const TYPES = [...BLOCKS, ...SPIKES, ...PORTALS];
 export function object(type, x, y = 0) { return { type, x, y, rotation: 0, flipX: false, flipY: false }; }
 export function polygon(o) {
-  const portal = PORTALS.includes(o.type), h = portal ? 2.5 : o.type === 'half' ? .5 : o.type === 'small' ? 2 / 3 : 1, w = portal ? .6 : o.type === 'small' ? 2 / 3 : 1;
+  const portal = PORTALS.includes(o.type), scale = o.type === 'small' ? 2 / 3 : o.type === 'quarter' ? .25 : 1;
+  const h = portal ? 2.5 : o.type === 'half' ? .5 : scale, w = portal ? .6 : scale;
   const points = SPIKES.includes(o.type) ? [[0, 0], [w, 0], [w / 2, h]] : [[0, 0], [w, 0], [w, h], [0, h]];
   const a = o.rotation * Math.PI / 180, c = Math.round(Math.cos(a)), s = Math.round(Math.sin(a));
   return points.map(([x, y]) => {
@@ -35,7 +36,7 @@ export function step(s, held, dt = STEP, tapped = held && !s.inputHeld) {
   s.inputHeld = held;
   const oldY = s.y;
   if (s.mode === 'wheel' && s.grounded && tapped) { s.gravity *= -1; s.vy = 0; s.grounded = false; }
-  if (s.mode === 'square' && s.grounded && held) { s.vy = -s.gravity * JUMP; s.grounded = false; }
+  if (((s.mode === 'square' || s.mode === 'jumper') && s.grounded && held) || (s.mode === 'jumper' && tapped)) { s.vy = -s.gravity * JUMP; s.grounded = false; }
   const acceleration = s.mode === 'plane' ? -s.gravity * (held ? 14 : -12) : s.gravity * GRAVITY;
   s.x += SPEED * dt; s.time += dt;
   s.y += s.vy * dt + acceleration * dt * dt / 2;

@@ -22,7 +22,7 @@ test('two-block ledges can be landed on across a useful jump timing window', () 
   }
 });
 test('planes survive solid top, underside and side contact; can climb past walls; spikes still kill', () => {
-  for (const type of ['block', 'grid', 'black']) for (const rotation of [0, 90, 180, 270]) {
+  for (const type of ['block', 'grid', 'black', 'outline']) for (const rotation of [0, 90, 180, 270]) {
     const block = { ...object(type, 5, 2), rotation };
     for (const [y, vy, held] of [[3.01, -2, false], [2 - SIZE - .01, 2, true], [2.1, 0, false]]) {
       const s = { ...createState({ ...empty, objects: [block] }), mode: 'plane', x: y === 2.1 ? 5 - SIZE - .01 : 5, y, vy, grounded: false };
@@ -78,6 +78,7 @@ test('invalid drafts are refused, authored levels validate', () => {
 // This controller supplies only the same held/not-held input as a player. It cannot teleport,
 // change physics or remove objects. Every authored trail must reach its actual finish alive.
 export function inputFor(s) {
+  if (s.mode === 'jumper') return [5.5, 7.5, 16.5, 26].some(x => s.x >= x && s.x < x + SPEED * STEP);
   if (s.mode === 'wheel') return s.grounded && s.gravity < 0 && s.level.objects.some(o => SPIKES.includes(o.type) && o.x - s.x > 1 && o.x - s.x < 2);
   if (s.mode === 'plane') return s.y + s.vy * .3 < 2.55;
   if (!s.grounded) return false;

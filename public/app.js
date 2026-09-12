@@ -132,9 +132,9 @@ function frame(now) {
     else {
       acc += dt;
       while (acc >= STEP && state.status === 'playing') {
-        const grounded = state.grounded, previousMode = state.mode, wheelTap = state.mode === 'wheel' && jumpBuffer > 0;
-        step(state, held || (state.mode === 'square' && jumpBuffer > 0), STEP, wheelTap);
-        jumpBuffer = wheelTap || previousMode !== state.mode || (grounded && !state.grounded) ? 0 : Math.max(0, jumpBuffer - STEP);
+        const grounded = state.grounded, previousMode = state.mode, freshTap = (state.mode === 'wheel' || state.mode === 'jumper') && jumpBuffer > 0;
+        step(state, held || (state.mode === 'square' && jumpBuffer > 0), STEP, freshTap);
+        jumpBuffer = freshTap || previousMode !== state.mode || (grounded && !state.grounded) ? 0 : Math.max(0, jumpBuffer - STEP);
         if (previousMode !== state.mode) { learned = false; cueUntil = state.time + 4; }
         acc -= STEP;
       }
@@ -150,7 +150,7 @@ function frame(now) {
     $('cue').hidden = paused || !$('rotate').hidden || learned || state.time > cueUntil || state.status !== 'playing';
     if (!$('cue').hidden) {
       $('cue').firstChild.textContent = state.mode === 'plane' ? 'HOLD TO FLY ' : state.mode === 'wheel' ? 'TAP TO FLIP GRAVITY ' : 'TAP TO JUMP ';
-      $('cue').querySelector('span').textContent = state.mode === 'plane' ? 'RELEASE TO FALL' : state.mode === 'wheel' ? 'LAND FIRST · THEN TAP' : 'HOLD TO KEEP JUMPING';
+      $('cue').querySelector('span').textContent = state.mode === 'plane' ? 'RELEASE TO FALL' : state.mode === 'wheel' ? 'LAND FIRST · THEN TAP' : state.mode === 'jumper' ? 'TAP AGAIN IN MIDAIR' : 'HOLD TO KEEP JUMPING';
     }
     $('level-name').textContent = `${state.level.name} · ${state.mode.toUpperCase()} ${state.gravity > 0 ? '↑' : '↓'}`;
   }
@@ -174,7 +174,7 @@ $('level-length').onchange = () => {
 };
 $('test-level').onclick = () => { if (!draft.objects.length) toast('An empty trail is fine. Add some jumps when you come back.'); start(0, true); };
 function palette() {
-  const choices = { blocks: [['block', '■ SOLID'], ['grid', '▦ GRID'], ['black', '■ BLACK']], spikes: [['spike', '▲ FULL'], ['half', '▴ HALF'], ['small', '▴ ⅔ SIZE']], portals: [['plane', '▷ PLANE'], ['square', '□ SQUARE'], ['wheel', '⊙ WHEEL']], gravity: [['gravity-up', '↑ UPSIDE DOWN'], ['gravity-down', '↓ NORMAL']] }[tab];
+  const choices = { blocks: [['block', '■ SOLID'], ['grid', '▦ GRID'], ['black', '■ BLACK'], ['outline', '□ OUTLINE']], spikes: [['spike', '▲ FULL'], ['half', '▴ HALF'], ['small', '▴ ⅔ SIZE'], ['quarter', '▴ ¼ SIZE']], portals: [['plane', '▷ PLANE'], ['square', '□ SQUARE'], ['wheel', '⊙ WHEEL'], ['jumper', '⇈ JUMPER']], gravity: [['gravity-up', '↑ UPSIDE DOWN'], ['gravity-down', '↓ NORMAL']] }[tab];
   $('palette').replaceChildren(...choices.map(([type, name]) => { const b = document.createElement('button'); b.textContent = name; b.setAttribute('aria-pressed', String(tool === type)); b.onclick = () => { tool = type; palette(); updateSelection(); }; return b; }));
   $('select-tool').setAttribute('aria-pressed', String(tool === 'select'));
   for (const b of document.querySelectorAll('[data-tab]')) b.setAttribute('aria-selected', String(b.dataset.tab === tab));
@@ -211,9 +211,9 @@ function adjust(action) {
 for (const b of document.querySelectorAll('[data-action]')) b.onclick = () => adjust(b.dataset.action);
 function deleteSelected() { if (selected < 0) return; draft.objects.splice(selected, 1); selected = -1; saveDraft(); }
 $('delete-object').onclick = deleteSelected;
-$('how').onclick = () => sheet('One button. Find your flow.', 'Square: tap or press Space to jump onto two-block ledges. Hold for another jump when you land. Plane: hold to fly against gravity; release to fall. Blocks are safe while flying. Wheel: land on a block, floor or ceiling, then tap or press Space to flip gravity. Midair taps are ignored; holding does not flip again when you land. UP and DOWN portals set gravity without changing your shape. Under upside-down gravity, land and jump on ceilings. All spikes kill; block sides stop planes but end square and wheel runs. Try Gravity Flip for the new mode, or build with it in the editor.');
+$('how').onclick = () => sheet('One button. Find your flow.', 'Square: tap or press Space to jump onto two-block ledges. Hold for another jump when you land. Jumper: same as square, but every fresh tap lets you jump again in midair. Try Air Steps! Plane: hold to fly against gravity; release to fall. Blocks are safe while flying. Wheel: land on a block, floor or ceiling, then tap or press Space to flip gravity. Midair taps are ignored; holding does not flip again when you land. UP and DOWN portals set gravity without changing your shape. Under upside-down gravity, land and jump on ceilings. All spikes kill, including the tiny quarter-size ones. Outline blocks are transparent but solid. Block sides stop planes but end other runs. Try Gravity Flip for wheel mode, or build with every object in the editor.');
 $('about').onclick = () => {
-  sheet('Clone Dash', 'Eight one-button trails and a place to build your own. An original geometric platformer inspired by Geometry Dash, made from a kid’s game idea.');
+  sheet('Clone Dash', 'Nine one-button trails and a place to build your own. An original geometric platformer inspired by Geometry Dash, made from a kid’s game idea.');
   const ethos = document.createElement('p'); ethos.textContent = document.querySelector('meta[name=description]').content;
   const mark = document.createElement('div'); mark.className = 'maker'; mark.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21 3 12C-4 4 6-3 12 5 18-3 28 4 21 12Z"/></svg> made with love by <a href="https://royashbrook.com" target="_blank" rel="noopener">roy</a> + <a href="https://royashbrook.com/agents" target="_blank" rel="noopener">ai</a> · <a href="https://github.com/sponsors/royashbrook" target="_blank" rel="noopener">sponsor me</a>';
   $('sheet-content').append(ethos, mark);

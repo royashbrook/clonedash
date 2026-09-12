@@ -1,5 +1,5 @@
 import { polygon, bounds, PORTALS, SIZE } from './engine.js';
-const portalLook = { plane: ['#ffd166', 'FLY', '▷'], square: ['#72f7dc', 'JUMP', '□'], wheel: ['#ff8ac4', 'WHEEL', '⊙'], 'gravity-up': ['#53e3ff', 'UP', '↑'], 'gravity-down': ['#ffb477', 'DOWN', '↓'] };
+const portalLook = { plane: ['#ffd166', 'FLY', '▷'], square: ['#72f7dc', 'JUMP', '□'], wheel: ['#ff8ac4', 'WHEEL', '⊙'], jumper: ['#53e3ff', 'JUMPER', '⇈'], 'gravity-up': ['#53e3ff', 'UP', '↑'], 'gravity-down': ['#ffb477', 'DOWN', '↓'] };
 export function render(canvas, { state, level, camera = 0, editing = false, selected = -1, time = 0, reduced = false, areaBottom, areaTop = 0 }) {
   const w = innerWidth, h = innerHeight, dpr = Math.min(devicePixelRatio || 1, 2);
   if (canvas.width !== Math.round(w * dpr) || canvas.height !== Math.round(h * dpr)) { canvas.width = Math.round(w * dpr); canvas.height = Math.round(h * dpr); }
@@ -52,7 +52,9 @@ export function render(canvas, { state, level, camera = 0, editing = false, sele
     } else {
       const p = polygon(o); ctx.beginPath(); p.forEach(([x, y], i) => i ? ctx.lineTo(X(x), Y(y)) : ctx.moveTo(X(x), Y(y))); ctx.closePath();
       const grad = ctx.createLinearGradient(0, Y(o.y + 1), 0, Y(o.y)); grad.addColorStop(0, '#35465d'); grad.addColorStop(1, '#03070c');
-      ctx.fillStyle = o.type === 'black' ? '#000000' : grad; ctx.fill(); ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2; ctx.stroke();
+      ctx.fillStyle = o.type === 'black' ? '#000000' : grad;
+      if (o.type !== 'outline') ctx.fill();
+      ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2; ctx.stroke();
       if (o.type === 'grid') {
         ctx.save(); ctx.clip(); ctx.strokeStyle = '#ffffff35'; ctx.lineWidth = 1;
         for (let q = 1; q <= 3; q++) { ctx.beginPath(); ctx.moveTo(X(o.x + q / 4), Y(o.y)); ctx.lineTo(X(o.x + q / 4), Y(o.y + 1)); ctx.moveTo(X(o.x), Y(o.y + q / 4)); ctx.lineTo(X(o.x + 1), Y(o.y + q / 4)); ctx.stroke(); } ctx.restore();
@@ -76,12 +78,16 @@ export function render(canvas, { state, level, camera = 0, editing = false, sele
       if (!reduced) for (let i = 0; i < 12; i++) { const a = i * 2.4; ctx.globalAlpha = 1 - t / .65; ctx.fillStyle = color; ctx.fillRect(Math.cos(a) * t * unit * 3, Math.sin(a) * t * unit * 3 + t * t * unit, unit * .12, unit * .12); }
     } else {
       if (!reduced) { ctx.fillStyle = `${color}35`; for (let i = 3; i >= 1; i--) ctx.fillRect(-unit * (.3 + i * .18), -unit * .15, unit * .2, unit * .3); }
-      if (state.mode === 'square') {
+      if (state.mode === 'square' || state.mode === 'jumper') {
         if (state.gravity > 0) ctx.scale(1, -1);
         if (!state.grounded && !reduced) ctx.rotate(-state.time * Math.PI * 2);
         const a = SIZE * unit;
         ctx.fillStyle = color; ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.fillRect(-a / 2, -a / 2, a, a); ctx.strokeRect(-a / 2, -a / 2, a, a);
-        ctx.fillStyle = '#101825'; ctx.fillRect(-a * .27, -a * .18, a * .15, a * .17); ctx.fillRect(a * .12, -a * .18, a * .15, a * .17); ctx.fillRect(-a * .22, a * .18, a * .44, a * .06);
+        ctx.fillStyle = '#101825';
+        if (state.mode === 'jumper') {
+          ctx.strokeStyle = '#101825'; ctx.lineWidth = Math.max(2, a * .08);
+          for (const offset of [-.12, .15]) { ctx.beginPath(); ctx.moveTo(-a * .23, a * (offset + .1)); ctx.lineTo(0, a * (offset - .12)); ctx.lineTo(a * .23, a * (offset + .1)); ctx.stroke(); }
+        } else { ctx.fillRect(-a * .27, -a * .18, a * .15, a * .17); ctx.fillRect(a * .12, -a * .18, a * .15, a * .17); ctx.fillRect(-a * .22, a * .18, a * .44, a * .06); }
       } else if (state.mode === 'wheel') {
         const r = SIZE * unit / 2;
         ctx.save(); if (!reduced) ctx.rotate(state.x * 3 * -state.gravity);

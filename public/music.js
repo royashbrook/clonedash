@@ -9,6 +9,7 @@ export const TRACKS = [
   { name: 'Switchcraft', root: 40, melody: [0, 12, 7, 19, 3, 15, 10, 22], wobble: 4 },
   { name: 'Clone Dash', root: 41, melody: [12, 10, 7, 3, 0, 7, 10, 19], wobble: 6 },
   { name: 'Gravity Flip', root: 44, melody: [0, 12, 3, 15, 7, 19, 15, 3], wobble: 4 },
+  { name: 'Air Steps', root: 46, melody: [0, 7, 12, 19, 22, 19, 15, 12], wobble: 3 },
 ];
 const BEAT = .4, BARS = 16, LENGTH = BARS * 4 * BEAT;
 const hz = n => 440 * 2 ** ((n - 69) / 12);
