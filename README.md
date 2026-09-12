@@ -6,7 +6,7 @@ A one-button, geometric platformer from a kid's idea. Nine hand-authored trails,
 
 Square: tap / Space to jump; hold to jump again on landing. Plane: hold to rise, release to fall. Portals switch modes. Land on blocks, avoid spikes and block sides. Landscape play uses the full screen. Pause freezes the run, including when backgrounded.
 
-Editor: choose Blocks, Spikes, or Portals, tap the grid to place. SELECT picks an existing object. Move with the arrows in 1, 1/2, or 1/20-block steps; rotate either direction, flip either axis, delete, and scroll the timeline. TEST plays the draft and returns to the same editor. Draft and best scores stay on this device. Storage failures never prevent play and are surfaced.
+Editor: choose Blocks, Spikes, Portals or Gravity, then tap the grid to place. SELECT picks an existing object. COPY + PASTE duplicates the selection into free space to its right, preserving rotation and flips. DELETE removes the selection; DELETE ALL asks for confirmation before clearing only the draft's objects, not its name, length or completed trails. Move with the arrows in 1, 1/2, or 1/20-block steps; rotate either direction, flip either axis, and scroll the timeline. TEST plays the draft and returns to the same editor. Draft and best scores stay on this device. Storage failures never prevent play and are surfaced.
 
 ## Develop
 
@@ -28,7 +28,9 @@ The editor includes wheel portals, a separate GRAVITY tab, completely black outl
 
 ## Jumper and Air Steps
 
-Jumper mode behaves like square, but each fresh tap or Space press restarts the jump even in midair. There is no extra-jump limit. Holding only repeats on landing, not in the air; keyboard auto-repeat is ignored. Air jumps also work with inverted gravity. The jumper has a double-chevron icon and its own portal in the editor.
+Jumper mode has square movement, but each fresh tap or Space press restarts the jump even in midair. There is no extra-jump limit. Holding only repeats on landing, not in the air; keyboard auto-repeat is ignored. Air jumps also work with inverted gravity. Like planes, jumpers survive solid contact: land, bump a ceiling or stop at a wall, then jump clear. They do not pass through blocks. The jumper has a double-chevron icon and its own portal in the editor.
+
+Hazard contact uses an inner 0.48-block player box, inset 0.08 blocks on each side of the visible 0.64-block body. This forgives small edge grazes without making direct spike hits safe. Landing, safe solid contact and portals still use the full body; jump reach and platform support are unchanged.
 
 Outline blocks have a transparent interior and white outline, with the same solid collision as other blocks. Quarter-size spikes are 1/4 block wide and tall and remain lethal. Both support all editor transforms and saved drafts. The ninth trail, Air Steps, introduces air jumps onto a four-block-high outline shelf and has its own music. Existing trails and progress keep their indices and save format.
 

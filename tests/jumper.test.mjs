@@ -33,7 +33,7 @@ test('jumper and square portals preserve gravity and switch air-jump ability', (
   }
 });
 
-test('outline blocks are solid: support jumper on either gravity face and kill side contact', () => {
+test('outline blocks support jumper on either gravity face and safely stop side contact', () => {
   const level = { ...empty, objects: [object('outline', 5, 2)] };
   for (const gravity of [-1, 1]) {
     const s = { ...createState(level), mode: 'jumper', gravity, x: 5, y: gravity < 0 ? 3.01 : 2 - SIZE - .01, vy: gravity * 2, grounded: false };
@@ -41,7 +41,7 @@ test('outline blocks are solid: support jumper on either gravity face and kill s
     assert.equal(s.y, gravity < 0 ? 3 : 2 - SIZE);
   }
   const side = { ...createState(level), mode: 'jumper', x: 5 - SIZE, y: 2.1, grounded: false };
-  step(side, false); assert.equal(side.status, 'dead');
+  step(side, false); assert.equal(side.status, 'playing'); assert.equal(side.x, 5 - SIZE);
 });
 
 test('quarter spike geometry, transforms, save validation and lethal collision agree', () => {

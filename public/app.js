@@ -1,4 +1,4 @@
-import { createState, step, STEP, object, transform, validateLevel, bounds } from './engine.js';
+import { createState, step, STEP, object, transform, validateLevel, bounds, duplicateObject } from './engine.js';
 import { LEVELS } from './levels.js';
 import { render } from './render.js';
 import { wireInstall } from './install.js';
@@ -200,7 +200,8 @@ function editAt(e) {
 function updateSelection() {
   const o = draft.objects[selected];
   $('selection').textContent = o ? `${o.type.toUpperCase()} · x ${o.x.toFixed(2)} / y ${o.y.toFixed(2)} · ${o.rotation}°` : tool === 'select' ? 'Tap an object to select it.' : `Tap the grid to place ${tool === 'half' ? 'a half spike' : 'a ' + tool}.`;
-  for (const b of document.querySelectorAll('[data-action],#delete-object')) b.disabled = !o;
+  for (const b of document.querySelectorAll('[data-action],#delete-object,#duplicate-object')) b.disabled = !o;
+  $('delete-all').disabled = draft.objects.length === 0;
 }
 function adjust(action) {
   if (selected < 0) return;
@@ -211,7 +212,15 @@ function adjust(action) {
 for (const b of document.querySelectorAll('[data-action]')) b.onclick = () => adjust(b.dataset.action);
 function deleteSelected() { if (selected < 0) return; draft.objects.splice(selected, 1); selected = -1; saveDraft(); }
 $('delete-object').onclick = deleteSelected;
-$('how').onclick = () => sheet('One button. Find your flow.', 'Square: tap or press Space to jump onto two-block ledges. Hold for another jump when you land. Jumper: same as square, but every fresh tap lets you jump again in midair. Try Air Steps! Plane: hold to fly against gravity; release to fall. Blocks are safe while flying. Wheel: land on a block, floor or ceiling, then tap or press Space to flip gravity. Midair taps are ignored; holding does not flip again when you land. UP and DOWN portals set gravity without changing your shape. Under upside-down gravity, land and jump on ceilings. All spikes kill, including the tiny quarter-size ones. Outline blocks are transparent but solid. Block sides stop planes but end other runs. Try Gravity Flip for wheel mode, or build with every object in the editor.');
+$('duplicate-object').onclick = () => {
+  try { draft.objects.push(duplicateObject(draft, selected)); selected = draft.objects.length - 1; saveDraft(); }
+  catch (error) { toast(error.message); }
+};
+$('delete-all').onclick = () => {
+  if (!draft.objects.length) return;
+  sheet('Delete all objects?', `Remove all ${draft.objects.length} objects from this draft? This cannot be undone. Your completed trails will stay.`, [['CANCEL', closeSheet, true], ['DELETE ALL OBJECTS', () => { draft.objects = []; selected = -1; saveDraft(); closeSheet(); }]], false);
+};
+$('how').onclick = () => sheet('One button. Find your flow.', 'Square: tap or press Space to jump onto two-block ledges. Hold for another jump when you land. Jumper: same as square, but every fresh tap lets you jump again in midair. Touching blocks is safe: jump up a wall or slide under a ceiling. Try Air Steps! Plane: hold to fly against gravity; release to fall. Blocks are safe while flying. Wheel: land on a block, floor or ceiling, then tap or press Space to flip gravity. Midair taps are ignored; holding does not flip again when you land. UP and DOWN portals set gravity without changing your shape. Under upside-down gravity, land and jump on ceilings. All spikes kill, including the tiny quarter-size ones. Outline blocks are transparent but solid. Block sides stop planes and jumpers but end square and wheel runs. Your smaller hazard hitbox forgives edge grazes. Try Gravity Flip for wheel mode, or build with every object in the editor.');
 $('about').onclick = () => {
   sheet('Clone Dash', 'Nine one-button trails and a place to build your own. An original geometric platformer inspired by Geometry Dash, made from a kid’s game idea.');
   const ethos = document.createElement('p'); ethos.textContent = document.querySelector('meta[name=description]').content;

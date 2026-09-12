@@ -1,5 +1,6 @@
 // Quarter-block clearance makes a two-block ledge landable, not just reachable at one instant.
 export const SPEED = 5, GRAVITY = 16, JUMP = Math.sqrt(2 * GRAVITY * 2.25), SIZE = .64, STEP = 1 / 120;
+export const DEATH_INSET = .08; // 75% width/height for hazards; full size still supports landings.
 export const BLOCKS = ['block', 'grid', 'black', 'outline'];
 export const SPIKES = ['spike', 'half', 'small', 'quarter'];
 export const PORTALS = ['plane', 'square', 'wheel', 'jumper', 'gravity-up', 'gravity-down'];
@@ -31,6 +32,10 @@ export function intersects(a, b) {
 export function createState(level) {
   return { x: 1, y: 0, vy: 0, mode: 'square', gravity: -1, inputHeld: false, grounded: true, status: 'playing', time: 0, touchingPortals: [], level };
 }
+function playerPolygon(s, inset = 0) {
+  const left = s.x + inset, right = s.x + SIZE - inset, bottom = s.y + inset, top = s.y + SIZE - inset;
+  return [[left, bottom], [right, bottom], [right, top], [left, top]];
+}
 export function step(s, held, dt = STEP, tapped = held && !s.inputHeld) {
   if (s.status !== 'playing') return s;
   s.inputHeld = held;
@@ -45,10 +50,10 @@ export function step(s, held, dt = STEP, tapped = held && !s.inputHeld) {
   s.grounded = false;
   if (s.y <= 0) {
     s.y = 0; s.vy = 0; s.grounded = s.gravity < 0;
-    if (s.gravity > 0 && s.mode !== 'plane') s.status = 'dead';
+    if (s.gravity > 0 && s.mode !== 'plane' && s.mode !== 'jumper') s.status = 'dead';
   }
   if (s.y + SIZE > 7) {
-    if (s.gravity > 0 || s.mode === 'plane') { s.y = 7 - SIZE; s.vy = 0; s.grounded = s.gravity > 0; }
+    if (s.gravity > 0 || s.mode === 'plane' || s.mode === 'jumper') { s.y = 7 - SIZE; s.vy = 0; s.grounded = s.gravity > 0; }
     else s.status = 'dead';
   }
   const touching = [];
@@ -56,7 +61,7 @@ export function step(s, held, dt = STEP, tapped = held && !s.inputHeld) {
     const o = s.level.objects[i];
     if (o.x > s.x + 2 || o.x < s.x - 2) continue;
     if (PORTALS.includes(o.type)) {
-      const player = [[s.x, s.y], [s.x + SIZE, s.y], [s.x + SIZE, s.y + SIZE], [s.x, s.y + SIZE]];
+      const player = playerPolygon(s);
       if (intersects(player, polygon(o))) {
         touching.push(i);
         if (!s.touchingPortals.includes(i)) {
@@ -69,18 +74,18 @@ export function step(s, held, dt = STEP, tapped = held && !s.inputHeld) {
       }
       continue;
     }
-    const p = polygon(o), b = bounds(o);
+    const p = polygon(o), b = bounds(o), safeSolid = (s.mode === 'plane' || s.mode === 'jumper') && BLOCKS.includes(o.type);
     if (BLOCKS.includes(o.type) && s.x + SIZE > b.left + .001 && s.x < b.right - .001) {
-      if ((s.gravity < 0 || s.mode === 'plane') && s.vy <= 0 && oldY >= b.top - .015 && s.y <= b.top) {
+      if ((s.gravity < 0 || safeSolid) && s.vy <= 0 && oldY >= b.top - .015 && s.y <= b.top) {
         s.y = b.top; s.vy = 0; s.grounded = s.gravity < 0;
-      } else if ((s.gravity > 0 || s.mode === 'plane') && s.vy >= 0 && oldY + SIZE <= b.bottom + .015 && s.y + SIZE >= b.bottom) {
+      } else if ((s.gravity > 0 || safeSolid) && s.vy >= 0 && oldY + SIZE <= b.bottom + .015 && s.y + SIZE >= b.bottom) {
         s.y = b.bottom - SIZE; s.vy = 0; s.grounded = s.gravity > 0;
       }
     }
-    const player = [[s.x, s.y], [s.x + SIZE, s.y], [s.x + SIZE, s.y + SIZE], [s.x, s.y + SIZE]];
+    const player = playerPolygon(s, safeSolid ? 0 : DEATH_INSET);
     if (intersects(player, p)) {
-      if (s.mode === 'plane' && BLOCKS.includes(o.type)) {
-        // Solid contact is safe: slide underneath or stop at a wall until the pilot climbs.
+      if (safeSolid) {
+        // Solid contact is safe: slide underneath or stop at a wall until the player climbs.
         if (oldY + SIZE <= b.bottom + .015 && s.vy > 0) { s.y = b.bottom - SIZE; s.vy = 0; }
         else s.x = b.left - SIZE;
       } else s.status = 'dead';
@@ -108,4 +113,16 @@ export function transform(o, action, amount = 1) {
   if (action === 'flipY') o.flipY = !o.flipY;
   o.x = Math.round(o.x * 20) / 20; o.y = Math.round(o.y * 20) / 20;
   return o;
+}
+export function duplicateObject(level, index) {
+  const source = level.objects[index];
+  if (!source) throw Error('Select an object to copy.');
+  if (level.objects.length >= 600) throw Error('This trail has reached 600 objects.');
+  const copy = structuredClone(source), b = bounds(copy), stride = Math.max(1, b.right - b.left);
+  do {
+    copy.x = Math.round((copy.x + stride) * 20) / 20;
+    if (copy.x > level.length - 2) throw Error('No room to the right. Move the object or lengthen the trail.');
+  } while (level.objects.some(o => intersects(polygon(copy), polygon(o))));
+  validateLevel({ ...level, objects: [...level.objects, copy] });
+  return copy;
 }

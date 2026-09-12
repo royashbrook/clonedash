@@ -49,7 +49,7 @@ test('inverted square and wheel land on block undersides; square jumps away; sid
     step(s, false); assert.equal(s.y, 4 - SIZE); assert.ok(s.grounded); assert.equal(s.status, 'playing');
     step(s, true); assert.ok(s.y < 4 - SIZE); assert.equal(s.grounded, false);
     const side = { ...createState({ ...empty, objects: [object(type, 5, 4)] }), mode, gravity: 1, x: 5 - SIZE, y: 4.1, grounded: false };
-    step(side, false); assert.equal(side.status, 'dead');
+    step(side, false); step(side, false); assert.equal(side.status, 'dead');
   }
 });
 
