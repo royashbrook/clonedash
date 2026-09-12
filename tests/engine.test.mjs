@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createState, step, STEP, SPEED, SIZE, polygon, intersects, bounds, object, transform, validateLevel } from '../public/engine.js';
+import { createState, step, STEP, SPEED, SIZE, PORTALS, SPIKES, polygon, intersects, bounds, object, transform, validateLevel } from '../public/engine.js';
 import { LEVELS } from '../public/levels.js';
 const empty = { name: 'Test', length: 100, objects: [] };
 test('auto-run is 5 blocks/sec; jump clears two blocks with a quarter-block margin', () => {
@@ -22,7 +22,7 @@ test('two-block ledges can be landed on across a useful jump timing window', () 
   }
 });
 test('planes survive solid top, underside and side contact; can climb past walls; spikes still kill', () => {
-  for (const type of ['block', 'grid']) for (const rotation of [0, 90, 180, 270]) {
+  for (const type of ['block', 'grid', 'black']) for (const rotation of [0, 90, 180, 270]) {
     const block = { ...object(type, 5, 2), rotation };
     for (const [y, vy, held] of [[3.01, -2, false], [2 - SIZE - .01, 2, true], [2.1, 0, false]]) {
       const s = { ...createState({ ...empty, objects: [block] }), mode: 'plane', x: y === 2.1 ? 5 - SIZE - .01 : 5, y, vy, grounded: false };
@@ -35,7 +35,7 @@ test('planes survive solid top, underside and side contact; can climb past walls
   }
   const floor = { ...createState(empty), mode: 'plane' };
   step(floor, false); assert.equal(floor.status, 'playing'); step(floor, true); assert.ok(floor.y > 0);
-  for (const type of ['spike', 'half']) {
+  for (const type of SPIKES) {
     const s = { ...createState({ ...empty, objects: [object(type, 3)] }), mode: 'plane' };
     for (let i = 0; i < 90; i++) step(s, false);
     assert.equal(s.status, 'dead');
@@ -78,12 +78,13 @@ test('invalid drafts are refused, authored levels validate', () => {
 // This controller supplies only the same held/not-held input as a player. It cannot teleport,
 // change physics or remove objects. Every authored trail must reach its actual finish alive.
 export function inputFor(s) {
+  if (s.mode === 'wheel') return s.grounded && s.gravity < 0 && s.level.objects.some(o => SPIKES.includes(o.type) && o.x - s.x > 1 && o.x - s.x < 2);
   if (s.mode === 'plane') return s.y + s.vy * .3 < 2.55;
   if (!s.grounded) return false;
   return s.level.objects.some(o => {
-    if (['plane', 'square'].includes(o.type)) return false;
+    if (PORTALS.includes(o.type)) return false;
     const b = bounds(o);
-    const lead = ['spike', 'half'].includes(o.type) ? 1.1 : 2.1;
+    const lead = SPIKES.includes(o.type) ? 1.1 : 2.1;
     return b.top > s.y + .05 && b.bottom < s.y + 1.1 && b.left - s.x > lead - .5 && b.left - s.x < lead;
   });
 }

@@ -1,10 +1,13 @@
 // Quarter-block clearance makes a two-block ledge landable, not just reachable at one instant.
 export const SPEED = 5, GRAVITY = 16, JUMP = Math.sqrt(2 * GRAVITY * 2.25), SIZE = .64, STEP = 1 / 120;
-export const TYPES = ['block', 'grid', 'spike', 'half', 'plane', 'square'];
+export const BLOCKS = ['block', 'grid', 'black'];
+export const SPIKES = ['spike', 'half', 'small'];
+export const PORTALS = ['plane', 'square', 'wheel', 'gravity-up', 'gravity-down'];
+export const TYPES = [...BLOCKS, ...SPIKES, ...PORTALS];
 export function object(type, x, y = 0) { return { type, x, y, rotation: 0, flipX: false, flipY: false }; }
 export function polygon(o) {
-  const portal = ['plane', 'square'].includes(o.type), h = portal ? 2.5 : o.type === 'half' ? .5 : 1, w = portal ? .6 : 1;
-  const points = ['spike', 'half'].includes(o.type) ? [[0, 0], [1, 0], [.5, h]] : [[0, 0], [w, 0], [w, h], [0, h]];
+  const portal = PORTALS.includes(o.type), h = portal ? 2.5 : o.type === 'half' ? .5 : o.type === 'small' ? 2 / 3 : 1, w = portal ? .6 : o.type === 'small' ? 2 / 3 : 1;
+  const points = SPIKES.includes(o.type) ? [[0, 0], [w, 0], [w / 2, h]] : [[0, 0], [w, 0], [w, h], [0, h]];
   const a = o.rotation * Math.PI / 180, c = Math.round(Math.cos(a)), s = Math.round(Math.sin(a));
   return points.map(([x, y]) => {
     x = (x - w / 2) * (o.flipX ? -1 : 1); y = (y - h / 2) * (o.flipY ? -1 : 1);
@@ -25,51 +28,64 @@ export function intersects(a, b) {
   return true;
 }
 export function createState(level) {
-  return { x: 1, y: 0, vy: 0, mode: 'square', grounded: true, status: 'playing', time: 0, portal: -1, level };
+  return { x: 1, y: 0, vy: 0, mode: 'square', gravity: -1, inputHeld: false, grounded: true, status: 'playing', time: 0, touchingPortals: [], level };
 }
-export function step(s, held, dt = STEP) {
+export function step(s, held, dt = STEP, tapped = held && !s.inputHeld) {
   if (s.status !== 'playing') return s;
+  s.inputHeld = held;
   const oldY = s.y;
-  if (s.mode === 'square' && s.grounded && held) { s.vy = JUMP; s.grounded = false; }
-  const acceleration = s.mode === 'plane' ? (held ? 14 : -12) : -GRAVITY;
+  if (s.mode === 'wheel' && tapped) { s.gravity *= -1; s.vy = 0; s.grounded = false; }
+  if (s.mode === 'square' && s.grounded && held) { s.vy = -s.gravity * JUMP; s.grounded = false; }
+  const acceleration = s.mode === 'plane' ? -s.gravity * (held ? 14 : -12) : s.gravity * GRAVITY;
   s.x += SPEED * dt; s.time += dt;
   s.y += s.vy * dt + acceleration * dt * dt / 2;
   s.vy += acceleration * dt;
   if (s.mode === 'plane') s.vy = Math.max(-4, Math.min(4, s.vy));
   s.grounded = false;
   if (s.y <= 0) {
-    s.y = 0; s.vy = 0; s.grounded = true;
+    s.y = 0; s.vy = 0; s.grounded = s.gravity < 0;
+    if (s.gravity > 0 && s.mode !== 'plane') s.status = 'dead';
   }
   if (s.y + SIZE > 7) {
-    if (s.mode === 'plane') { s.y = 7 - SIZE; s.vy = 0; }
+    if (s.gravity > 0 || s.mode === 'plane') { s.y = 7 - SIZE; s.vy = 0; s.grounded = s.gravity > 0; }
     else s.status = 'dead';
   }
+  const touching = [];
   for (let i = 0; i < s.level.objects.length; i++) {
     const o = s.level.objects[i];
     if (o.x > s.x + 2 || o.x < s.x - 2) continue;
-    if (o.type === 'plane' || o.type === 'square') {
+    if (PORTALS.includes(o.type)) {
       const player = [[s.x, s.y], [s.x + SIZE, s.y], [s.x + SIZE, s.y + SIZE], [s.x, s.y + SIZE]];
-      if (s.portal !== i && intersects(player, polygon(o))) {
-        s.mode = o.type; s.portal = i;
-        if (o.type === 'plane') { s.y = Math.max(.5, s.y); s.vy = 3; s.grounded = false; }
+      if (intersects(player, polygon(o))) {
+        touching.push(i);
+        if (!s.touchingPortals.includes(i)) {
+          if (o.type.startsWith('gravity-')) { s.gravity = o.type === 'gravity-up' ? 1 : -1; s.vy = 0; s.grounded = false; }
+          else {
+            s.mode = o.type;
+            if (o.type === 'plane') { s.y = Math.max(.5, Math.min(7 - SIZE - .5, s.y)); s.vy = -s.gravity * 3; s.grounded = false; }
+          }
+        }
       }
       continue;
     }
     const p = polygon(o), b = bounds(o);
-    if (o.type === 'block' || o.type === 'grid') {
-      if (s.vy <= 0 && oldY >= b.top - .015 && s.y <= b.top && s.x + SIZE > b.left + .001 && s.x < b.right - .001) {
-        s.y = b.top; s.vy = 0; s.grounded = true;
+    if (BLOCKS.includes(o.type) && s.x + SIZE > b.left + .001 && s.x < b.right - .001) {
+      if ((s.gravity < 0 || s.mode === 'plane') && s.vy <= 0 && oldY >= b.top - .015 && s.y <= b.top) {
+        s.y = b.top; s.vy = 0; s.grounded = s.gravity < 0;
+      } else if ((s.gravity > 0 || s.mode === 'plane') && s.vy >= 0 && oldY + SIZE <= b.bottom + .015 && s.y + SIZE >= b.bottom) {
+        s.y = b.bottom - SIZE; s.vy = 0; s.grounded = s.gravity > 0;
       }
     }
     const player = [[s.x, s.y], [s.x + SIZE, s.y], [s.x + SIZE, s.y + SIZE], [s.x, s.y + SIZE]];
     if (intersects(player, p)) {
-      if (s.mode === 'plane' && (o.type === 'block' || o.type === 'grid')) {
+      if (s.mode === 'plane' && BLOCKS.includes(o.type)) {
         // Solid contact is safe: slide underneath or stop at a wall until the pilot climbs.
         if (oldY + SIZE <= b.bottom + .015 && s.vy > 0) { s.y = b.bottom - SIZE; s.vy = 0; }
         else s.x = b.left - SIZE;
       } else s.status = 'dead';
     }
   }
+  s.touchingPortals = touching;
   if (s.status === 'playing' && s.x >= s.level.length) s.status = 'complete';
   return s;
 }

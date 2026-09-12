@@ -8,6 +8,7 @@ export const TRACKS = [
   { name: 'Sky Circuit', root: 43, melody: [19, 15, 12, 10, 7, 10, 12, 15], wobble: 3 },
   { name: 'Switchcraft', root: 40, melody: [0, 12, 7, 19, 3, 15, 10, 22], wobble: 4 },
   { name: 'Clone Dash', root: 41, melody: [12, 10, 7, 3, 0, 7, 10, 19], wobble: 6 },
+  { name: 'Gravity Flip', root: 44, melody: [0, 12, 3, 15, 7, 19, 15, 3], wobble: 4 },
 ];
 const BEAT = .4, BARS = 16, LENGTH = BARS * 4 * BEAT;
 const hz = n => 440 * 2 ** ((n - 69) / 12);

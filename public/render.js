@@ -1,10 +1,13 @@
-import { polygon, SIZE } from './engine.js';
+import { polygon, bounds, PORTALS, SIZE } from './engine.js';
+const portalLook = { plane: ['#ffd166', 'FLY', '▷'], square: ['#72f7dc', 'JUMP', '□'], wheel: ['#ff8ac4', 'WHEEL', '⊙'], 'gravity-up': ['#53e3ff', 'UP', '↑'], 'gravity-down': ['#ffb477', 'DOWN', '↓'] };
 export function render(canvas, { state, level, camera = 0, editing = false, selected = -1, time = 0, reduced = false, areaBottom, areaTop = 0 }) {
   const w = innerWidth, h = innerHeight, dpr = Math.min(devicePixelRatio || 1, 2);
   if (canvas.width !== Math.round(w * dpr) || canvas.height !== Math.round(h * dpr)) { canvas.width = Math.round(w * dpr); canvas.height = Math.round(h * dpr); }
   const ctx = canvas.getContext('2d'); ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   const floor = editing ? (areaBottom ?? h - 180) - 18 : h - Math.max(42, h * .16);
-  const unit = Math.max(12, Math.min((floor - areaTop - 14) / 7, w / 13.5, 82));
+  const hasGravity = level.objects.some(o => ['wheel', 'gravity-up', 'gravity-down'].includes(o.type));
+  const top = !editing && hasGravity ? Math.max(84, areaTop) : areaTop;
+  const unit = Math.max(12, Math.min((floor - top - 14) / 7, w / 13.5, 82));
   const X = x => (x - camera) * unit, Y = y => floor - y * unit;
   const color = level.color || '#9aff6b';
   const bg = ctx.createLinearGradient(0, 0, w, h); bg.addColorStop(0, '#101825'); bg.addColorStop(1, '#172c3d');
@@ -35,28 +38,29 @@ export function render(canvas, { state, level, camera = 0, editing = false, sele
   for (let x = -(camera * unit % (unit / 2)); x < w; x += unit / 2) { ctx.beginPath(); ctx.moveTo(x, floor); ctx.lineTo(x - h * .2, h); ctx.stroke(); }
   for (let y = floor + 14; y < h; y += 18) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke(); }
   ctx.fillStyle = color; ctx.fillRect(0, floor, w, 2);
+  if (hasGravity) { ctx.fillStyle = '#0a111c'; ctx.fillRect(0, Y(7) - 12, w, 12); ctx.fillStyle = color; ctx.fillRect(0, Y(7) - 2, w, 2); }
   level.objects.forEach((o, index) => {
     if (X(o.x) < -unit * 2 || X(o.x) > w + unit) return;
-    if (o.type === 'plane' || o.type === 'square') {
-      const x = X(o.x + .3), y = Y(o.y + 1.25), c = o.type === 'plane' ? '#ffd166' : '#72f7dc';
+    if (PORTALS.includes(o.type)) {
+      const x = X(o.x + .3), y = Y(o.y + 1.25), [c, label, icon] = portalLook[o.type];
       ctx.save(); ctx.strokeStyle = c; ctx.lineWidth = 3; ctx.fillStyle = `${c}18`;
       ctx.beginPath(); ctx.ellipse(x, y, unit * .3, unit * 1.25, -o.rotation * Math.PI / 180, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-      ctx.fillStyle = c; ctx.font = `bold ${Math.max(12, unit * .28)}px system-ui`; ctx.textAlign = 'center'; ctx.fillText(o.type === 'plane' ? 'FLY' : 'JUMP', x, y - unit * 1.4);
+      ctx.fillStyle = c; ctx.font = `bold ${Math.max(12, unit * .28)}px system-ui`; ctx.textAlign = 'center'; ctx.fillText(label, x, y - unit * 1.4);
       ctx.translate(x, y); ctx.rotate(-o.rotation * Math.PI / 180); ctx.scale(o.flipX ? -1 : 1, o.flipY ? -1 : 1); ctx.strokeStyle = '#fff'; ctx.lineWidth = 2;
-      if (o.type === 'square') ctx.strokeRect(-unit * .13, -unit * .13, unit * .26, unit * .26);
-      else { ctx.beginPath(); ctx.moveTo(-unit * .2, -unit * .13); ctx.lineTo(unit * .2, 0); ctx.lineTo(-unit * .2, unit * .13); ctx.closePath(); ctx.stroke(); }
+      ctx.fillStyle = '#fff'; ctx.font = `bold ${unit * .55}px system-ui`; ctx.textBaseline = 'middle'; ctx.fillText(icon, 0, 0);
       ctx.restore();
     } else {
       const p = polygon(o); ctx.beginPath(); p.forEach(([x, y], i) => i ? ctx.lineTo(X(x), Y(y)) : ctx.moveTo(X(x), Y(y))); ctx.closePath();
       const grad = ctx.createLinearGradient(0, Y(o.y + 1), 0, Y(o.y)); grad.addColorStop(0, '#35465d'); grad.addColorStop(1, '#03070c');
-      ctx.fillStyle = grad; ctx.fill(); ctx.strokeStyle = '#edf5ff'; ctx.lineWidth = 2; ctx.stroke();
+      ctx.fillStyle = o.type === 'black' ? '#000000' : grad; ctx.fill(); ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2; ctx.stroke();
       if (o.type === 'grid') {
         ctx.save(); ctx.clip(); ctx.strokeStyle = '#ffffff35'; ctx.lineWidth = 1;
         for (let q = 1; q <= 3; q++) { ctx.beginPath(); ctx.moveTo(X(o.x + q / 4), Y(o.y)); ctx.lineTo(X(o.x + q / 4), Y(o.y + 1)); ctx.moveTo(X(o.x), Y(o.y + q / 4)); ctx.lineTo(X(o.x + 1), Y(o.y + q / 4)); ctx.stroke(); } ctx.restore();
       }
     }
     if (editing && index === selected) {
-      ctx.strokeStyle = '#9aff6b'; ctx.lineWidth = 3; ctx.setLineDash([5, 3]); ctx.strokeRect(X(o.x) - 5, Y(o.y + (o.type === 'plane' || o.type === 'square' ? 2.5 : 1)) - 5, unit + 10, (o.type === 'plane' || o.type === 'square' ? 2.5 : 1) * unit + 10); ctx.setLineDash([]);
+      const b = bounds(o);
+      ctx.strokeStyle = '#9aff6b'; ctx.lineWidth = 3; ctx.setLineDash([5, 3]); ctx.strokeRect(X(b.left) - 5, Y(b.top) - 5, (b.right - b.left) * unit + 10, (b.top - b.bottom) * unit + 10); ctx.setLineDash([]);
     }
   });
   if (X(level.length) < w + 100) {
@@ -73,11 +77,21 @@ export function render(canvas, { state, level, camera = 0, editing = false, sele
     } else {
       if (!reduced) { ctx.fillStyle = `${color}35`; for (let i = 3; i >= 1; i--) ctx.fillRect(-unit * (.3 + i * .18), -unit * .15, unit * .2, unit * .3); }
       if (state.mode === 'square') {
+        if (state.gravity > 0) ctx.scale(1, -1);
         if (!state.grounded && !reduced) ctx.rotate(-state.time * Math.PI * 2);
         const a = SIZE * unit;
         ctx.fillStyle = color; ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.fillRect(-a / 2, -a / 2, a, a); ctx.strokeRect(-a / 2, -a / 2, a, a);
         ctx.fillStyle = '#101825'; ctx.fillRect(-a * .27, -a * .18, a * .15, a * .17); ctx.fillRect(a * .12, -a * .18, a * .15, a * .17); ctx.fillRect(-a * .22, a * .18, a * .44, a * .06);
+      } else if (state.mode === 'wheel') {
+        const r = SIZE * unit / 2;
+        ctx.save(); if (!reduced) ctx.rotate(state.x * 3 * -state.gravity);
+        ctx.fillStyle = color; ctx.strokeStyle = '#fff'; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+        ctx.strokeStyle = '#101825';
+        for (let i = 0; i < 8; i++) { const a = i * Math.PI / 4; ctx.beginPath(); ctx.moveTo(Math.cos(a) * r * .7, Math.sin(a) * r * .7); ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r); ctx.stroke(); }
+        ctx.restore(); ctx.fillStyle = '#101825'; ctx.font = `bold ${r * 1.6}px system-ui`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(state.gravity > 0 ? '↑' : '↓', 0, 0);
       } else {
+        if (state.gravity > 0) ctx.scale(1, -1);
         ctx.rotate(-state.vy * .06); ctx.fillStyle = color; ctx.strokeStyle = '#fff'; ctx.lineWidth = 2;
         ctx.beginPath(); ctx.moveTo(unit * .42, 0); ctx.lineTo(-unit * .34, -unit * .29); ctx.lineTo(-unit * .17, 0); ctx.lineTo(-unit * .34, unit * .29); ctx.closePath(); ctx.fill(); ctx.stroke();
         ctx.fillStyle = '#101825'; ctx.fillRect(-unit * .05, -unit * .07, unit * .12, unit * .14);

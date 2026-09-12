@@ -14,9 +14,9 @@ async function startServer(change = (_file, data) => data) {
   await new Promise(r => server.listen(0, '127.0.0.1', r));
   return { url: `http://127.0.0.1:${server.address().port}/`, close: () => server.listening ? new Promise(r => { server.close(r); server.closeAllConnections(); }) : Promise.resolve() };
 }
-test('home is a seven-trail picker; play fills the screen; pause and rotate preserve progress', async ({ page }) => {
+test('home is an eight-trail picker; play fills the screen; pause and rotate preserve progress', async ({ page }) => {
   const errors = []; page.on('pageerror', e => errors.push(e.message));
-  await page.goto('/'); await expect(page.locator('.level-card')).toHaveCount(7);
+  await page.goto('/'); await expect(page.locator('.level-card')).toHaveCount(8);
   await page.screenshot({ path: 'test-results/home-landscape.png' });
   await page.getByRole('button', { name: 'Play First Spark', exact: true }).click();
   await page.waitForTimeout(700);
@@ -32,7 +32,9 @@ test('home is a seven-trail picker; play fills the screen; pause and rotate pres
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(430); expect(errors).toEqual([]);
 });
 test('editor places, selects, micro-adjusts, rotates, flips and persists; test returns to same draft', async ({ page }) => {
-  await page.goto('/'); await page.locator('#editor-open').click();
+  await page.clock.install(); await page.goto('/'); await page.clock.runFor(32);
+  // Keep RAF paused: the first editor tap must not reuse the last home-frame geometry.
+  await page.locator('#editor-open').click();
   const point = await page.evaluate(() => {
     const top = document.querySelector('.editor-head').getBoundingClientRect().bottom;
     const floor = document.querySelector('.editor-controls').getBoundingClientRect().top - 18;
@@ -125,11 +127,11 @@ test('offline shell reopens after the actual server goes away', async ({ browser
     await page.reload(); await page.waitForFunction(() => !!navigator.serviceWorker.controller);
     expect(await page.evaluate(async () => !!(await caches.match('/index.html')))).toBe(true);
     await server.close();
-    await page.reload(); await expect(page.locator('.level-card')).toHaveCount(7);
+    await page.reload(); await expect(page.locator('.level-card')).toHaveCount(8);
     await page.getByRole('button', { name: 'Play First Spark', exact: true }).click(); await expect(page.locator('#hud')).toBeVisible();
   } finally { await context.close(); await server.close(); }
 });
-test('sound on starts actual menu music; seven original tracks have audible, distinct PCM', async ({ page }) => {
+test('sound on starts actual menu music; eight original tracks have audible, distinct PCM', async ({ page }) => {
   await page.addInitScript(() => {
     window.audioStarts = [];
     window.audioStops = 0;
@@ -142,7 +144,7 @@ test('sound on starts actual menu music; seven original tracks have audible, dis
   await expect.poll(() => page.evaluate(() => window.audioStarts.length)).toBeGreaterThan(0);
   const result = await page.evaluate(async () => {
     const { compose } = await import('/music.js'); const tracks = [];
-    for (let i = 0; i < 7; i++) {
+    for (let i = 0; i < 8; i++) {
       const buffer = await compose(i), data = buffer.getChannelData(0); let energy = 0, peak = 0, signature = 0;
       for (let n = 0; n < data.length; n++) { energy += data[n] ** 2; peak = Math.max(peak, Math.abs(data[n])); if (n % 100 === 0) signature += data[n] * n; }
       tracks.push({ duration: buffer.duration, rms: Math.sqrt(energy / data.length), peak, signature });
@@ -150,7 +152,7 @@ test('sound on starts actual menu music; seven original tracks have audible, dis
     return tracks;
   });
   for (const t of result) { expect(t.duration).toBeCloseTo(25.6, 2); expect(t.rms).toBeGreaterThan(.03); expect(t.peak).toBeLessThan(1); }
-  expect(new Set(result.map(t => t.signature)).size).toBe(7);
+  expect(new Set(result.map(t => t.signature)).size).toBe(8);
   const stoppedBefore = await page.evaluate(() => window.audioStops);
   await page.evaluate(() => { Object.defineProperty(document, 'hidden', { configurable: true, value: true }); document.dispatchEvent(new Event('visibilitychange')); });
   expect(await page.evaluate(() => window.audioStops)).toBeGreaterThan(stoppedBefore);

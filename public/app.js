@@ -14,7 +14,7 @@ try {
     const p = JSON.parse(raw);
     if (p.version !== 1 || !p.best || typeof p.best !== 'object' || Array.isArray(p.best)) throw Error();
     validateLevel(p.draft);
-    if (Object.entries(p.best).some(([k, v]) => !/^[0-6]$/.test(k) || !Number.isFinite(v) || v < 0 || v > 100)) throw Error();
+    if (Object.entries(p.best).some(([k, v]) => !/^\d+$/.test(k) || +k >= LEVELS.length || !Number.isFinite(v) || v < 0 || v > 100)) throw Error();
     save = p;
   }
 } catch { storageOK = false; }
@@ -25,7 +25,7 @@ function persist() {
 }
 let toastTimer;
 function toast(message) { $('notice').textContent = message; $('notice').hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => $('notice').hidden = true, 4200); }
-let mode = 'home', state, current = 0, custom = false, paused = false, held = false, jumpBuffer = 0, attempt = 1, deathTime = 0, readyTime = 0, acc = 0, last = 0, camera = 0, view, learned = false;
+let mode = 'home', state, current = 0, custom = false, paused = false, held = false, jumpBuffer = 0, attempt = 1, deathTime = 0, readyTime = 0, acc = 0, last = 0, camera = 0, learned = false, cueUntil = 5;
 let draft = structuredClone(save.draft), selected = -1, tool = 'block', tab = 'blocks';
 let audio;
 const music = new Soundtrack();
@@ -39,7 +39,7 @@ soundLabel();
 function updateHome() {
   const completed = LEVELS.filter((_, i) => save.best[i] === 100).length;
   const next = LEVELS.findIndex((_, i) => save.best[i] !== 100); current = next < 0 ? 0 : next;
-  $('stars').textContent = `${completed} / 7`;
+  $('stars').textContent = `${completed} / ${LEVELS.length}`;
   $('play').firstChild.textContent = `PLAY ${LEVELS[current].name.toUpperCase()} `;
   $('progress-copy').textContent = completed ? `${completed} trails complete. Every trail is always open.` : 'Your first jump starts here.';
   $('levels').replaceChildren(...LEVELS.map((l, i) => {
@@ -63,7 +63,7 @@ function start(index, isCustom = false) {
 }
 function resetRun() {
   music.stop();
-  state = createState(custom ? structuredClone(draft) : LEVELS[current]); deathTime = 0; readyTime = .4; held = false; jumpBuffer = 0; acc = 0;
+  state = createState(custom ? structuredClone(draft) : LEVELS[current]); deathTime = 0; readyTime = .4; held = false; jumpBuffer = 0; acc = 0; cueUntil = 5;
   $('level-name').textContent = state.level.name; $('attempt').textContent = `TRY ${attempt}`;
 }
 function record() {
@@ -104,7 +104,7 @@ addEventListener('pagehide', () => { pause(); held = false; music.stop(); });
 addEventListener('blur', () => { held = false; if (mode === 'play') pause(); });
 function complete() {
   record(); held = false; tone(784, .2); setTimeout(() => tone(1047, .3), 130);
-  const actions = custom ? [['BACK TO EDITOR', openEditor, true], ['Restart Level', () => start(current, true)], ['Main Menu', home]] : [['Main Menu', home, true], ['Restart Level', () => start(current)], ...(current < 6 ? [['NEXT TRAIL', () => start(current + 1)]] : [])];
+  const actions = custom ? [['BACK TO EDITOR', openEditor, true], ['Restart Level', () => start(current, true)], ['Main Menu', home]] : [['Main Menu', home, true], ['Restart Level', () => start(current)], ...(current < LEVELS.length - 1 ? [['NEXT TRAIL', () => start(current + 1)]] : [])];
   sheet('Level Complete!', custom ? 'Your trail works. Keep building!' : `${state.level.name} cleared. Nice flow.`, actions, false);
 }
 function press() {
@@ -115,7 +115,7 @@ canvas.addEventListener('pointerdown', e => { if (mode === 'editor') { editAt(e)
 for (const event of ['pointerup', 'pointercancel', 'lostpointercapture']) canvas.addEventListener(event, () => held = false);
 addEventListener('keydown', e => {
   if (['INPUT', 'SELECT', 'TEXTAREA'].includes(e.target.tagName)) return;
-  if (e.code === 'Space' || e.code === 'ArrowUp') { if (mode === 'play') { e.preventDefault(); press(); } }
+  if (e.code === 'Space' || e.code === 'ArrowUp') { if (mode === 'play') { e.preventDefault(); if (!e.repeat) press(); } }
   if (e.code === 'Escape' && mode === 'play' && !$('sheet').open) pause();
   if (mode === 'editor' && selected >= 0) {
     const key = { ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'up', ArrowDown: 'down' }[e.code];
@@ -132,9 +132,10 @@ function frame(now) {
     else {
       acc += dt;
       while (acc >= STEP && state.status === 'playing') {
-        const grounded = state.grounded;
-        step(state, held || (state.mode === 'square' && jumpBuffer > 0));
-        jumpBuffer = grounded && !state.grounded ? 0 : Math.max(0, jumpBuffer - STEP);
+        const grounded = state.grounded, previousMode = state.mode, wheelTap = state.mode === 'wheel' && jumpBuffer > 0;
+        step(state, held || (state.mode === 'square' && jumpBuffer > 0), STEP, wheelTap);
+        jumpBuffer = wheelTap || previousMode !== state.mode || (grounded && !state.grounded) ? 0 : Math.max(0, jumpBuffer - STEP);
+        if (previousMode !== state.mode) { learned = false; cueUntil = state.time + 4; }
         acc -= STEP;
       }
       if (state.status === 'dead') { deathTime = 0; held = false; record(); tone(90, .16); }
@@ -142,15 +143,22 @@ function frame(now) {
     }
     camera = Math.max(0, state.x - 3);
   }
-  const level = mode === 'editor' ? draft : mode === 'play' ? state.level : LEVELS[0];
   music.sync(mode === 'play' && !custom ? current : 0, !document.hidden && (mode === 'home' || mode === 'editor' || (mode === 'play' && !paused && $('rotate').hidden && state.status === 'playing' && readyTime <= 0)), mode === 'play' ? state.time : now / 1000);
-  view = render(canvas, { level, state: mode === 'play' ? state : mode === 'home' ? { ...createState(level), x: 9, y: 1.3, grounded: false, time: 0 } : null, camera: mode === 'editor' ? +$('pan').value : mode === 'play' ? camera : 0, editing: mode === 'editor', selected, time: deathTime, reduced: reduced.matches, areaTop: $('editor').hidden ? 0 : $('editor').querySelector('header').getBoundingClientRect().bottom, areaBottom: $('editor').hidden ? undefined : $('editor').querySelector('.editor-controls').getBoundingClientRect().top });
+  draw();
   if (mode === 'play') {
     $('run-progress').value = Math.min(100, (state.x - 1) / (state.level.length - 1) * 100);
-    $('cue').hidden = paused || !$('rotate').hidden || learned || state.time > 5 || state.status !== 'playing';
-    if (!$('cue').hidden) $('cue').firstChild.textContent = state.mode === 'plane' ? 'HOLD TO FLY ' : 'TAP TO JUMP ';
+    $('cue').hidden = paused || !$('rotate').hidden || learned || state.time > cueUntil || state.status !== 'playing';
+    if (!$('cue').hidden) {
+      $('cue').firstChild.textContent = state.mode === 'plane' ? 'HOLD TO FLY ' : state.mode === 'wheel' ? 'TAP TO FLIP GRAVITY ' : 'TAP TO JUMP ';
+      $('cue').querySelector('span').textContent = state.mode === 'plane' ? 'RELEASE TO FALL' : state.mode === 'wheel' ? 'ONE TAP · ONE FLIP' : 'HOLD TO KEEP JUMPING';
+    }
+    $('level-name').textContent = `${state.level.name} · ${state.mode.toUpperCase()} ${state.gravity > 0 ? '↑' : '↓'}`;
   }
   requestAnimationFrame(frame);
+}
+function draw() {
+  const level = mode === 'editor' ? draft : mode === 'play' ? state.level : LEVELS[0];
+  return render(canvas, { level, state: mode === 'play' ? state : mode === 'home' ? { ...createState(level), x: 9, y: 1.3, grounded: false, time: 0 } : null, camera: mode === 'editor' ? +$('pan').value : mode === 'play' ? camera : 0, editing: mode === 'editor', selected, time: deathTime, reduced: reduced.matches, areaTop: $('editor').hidden ? 0 : $('editor').querySelector('header').getBoundingClientRect().bottom, areaBottom: $('editor').hidden ? undefined : $('editor').querySelector('.editor-controls').getBoundingClientRect().top });
 }
 function saveDraft() {
   try { validateLevel(draft); save.draft = structuredClone(draft); persist(); } catch { toast('Keep objects inside the trail, after the start and before the finish.'); }
@@ -166,15 +174,17 @@ $('level-length').onchange = () => {
 };
 $('test-level').onclick = () => { if (!draft.objects.length) toast('An empty trail is fine. Add some jumps when you come back.'); start(0, true); };
 function palette() {
-  const choices = { blocks: [['block', '■ SOLID'], ['grid', '▦ GRID']], spikes: [['spike', '▲ FULL'], ['half', '▴ HALF']], portals: [['plane', '▷ PLANE'], ['square', '□ SQUARE']] }[tab];
+  const choices = { blocks: [['block', '■ SOLID'], ['grid', '▦ GRID'], ['black', '■ BLACK']], spikes: [['spike', '▲ FULL'], ['half', '▴ HALF'], ['small', '▴ ⅔ SIZE']], portals: [['plane', '▷ PLANE'], ['square', '□ SQUARE'], ['wheel', '⊙ WHEEL']], gravity: [['gravity-up', '↑ UPSIDE DOWN'], ['gravity-down', '↓ NORMAL']] }[tab];
   $('palette').replaceChildren(...choices.map(([type, name]) => { const b = document.createElement('button'); b.textContent = name; b.setAttribute('aria-pressed', String(tool === type)); b.onclick = () => { tool = type; palette(); updateSelection(); }; return b; }));
   $('select-tool').setAttribute('aria-pressed', String(tool === 'select'));
   for (const b of document.querySelectorAll('[data-tab]')) b.setAttribute('aria-selected', String(b.dataset.tab === tab));
 }
-for (const b of document.querySelectorAll('[data-tab]')) b.onclick = () => { tab = b.dataset.tab; tool = { blocks: 'block', spikes: 'spike', portals: 'plane' }[tab]; palette(); updateSelection(); };
+for (const b of document.querySelectorAll('[data-tab]')) b.onclick = () => { tab = b.dataset.tab; tool = { blocks: 'block', spikes: 'spike', portals: 'plane', gravity: 'gravity-up' }[tab]; palette(); updateSelection(); };
 $('select-tool').onclick = () => { tool = 'select'; palette(); updateSelection(); };
 function editAt(e) {
-  if (!view || !$('rotate').hidden || $('sheet').open) return;
+  if (!$('rotate').hidden || $('sheet').open) return;
+  // Input can arrive before the next animation frame after opening, panning or resizing.
+  const view = draw();
   const x = view.x(e.clientX), y = view.y(e.clientY);
   if (y < 0 || y > 6) return;
   if (tool === 'select') {
@@ -201,9 +211,9 @@ function adjust(action) {
 for (const b of document.querySelectorAll('[data-action]')) b.onclick = () => adjust(b.dataset.action);
 function deleteSelected() { if (selected < 0) return; draft.objects.splice(selected, 1); selected = -1; saveDraft(); }
 $('delete-object').onclick = deleteSelected;
-$('how').onclick = () => sheet('One button. Find your flow.', 'Square: tap or press Space to jump onto two-block ledges. Hold for another jump when you land. Plane: hold to climb, release to descend. Blocks are safe to touch while flying; hold to climb past a wall. Glowing portals switch your shape. Spikes always end the run; block sides end square runs. Pause whenever you want. Turn your phone sideways for play and the editor.');
+$('how').onclick = () => sheet('One button. Find your flow.', 'Square: tap or press Space to jump onto two-block ledges. Hold for another jump when you land. Plane: hold to fly against gravity; release to fall. Blocks are safe while flying. Wheel: each tap or Space press flips gravity, even in midair. Holding does not repeat the flip. UP and DOWN portals set gravity without changing your shape. Under upside-down gravity, land and jump on ceilings. All spikes kill; block sides stop planes but end square and wheel runs. Try Gravity Flip for the new mode, or build with it in the editor.');
 $('about').onclick = () => {
-  sheet('Clone Dash', 'Seven one-button trails and a place to build your own. An original geometric platformer inspired by Geometry Dash, made from a kid’s game idea.');
+  sheet('Clone Dash', 'Eight one-button trails and a place to build your own. An original geometric platformer inspired by Geometry Dash, made from a kid’s game idea.');
   const ethos = document.createElement('p'); ethos.textContent = document.querySelector('meta[name=description]').content;
   const mark = document.createElement('div'); mark.className = 'maker'; mark.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21 3 12C-4 4 6-3 12 5 18-3 28 4 21 12Z"/></svg> made with love by <a href="https://royashbrook.com" target="_blank" rel="noopener">roy</a> + <a href="https://royashbrook.com/agents" target="_blank" rel="noopener">ai</a> · <a href="https://github.com/sponsors/royashbrook" target="_blank" rel="noopener">sponsor me</a>';
   $('sheet-content').append(ethos, mark);
@@ -234,5 +244,5 @@ setInterval(checkUpdate, 60000);
 document.addEventListener('visibilitychange', () => { if (!document.hidden) void checkUpdate(); });
 updateHome(); if (!storageOK) persist();
 const requested = Number(new URLSearchParams(location.search).get('level'));
-if (requested >= 1 && requested <= 7 && Number.isInteger(requested)) start(requested - 1);
+if (requested >= 1 && requested <= LEVELS.length && Number.isInteger(requested)) start(requested - 1);
 requestAnimationFrame(frame);

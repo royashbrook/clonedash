@@ -1,6 +1,6 @@
 # Clone Dash
 
-A one-button, geometric platformer from a kid's idea. Seven hand-authored trails, square and plane modes, and a touch-friendly level editor. Original art and synthesized sound; no copied Geometry Dash assets.
+A one-button, geometric platformer from a kid's idea. Eight hand-authored trails, square, plane and wheel modes, and a touch-friendly level editor. Original art and synthesized sound; no copied Geometry Dash assets.
 
 **Play:** https://clonedash.royashbrook.com
 
@@ -18,6 +18,12 @@ No runtime dependencies. Engine uses 120 Hz fixed steps in block units. Speed is
 
 ## Music
 
-Seven original instrumental electronic tracks, composed in `public/music.js`: half-time drums, resonant wobble bass, sub bass, pads and arpeggiated synth melodies. At 150 BPM, one block of travel equals an eighth note. Each trail has a distinct key and melody, with intro, drop and breakdown sections. Music renders on-device into an audio buffer, works offline, starts after a sound/play gesture, and follows run time through pauses and retries. No licensed samples or external music requests.
+Eight original instrumental electronic tracks, composed in `public/music.js`: half-time drums, resonant wobble bass, sub bass, pads and arpeggiated synth melodies. At 150 BPM, one block of travel equals an eighth note. Each trail has a distinct key and melody, with intro, drop and breakdown sections. Music renders on-device into an audio buffer, works offline, starts after a sound/play gesture, and follows run time through pauses and retries. No licensed samples or external music requests.
+
+## Wheel and gravity
+
+Wheel mode flips gravity once per tap or Space press, including in midair. Holding does not repeat; keyboard auto-repeat is ignored. UP and DOWN portals set gravity without changing mode. Square jumps and plane controls mirror with gravity; inverted square/wheel landings use block undersides and the ceiling. Mode portals preserve gravity. Every new run resets to square and normal gravity.
+
+The editor includes wheel portals, a separate GRAVITY tab, completely black outlined blocks, and spikes scaled to 2/3 in both width and height. Shapes, rotations and flips use the same geometry for painting and collision. The bonus Gravity Flip trail demonstrates the new objects; the original seven layouts and save format are unchanged.
 
 no ads, no lives, no timers, nothing to buy, no accounts, no cookies, nothing sold or shared.
