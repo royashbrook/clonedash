@@ -201,7 +201,7 @@ function adjust(action) {
 for (const b of document.querySelectorAll('[data-action]')) b.onclick = () => adjust(b.dataset.action);
 function deleteSelected() { if (selected < 0) return; draft.objects.splice(selected, 1); selected = -1; saveDraft(); }
 $('delete-object').onclick = deleteSelected;
-$('how').onclick = () => sheet('One button. Find your flow.', 'Square: tap or press Space to jump. Hold for another jump when you land. Plane: hold to climb, release to descend. Glowing portals switch your shape. Spikes and the sides of blocks end the run. Land on top of blocks. Pause whenever you want. Turn your phone sideways for play and the editor.');
+$('how').onclick = () => sheet('One button. Find your flow.', 'Square: tap or press Space to jump onto two-block ledges. Hold for another jump when you land. Plane: hold to climb, release to descend. Blocks are safe to touch while flying; hold to climb past a wall. Glowing portals switch your shape. Spikes always end the run; block sides end square runs. Pause whenever you want. Turn your phone sideways for play and the editor.');
 $('about').onclick = () => {
   sheet('Clone Dash', 'Seven one-button trails and a place to build your own. An original geometric platformer inspired by Geometry Dash, made from a kid’s game idea.');
   const ethos = document.createElement('p'); ethos.textContent = document.querySelector('meta[name=description]').content;

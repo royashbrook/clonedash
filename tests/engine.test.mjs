@@ -1,12 +1,45 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createState, step, STEP, SPEED, polygon, intersects, bounds, object, transform, validateLevel } from '../public/engine.js';
+import { createState, step, STEP, SPEED, SIZE, polygon, intersects, bounds, object, transform, validateLevel } from '../public/engine.js';
 import { LEVELS } from '../public/levels.js';
 const empty = { name: 'Test', length: 100, objects: [] };
-test('auto-run is 2.5 blocks/sec; analytical jump apex is exactly 2 blocks', () => {
+test('auto-run is 5 blocks/sec; jump clears two blocks with a quarter-block margin', () => {
   const s = createState(empty); step(s, true); let peak = s.y;
   for (let i = 1; i < 120; i++) { step(s, false); peak = Math.max(peak, s.y); }
-  assert.ok(Math.abs(s.x - 1 - SPEED) < 1e-9); assert.ok(Math.abs(peak - 2) < 1e-9); assert.equal(s.y, 0);
+  assert.equal(SPEED, 5); assert.ok(Math.abs(s.x - 1 - 5) < 1e-9); assert.ok(Math.abs(peak - 2.25) < .001);
+  for (let i = 0; i < 20; i++) step(s, false);
+  assert.equal(s.y, 0);
+});
+test('two-block ledges can be landed on across a useful jump timing window', () => {
+  for (const launch of [1.9, 2.1, 2.3, 2.5]) {
+    const s = createState({ ...empty, objects: [object('block', 5), object('grid', 5, 1), object('grid', 6, 1), object('grid', 7, 1)] });
+    let landed = false;
+    while (s.x < 8 && s.status === 'playing') {
+      step(s, s.grounded && s.y === 0 && s.x >= launch);
+      if (s.grounded && s.y === 2) landed = true;
+    }
+    assert.equal(s.status, 'playing', `launch ${launch}`); assert.ok(landed, `launch ${launch}`);
+  }
+});
+test('planes survive solid top, underside and side contact; can climb past walls; spikes still kill', () => {
+  for (const type of ['block', 'grid']) for (const rotation of [0, 90, 180, 270]) {
+    const block = { ...object(type, 5, 2), rotation };
+    for (const [y, vy, held] of [[3.01, -2, false], [2 - SIZE - .01, 2, true], [2.1, 0, false]]) {
+      const s = { ...createState({ ...empty, objects: [block] }), mode: 'plane', x: y === 2.1 ? 5 - SIZE - .01 : 5, y, vy, grounded: false };
+      for (let i = 0; i < 6; i++) step(s, held);
+      assert.equal(s.status, 'playing');
+      assert.ok(!intersects([[s.x,s.y],[s.x+SIZE,s.y],[s.x+SIZE,s.y+SIZE],[s.x,s.y+SIZE]], polygon(block)));
+      for (let i = 0; i < 180; i++) step(s, true);
+      assert.equal(s.status, 'playing'); assert.ok(s.x > 6, 'plane escapes contact');
+    }
+  }
+  const floor = { ...createState(empty), mode: 'plane' };
+  step(floor, false); assert.equal(floor.status, 'playing'); step(floor, true); assert.ok(floor.y > 0);
+  for (const type of ['spike', 'half']) {
+    const s = { ...createState({ ...empty, objects: [object(type, 3)] }), mode: 'plane' };
+    for (let i = 0; i < 90; i++) step(s, false);
+    assert.equal(s.status, 'dead');
+  }
 });
 test('plane input changes acceleration; both portals work', () => {
   const level = { ...empty, objects: [object('plane', 3), object('square', 4)] };
@@ -22,9 +55,9 @@ test('spikes kill, block sides kill, block tops support; paused terminal states 
     for (let i = 0; i < 200; i++) step(s, false);
     assert.equal(s.status, 'dead', type); const snapshot = JSON.stringify(s); step(s, true); assert.equal(JSON.stringify(s), snapshot);
   }
-  const s = createState({ ...empty, objects: [object('block', 3), object('grid', 4)] });
+  const s = createState({ ...empty, objects: [object('block', 3), object('grid', 4), object('grid', 5)] });
   let landed = false;
-  while (s.x < 5 && s.status === 'playing') { step(s, s.grounded && s.x > 1.7 && s.x < 2); if (s.grounded && s.y === 1) landed = true; }
+  while (s.x < 6 && s.status === 'playing') { step(s, s.grounded && s.x < 1.1); if (s.grounded && s.y === 1) landed = true; }
   assert.equal(s.status, 'playing'); assert.ok(landed);
 });
 test('editor precise nudges, both rotations, flips and collision geometry agree', () => {
@@ -50,7 +83,8 @@ export function inputFor(s) {
   return s.level.objects.some(o => {
     if (['plane', 'square'].includes(o.type)) return false;
     const b = bounds(o);
-    return b.top > s.y + .05 && b.bottom < s.y + 1.1 && b.left - s.x > .7 && b.left - s.x < 1.15;
+    const lead = ['spike', 'half'].includes(o.type) ? 1.1 : 2.1;
+    return b.top > s.y + .05 && b.bottom < s.y + 1.1 && b.left - s.x > lead - .5 && b.left - s.x < lead;
   });
 }
 for (const [i, level] of LEVELS.entries()) test(`completion witness ${i + 1}: ${level.name}`, () => {

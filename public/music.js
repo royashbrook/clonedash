@@ -1,4 +1,4 @@
-// Original 150 BPM compositions: one block is one beat at 2.5 blocks/second.
+// Original 150 BPM compositions: one block is an eighth note at 5 blocks/second.
 // Render locally once per trail, then play a buffer. No network, samples or audio timer drift.
 export const TRACKS = [
   { name: 'First Spark', root: 40, melody: [12, 7, 10, 7, 15, 12, 7, 10], wobble: 2 },

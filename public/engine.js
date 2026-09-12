@@ -1,4 +1,5 @@
-export const SPEED = 2.5, GRAVITY = 16, JUMP = 8, SIZE = .64, STEP = 1 / 120;
+// Quarter-block clearance makes a two-block ledge landable, not just reachable at one instant.
+export const SPEED = 5, GRAVITY = 16, JUMP = Math.sqrt(2 * GRAVITY * 2.25), SIZE = .64, STEP = 1 / 120;
 export const TYPES = ['block', 'grid', 'spike', 'half', 'plane', 'square'];
 export function object(type, x, y = 0) { return { type, x, y, rotation: 0, flipX: false, flipY: false }; }
 export function polygon(o) {
@@ -38,9 +39,11 @@ export function step(s, held, dt = STEP) {
   s.grounded = false;
   if (s.y <= 0) {
     s.y = 0; s.vy = 0; s.grounded = true;
-    if (s.mode === 'plane') s.status = 'dead';
   }
-  if (s.y + SIZE > 7) s.status = 'dead';
+  if (s.y + SIZE > 7) {
+    if (s.mode === 'plane') { s.y = 7 - SIZE; s.vy = 0; }
+    else s.status = 'dead';
+  }
   for (let i = 0; i < s.level.objects.length; i++) {
     const o = s.level.objects[i];
     if (o.x > s.x + 2 || o.x < s.x - 2) continue;
@@ -54,12 +57,18 @@ export function step(s, held, dt = STEP) {
     }
     const p = polygon(o), b = bounds(o);
     if (o.type === 'block' || o.type === 'grid') {
-      if (s.mode === 'square' && s.vy <= 0 && oldY >= b.top - .015 && s.y <= b.top && s.x + SIZE > b.left + .001 && s.x < b.right - .001) {
+      if (s.vy <= 0 && oldY >= b.top - .015 && s.y <= b.top && s.x + SIZE > b.left + .001 && s.x < b.right - .001) {
         s.y = b.top; s.vy = 0; s.grounded = true;
       }
     }
     const player = [[s.x, s.y], [s.x + SIZE, s.y], [s.x + SIZE, s.y + SIZE], [s.x, s.y + SIZE]];
-    if (intersects(player, p)) s.status = 'dead';
+    if (intersects(player, p)) {
+      if (s.mode === 'plane' && (o.type === 'block' || o.type === 'grid')) {
+        // Solid contact is safe: slide underneath or stop at a wall until the pilot climbs.
+        if (oldY + SIZE <= b.bottom + .015 && s.vy > 0) { s.y = b.bottom - SIZE; s.vy = 0; }
+        else s.x = b.left - SIZE;
+      } else s.status = 'dead';
+    }
   }
   if (s.status === 'playing' && s.x >= s.level.length) s.status = 'complete';
   return s;

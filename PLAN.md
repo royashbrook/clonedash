@@ -1,6 +1,6 @@
 # Clone Dash
 
-Release scope: seven hand-authored, increasing-difficulty levels; 2.5 blocks/second auto-run; exact two-block square jump; hold-to-rise plane; both portals; two blocks and two spikes; collision follows editor transforms. Touch/keyboard, full-screen landscape gameplay, pause on background, brief death animation and quick retry.
+Release scope: seven hand-authored, increasing-difficulty levels; 5 blocks/second auto-run; two-block ledge jumps with quarter-block clearance; hold-to-rise plane with nonfatal solid contact; both portals; two blocks and two spikes; collision follows editor transforms. Touch/keyboard, full-screen landscape gameplay, pause on background, brief death animation and quick retry.
 
 Editor: Blocks / Spikes / Portals palette, select/place/delete, movement at 1 / 0.5 / 0.05 blocks, both quarter-turns and flips, pan, local draft, test and return. No server or user uploads.
 

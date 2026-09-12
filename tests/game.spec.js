@@ -59,12 +59,12 @@ test('editor places, selects, micro-adjusts, rotates, flips and persists; test r
 test('first trail can be completed with actual Space events; replay and completion persist', async ({ page }) => {
   await page.clock.install(); await page.goto('/');
   await page.getByRole('button', { name: 'Play First Spark', exact: true }).click();
-  const obstacles = [6, 12, 18, 24, 29]; let lastJump = -10;
-  for (let i = 0; i < 200; i++) {
+  const obstacles = [6, 12, 18, 24, 30]; let lastJump = -10;
+  for (let i = 0; i < 600; i++) {
     if (await page.getByRole('heading', { name: 'Level Complete!' }).isVisible()) break;
     const percent = await page.locator('#run-progress').evaluate(e => e.value), x = 1 + percent / 100 * 33;
-    if (obstacles.some(o => o - x > .8 && o - x < 1.2) && x - lastJump > 2) { await page.keyboard.down('Space'); lastJump = x; } else await page.keyboard.up('Space');
-    await page.clock.runFor(80);
+    if (obstacles.some(o => o - x > 1.7 && o - x < 2.1) && x - lastJump > 2) { await page.keyboard.down('Space'); lastJump = x; } else await page.keyboard.up('Space');
+    await page.clock.runFor(20);
   }
   await expect(page.getByRole('heading', { name: 'Level Complete!' })).toBeVisible();
   expect(await page.locator('#attempt').textContent()).toBe('TRY 1');
@@ -76,6 +76,32 @@ test('blocked storage and malformed saves do not block play or overwrite the old
   await page.goto('/'); await expect(page.locator('#notice')).toContainText('Storage unavailable');
   await page.getByRole('button', { name: 'Play First Spark', exact: true }).click(); await expect(page.locator('#hud')).toBeVisible();
   expect(await page.evaluate(() => localStorage.getItem('clonedash.v1'))).toBe('{bad');
+});
+test('real Space input lands the painted square on a two-block editor ledge', async ({ page }) => {
+  await page.clock.install();
+  await page.addInitScript(() => {
+    const block = (x, y) => ({ type: 'grid', x, y, rotation: 0, flipX: false, flipY: false });
+    localStorage.setItem('clonedash.v1', JSON.stringify({ version: 1, best: {}, sound: false, draft: { name: 'Two-block ledge', length: 20, objects: [block(5, 0), block(5, 1), block(6, 1), block(7, 1)] } }));
+    const fill = CanvasRenderingContext2D.prototype.fillRect;
+    CanvasRenderingContext2D.prototype.fillRect = function (x, y, w, h) {
+      if (this.fillStyle === '#9aff6b' && w === h && w > 20 && w < 60) window.squarePaint = { y: this.getTransform().f, width: w };
+      return fill.call(this, x, y, w, h);
+    };
+  });
+  await page.goto('/'); await page.locator('#editor-open').click(); await page.locator('#test-level').click();
+  await page.clock.runFor(100);
+  const ground = await page.evaluate(() => window.squarePaint);
+  for (let i = 0; i < 50; i++) {
+    const x = 1 + await page.locator('#run-progress').evaluate(e => e.value) / 100 * 19;
+    if (x >= 2.1) break;
+    await page.clock.runFor(20);
+  }
+  await page.keyboard.down('Space'); await page.clock.runFor(40); await page.keyboard.up('Space');
+  await page.clock.runFor(760);
+  expect(await page.locator('#attempt').textContent()).toBe('TRY 1');
+  const landed = await page.evaluate(() => window.squarePaint);
+  expect(ground.y - landed.y).toBeCloseTo(2 * ground.width / .64, 1);
+  await page.screenshot({ path: 'test-results/two-block-landing.png' });
 });
 test('served-shell update appears without restarting', async ({ browser }) => {
   let changed = false;
