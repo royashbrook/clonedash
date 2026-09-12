@@ -70,6 +70,28 @@ test('outline is transparent with white edges; new editor objects transform and 
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem('clonedash.v1')).draft)).toEqual(draft);
 });
 
+test('editor palette groups never shrink underneath neighboring controls', async ({ page }) => {
+  await page.goto('/'); await page.locator('#editor-open').click();
+  for (const [width, height] of [[740, 360], [932, 430], [1180, 820]]) {
+    await page.setViewportSize({ width, height });
+    for (const tab of ['BLOCKS', 'SPIKES', 'PORTALS', 'GRAVITY']) {
+      await page.getByRole('tab', { name: tab, exact: true }).click();
+      const boxes = await page.evaluate(() => {
+        const tabs = document.querySelector('.tabs').getBoundingClientRect();
+        const palette = document.querySelector('#palette').getBoundingClientRect();
+        const select = document.querySelector('#select-tool').getBoundingClientRect();
+        const last = document.querySelector('#palette').lastElementChild.getBoundingClientRect();
+        return { tabsRight: tabs.right, paletteLeft: palette.left, paletteRight: palette.right, selectLeft: select.left, lastRight: last.right };
+      });
+      expect(boxes.tabsRight).toBeLessThanOrEqual(boxes.paletteLeft);
+      expect(boxes.lastRight).toBeLessThanOrEqual(boxes.paletteRight + .1);
+      expect(boxes.paletteRight).toBeLessThanOrEqual(boxes.selectLeft);
+      await page.locator('#palette button').last().click();
+      await expect(page.locator('#palette button').last()).toHaveAttribute('aria-pressed', 'true');
+    }
+  }
+});
+
 test('Air Steps lands on the high outline shelf using real air jumps and saves completion', async ({ page }) => {
   await page.clock.install(); await trackPaint(page); await page.goto('/');
   await page.getByRole('button', { name: 'Play Air Steps', exact: true }).click();
