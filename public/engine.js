@@ -1,15 +1,16 @@
 // Quarter-block clearance makes a two-block ledge landable, not just reachable at one instant.
 export const SPEED = 5, GRAVITY = 16, JUMP = Math.sqrt(2 * GRAVITY * 2.25), SIZE = .64, STEP = 1 / 120;
-export const DEATH_INSET = .08; // 75% width/height for hazards; full size still supports landings.
-export const BLOCKS = ['block', 'grid', 'black', 'outline'];
+export const DEATH_INSET = .12; // 0.40-block hazard box; full size still supports landings.
+export const BLOCKS = ['block', 'grid', 'black', 'outline', 'plain-black'];
+export const RAMPS = ['ramp', 'ramp-grid', 'ramp-black'];
 export const SPIKES = ['spike', 'half', 'small', 'quarter'];
 export const PORTALS = ['plane', 'square', 'wheel', 'jumper', 'gravity-up', 'gravity-down'];
-export const TYPES = [...BLOCKS, ...SPIKES, ...PORTALS];
+export const TYPES = [...BLOCKS, ...SPIKES, ...PORTALS, ...RAMPS, 'ring'];
 export function object(type, x, y = 0) { return { type, x, y, rotation: 0, flipX: false, flipY: false }; }
 export function polygon(o) {
   const portal = PORTALS.includes(o.type), scale = o.type === 'small' ? 2 / 3 : o.type === 'quarter' ? .25 : 1;
   const h = portal ? 2.5 : o.type === 'half' ? .5 : scale, w = portal ? .6 : scale;
-  const points = SPIKES.includes(o.type) ? [[0, 0], [w, 0], [w / 2, h]] : [[0, 0], [w, 0], [w, h], [0, h]];
+  const points = RAMPS.includes(o.type) ? [[0, 0], [1, 0], [1, 1]] : o.type === 'ring' ? Array.from({ length: 16 }, (_, i) => [.5 + .45 * Math.cos(i * Math.PI / 8), .5 + .45 * Math.sin(i * Math.PI / 8)]) : SPIKES.includes(o.type) ? [[0, 0], [w, 0], [w / 2, h]] : [[0, 0], [w, 0], [w, h], [0, h]];
   const a = o.rotation * Math.PI / 180, c = Math.round(Math.cos(a)), s = Math.round(Math.sin(a));
   return points.map(([x, y]) => {
     x = (x - w / 2) * (o.flipX ? -1 : 1); y = (y - h / 2) * (o.flipY ? -1 : 1);
@@ -30,7 +31,24 @@ export function intersects(a, b) {
   return true;
 }
 export function createState(level) {
-  return { x: 1, y: 0, vy: 0, mode: 'square', gravity: -1, inputHeld: false, grounded: true, status: 'playing', time: 0, touchingPortals: [], level };
+  return { x: 1, y: 0, vy: 0, mode: 'square', gravity: -1, inputHeld: false, grounded: true, status: 'playing', time: 0, touchingPortals: [], usedRings: [], level };
+}
+export function ringReady(s, o, index) {
+  const dx = Math.max(s.x - (o.x + .5), 0, o.x + .5 - s.x - SIZE);
+  const dy = Math.max(s.y - (o.y + .5), 0, o.y + .5 - s.y - SIZE);
+  return !s.usedRings.includes(index) && dx * dx + dy * dy <= .6 * .6;
+}
+// Height of the actual triangle over the player's full horizontal footprint.
+export function rampSurface(o, left, right, upper) {
+  const p = polygon(o), heights = [];
+  for (let i = 0; i < p.length; i++) {
+    const [ax, ay] = p[i], [bx, by] = p[(i + 1) % p.length];
+    if (ax === bx) continue;
+    const lo = Math.max(left, Math.min(ax, bx)), hi = Math.min(right, Math.max(ax, bx));
+    if (hi <= lo + .00001) continue;
+    for (const x of [lo, hi]) heights.push(ay + (by - ay) * (x - ax) / (bx - ax));
+  }
+  return heights.length ? (upper ? Math.max(...heights) : Math.min(...heights)) : null;
 }
 function playerPolygon(s, inset = 0) {
   const left = s.x + inset, right = s.x + SIZE - inset, bottom = s.y + inset, top = s.y + SIZE - inset;
@@ -39,8 +57,10 @@ function playerPolygon(s, inset = 0) {
 export function step(s, held, dt = STEP, tapped = held && !s.inputHeld) {
   if (s.status !== 'playing') return s;
   s.inputHeld = held;
-  const oldY = s.y;
-  if (s.mode === 'wheel' && s.grounded && tapped) { s.gravity *= -1; s.vy = 0; s.grounded = false; }
+  const oldY = s.y, oldX = s.x, wasGrounded = s.grounded;
+  const ring = tapped ? s.level.objects.findIndex((o, i) => o.type === 'ring' && ringReady(s, o, i)) : -1;
+  if (ring >= 0) { s.usedRings.push(ring); s.vy = -s.gravity * JUMP; s.grounded = false; }
+  if (ring < 0 && s.mode === 'wheel' && s.grounded && tapped) { s.gravity *= -1; s.vy = 0; s.grounded = false; }
   if (((s.mode === 'square' || s.mode === 'jumper') && s.grounded && held) || (s.mode === 'jumper' && tapped)) { s.vy = -s.gravity * JUMP; s.grounded = false; }
   const acceleration = s.mode === 'plane' ? -s.gravity * (held ? 14 : -12) : s.gravity * GRAVITY;
   s.x += SPEED * dt; s.time += dt;
@@ -59,6 +79,7 @@ export function step(s, held, dt = STEP, tapped = held && !s.inputHeld) {
   const touching = [];
   for (let i = 0; i < s.level.objects.length; i++) {
     const o = s.level.objects[i];
+    if (o.type === 'ring') continue;
     if (o.x > s.x + 2 || o.x < s.x - 2) continue;
     if (PORTALS.includes(o.type)) {
       const player = playerPolygon(s);
@@ -74,7 +95,20 @@ export function step(s, held, dt = STEP, tapped = held && !s.inputHeld) {
       }
       continue;
     }
-    const p = polygon(o), b = bounds(o), safeSolid = (s.mode === 'plane' || s.mode === 'jumper') && BLOCKS.includes(o.type);
+    const p = polygon(o), b = bounds(o), ramp = RAMPS.includes(o.type), safeSolid = (s.mode === 'plane' || s.mode === 'jumper') && (BLOCKS.includes(o.type) || ramp);
+    if (ramp) {
+      for (const upper of [true, false]) {
+        if (!(safeSolid || (upper ? s.gravity < 0 : s.gravity > 0))) continue;
+        const surface = rampSurface(o, s.x, s.x + SIZE, upper);
+        if (surface === null) continue;
+        const oldSurface = rampSurface(o, oldX, oldX + SIZE, upper);
+        const oldEdge = oldY + (upper ? 0 : SIZE), edge = s.y + (upper ? 0 : SIZE);
+        const direction = upper ? 1 : -1;
+        const following = wasGrounded && s.vy * s.gravity >= 0 && oldSurface !== null && Math.abs(oldEdge - oldSurface) < .02;
+        const crossing = s.vy * direction <= 0 && direction * (oldEdge - surface) >= -(SPEED * dt + .015) && direction * (edge - surface) <= 0;
+        if (following || crossing) { s.y = surface - (upper ? 0 : SIZE); s.vy = 0; s.grounded = upper ? s.gravity < 0 : s.gravity > 0; }
+      }
+    }
     if (BLOCKS.includes(o.type) && s.x + SIZE > b.left + .001 && s.x < b.right - .001) {
       if ((s.gravity < 0 || safeSolid) && s.vy <= 0 && oldY >= b.top - .015 && s.y <= b.top) {
         s.y = b.top; s.vy = 0; s.grounded = s.gravity < 0;

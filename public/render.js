@@ -1,4 +1,4 @@
-import { polygon, bounds, PORTALS, SIZE } from './engine.js';
+import { polygon, bounds, PORTALS, RAMPS, SIZE, ringReady } from './engine.js';
 const portalLook = { plane: ['#ffd166', 'FLY', '▷'], square: ['#72f7dc', 'JUMP', '□'], wheel: ['#ff8ac4', 'WHEEL', '⊙'], jumper: ['#53e3ff', 'JUMPER', '⇈'], 'gravity-up': ['#53e3ff', 'UP', '↑'], 'gravity-down': ['#ffb477', 'DOWN', '↓'] };
 export function render(canvas, { state, level, camera = 0, editing = false, selected = -1, time = 0, reduced = false, areaBottom, areaTop = 0 }) {
   const w = innerWidth, h = innerHeight, dpr = Math.min(devicePixelRatio || 1, 2);
@@ -41,7 +41,13 @@ export function render(canvas, { state, level, camera = 0, editing = false, sele
   if (hasGravity) { ctx.fillStyle = '#0a111c'; ctx.fillRect(0, Y(7) - 12, w, 12); ctx.fillStyle = color; ctx.fillRect(0, Y(7) - 2, w, 2); }
   level.objects.forEach((o, index) => {
     if (X(o.x) < -unit * 2 || X(o.x) > w + unit) return;
-    if (PORTALS.includes(o.type)) {
+    if (o.type === 'ring') {
+      const active = state && ringReady(state, o, index), used = state?.usedRings.includes(index);
+      ctx.save(); ctx.globalAlpha = used ? .25 : 1; ctx.strokeStyle = active ? '#ffffff' : '#ffd166'; ctx.lineWidth = active ? 4 : 3;
+      ctx.beginPath(); ctx.arc(X(o.x + .5), Y(o.y + .5), unit * .45, 0, Math.PI * 2); ctx.stroke();
+      ctx.strokeStyle = '#ffd16666'; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(X(o.x + .5), Y(o.y + .5), unit * .6, 0, Math.PI * 2); ctx.stroke();
+      ctx.fillStyle = '#ffd166'; ctx.font = `bold ${unit * .4}px system-ui`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(state?.gravity > 0 ? '↓' : '↑', X(o.x + .5), Y(o.y + .5)); ctx.restore();
+    } else if (PORTALS.includes(o.type)) {
       const x = X(o.x + .3), y = Y(o.y + 1.25), [c, label, icon] = portalLook[o.type];
       ctx.save(); ctx.strokeStyle = c; ctx.lineWidth = 3; ctx.fillStyle = `${c}18`;
       ctx.beginPath(); ctx.ellipse(x, y, unit * .3, unit * 1.25, -o.rotation * Math.PI / 180, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
@@ -52,13 +58,15 @@ export function render(canvas, { state, level, camera = 0, editing = false, sele
     } else {
       const p = polygon(o); ctx.beginPath(); p.forEach(([x, y], i) => i ? ctx.lineTo(X(x), Y(y)) : ctx.moveTo(X(x), Y(y))); ctx.closePath();
       const grad = ctx.createLinearGradient(0, Y(o.y + 1), 0, Y(o.y)); grad.addColorStop(0, '#35465d'); grad.addColorStop(1, '#03070c');
-      ctx.fillStyle = o.type === 'black' ? '#000000' : grad;
+      ctx.fillStyle = ['black', 'plain-black', 'ramp-black'].includes(o.type) ? '#000000' : grad;
       if (o.type !== 'outline') ctx.fill();
-      ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2; ctx.stroke();
-      if (o.type === 'grid') {
+      ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2;
+      if (!RAMPS.includes(o.type) && o.type !== 'plain-black') ctx.stroke();
+      if (o.type === 'grid' || o.type === 'ramp-grid') {
         ctx.save(); ctx.clip(); ctx.strokeStyle = '#ffffff35'; ctx.lineWidth = 1;
         for (let q = 1; q <= 3; q++) { ctx.beginPath(); ctx.moveTo(X(o.x + q / 4), Y(o.y)); ctx.lineTo(X(o.x + q / 4), Y(o.y + 1)); ctx.moveTo(X(o.x), Y(o.y + q / 4)); ctx.lineTo(X(o.x + 1), Y(o.y + q / 4)); ctx.stroke(); } ctx.restore();
       }
+      if (RAMPS.includes(o.type)) { ctx.beginPath(); ctx.moveTo(X(p[0][0]), Y(p[0][1])); ctx.lineTo(X(p[2][0]), Y(p[2][1])); ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2; ctx.stroke(); }
     }
     if (editing && index === selected) {
       const b = bounds(o);

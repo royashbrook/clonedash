@@ -1,8 +1,8 @@
 # Clone Dash
 
-Release scope: seven original levels plus Gravity Flip and Air Steps bonus trails; 5 blocks/second auto-run; two-block ledge jumps with quarter-block clearance; hold-to-rise plane with nonfatal solid contact; surface-tap-to-flip wheel; midair-tap jumper; mode and gravity portals; four block and four spike styles; collision follows editor transforms. Touch/keyboard, full-screen landscape gameplay, pause on background, brief death animation and quick retry.
+Release scope: seven original levels plus Gravity Flip and Air Steps bonus trails; 5 blocks/second auto-run; two-block ledge jumps with quarter-block clearance; hold-to-rise plane and midair-tap jumper with safe solid contact; surface-tap-to-flip wheel; mode and gravity portals; five block and four spike styles; jump rings; three 45-degree ramp styles; collision follows editor transforms. Hazard box is 0.40 blocks, separate from full-size support. Touch/keyboard, full-screen landscape gameplay, pause on background, brief death animation and quick retry.
 
-Editor: Blocks / Spikes / Portals palette, select/place/delete, movement at 1 / 0.5 / 0.05 blocks, both quarter-turns and flips, pan, local draft, test and return. No server or user uploads.
+Editor: Blocks / Spikes / Portals / Gravity / Rings / Ramp tabs, select/place/delete, copy + paste, confirmed delete all, movement at 1 / 0.5 / 0.05 blocks, both quarter-turns and flips, pan, local draft, test and return. No server or user uploads.
 
 House shell: nine-level selection, how-to, about/maker mark, install help, local progress, safe storage failures, offline shell, update toast. Original geometric art and audio; no borrowed game assets.
 

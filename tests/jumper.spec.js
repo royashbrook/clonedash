@@ -74,7 +74,7 @@ test('editor palette groups never shrink underneath neighboring controls', async
   await page.goto('/'); await page.locator('#editor-open').click();
   for (const [width, height] of [[740, 360], [932, 430], [1180, 820]]) {
     await page.setViewportSize({ width, height });
-    for (const tab of ['BLOCKS', 'SPIKES', 'PORTALS', 'GRAVITY']) {
+    for (const tab of ['BLOCKS', 'SPIKES', 'PORTALS', 'GRAVITY', 'RINGS', 'RAMP']) {
       await page.getByRole('tab', { name: tab, exact: true }).click();
       const boxes = await page.evaluate(() => {
         const tabs = document.querySelector('.tabs').getBoundingClientRect();

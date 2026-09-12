@@ -21,7 +21,7 @@ test('jumper survives every block face and can jump away from walls under either
 });
 
 test('smaller death box forgives spike-tip grazes but still kills direct hits in every mode', () => {
-  assert.equal(SIZE - 2 * DEATH_INSET, .48);
+  assert.equal(SIZE - 2 * DEATH_INSET, .40);
   for (const mode of ['square', 'plane', 'wheel', 'jumper']) for (const type of SPIKES) {
     const spike = object(type, 5, 2), points = polygon(spike), top = Math.max(...points.map(p => p[1]));
     const center = (Math.min(...points.map(p => p[0])) + Math.max(...points.map(p => p[0]))) / 2;
@@ -32,7 +32,7 @@ test('smaller death box forgives spike-tip grazes but still kills direct hits in
   for (const mode of ['square', 'wheel']) {
     const s = { ...createState({ ...empty, objects: [object('block', 5)] }), mode, x: 5 - SIZE };
     step(s, false); assert.equal(s.status, 'playing', 'outer edge can graze block side');
-    step(s, false); assert.equal(s.status, 'dead', 'inner box still dies on block side');
+    step(s, false); step(s, false); assert.equal(s.status, 'dead', 'inner box still dies on block side');
   }
 });
 
