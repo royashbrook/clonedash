@@ -150,7 +150,7 @@ function frame(now) {
     $('cue').hidden = paused || !$('rotate').hidden || learned || state.time > cueUntil || state.status !== 'playing';
     if (!$('cue').hidden) {
       $('cue').firstChild.textContent = state.mode === 'plane' ? 'HOLD TO FLY ' : state.mode === 'wheel' ? 'TAP TO FLIP GRAVITY ' : 'TAP TO JUMP ';
-      $('cue').querySelector('span').textContent = state.mode === 'plane' ? 'RELEASE TO FALL' : state.mode === 'wheel' ? 'ONE TAP · ONE FLIP' : 'HOLD TO KEEP JUMPING';
+      $('cue').querySelector('span').textContent = state.mode === 'plane' ? 'RELEASE TO FALL' : state.mode === 'wheel' ? 'LAND FIRST · THEN TAP' : 'HOLD TO KEEP JUMPING';
     }
     $('level-name').textContent = `${state.level.name} · ${state.mode.toUpperCase()} ${state.gravity > 0 ? '↑' : '↓'}`;
   }
@@ -211,7 +211,7 @@ function adjust(action) {
 for (const b of document.querySelectorAll('[data-action]')) b.onclick = () => adjust(b.dataset.action);
 function deleteSelected() { if (selected < 0) return; draft.objects.splice(selected, 1); selected = -1; saveDraft(); }
 $('delete-object').onclick = deleteSelected;
-$('how').onclick = () => sheet('One button. Find your flow.', 'Square: tap or press Space to jump onto two-block ledges. Hold for another jump when you land. Plane: hold to fly against gravity; release to fall. Blocks are safe while flying. Wheel: each tap or Space press flips gravity, even in midair. Holding does not repeat the flip. UP and DOWN portals set gravity without changing your shape. Under upside-down gravity, land and jump on ceilings. All spikes kill; block sides stop planes but end square and wheel runs. Try Gravity Flip for the new mode, or build with it in the editor.');
+$('how').onclick = () => sheet('One button. Find your flow.', 'Square: tap or press Space to jump onto two-block ledges. Hold for another jump when you land. Plane: hold to fly against gravity; release to fall. Blocks are safe while flying. Wheel: land on a block, floor or ceiling, then tap or press Space to flip gravity. Midair taps are ignored; holding does not flip again when you land. UP and DOWN portals set gravity without changing your shape. Under upside-down gravity, land and jump on ceilings. All spikes kill; block sides stop planes but end square and wheel runs. Try Gravity Flip for the new mode, or build with it in the editor.');
 $('about').onclick = () => {
   sheet('Clone Dash', 'Eight one-button trails and a place to build your own. An original geometric platformer inspired by Geometry Dash, made from a kid’s game idea.');
   const ethos = document.createElement('p'); ethos.textContent = document.querySelector('meta[name=description]').content;

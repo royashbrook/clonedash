@@ -22,7 +22,7 @@ Eight original instrumental electronic tracks, composed in `public/music.js`: ha
 
 ## Wheel and gravity
 
-Wheel mode flips gravity once per tap or Space press, including in midair. Holding does not repeat; keyboard auto-repeat is ignored. UP and DOWN portals set gravity without changing mode. Square jumps and plane controls mirror with gravity; inverted square/wheel landings use block undersides and the ceiling. Mode portals preserve gravity. Every new run resets to square and normal gravity.
+Wheel mode flips gravity once per tap or Space press while resting on a solid surface (block top, inverted block underside, floor or ceiling). Midair taps are ignored, not queued for landing. Holding does not repeat; keyboard auto-repeat is ignored. UP and DOWN portals set gravity without changing mode. Square jumps and plane controls mirror with gravity; inverted square/wheel landings use block undersides and the ceiling. Mode portals preserve gravity. Every new run resets to square and normal gravity.
 
 The editor includes wheel portals, a separate GRAVITY tab, completely black outlined blocks, and spikes scaled to 2/3 in both width and height. Shapes, rotations and flips use the same geometry for painting and collision. The bonus Gravity Flip trail demonstrates the new objects; the original seven layouts and save format are unchanged.
 

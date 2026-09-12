@@ -3,17 +3,32 @@ import assert from 'node:assert/strict';
 import { createState, step, SIZE, STEP, TYPES, object, polygon, bounds, intersects, transform, validateLevel } from '../public/engine.js';
 const empty = { name: 'Gravity checks', length: 100, objects: [] };
 
-test('wheel flips once per press, can flip midair, and retries restore normal gravity', () => {
+test('wheel requires surface contact, ignores midair taps, and never queues a held flip on landing', () => {
   const s = { ...createState(empty), mode: 'wheel' };
   for (let i = 0; i < 30; i++) step(s, true);
   assert.equal(s.gravity, 1); assert.ok(s.y > 0); assert.ok(s.vy > 0);
   step(s, false); step(s, true);
-  assert.equal(s.gravity, -1); assert.ok(s.vy < 0);
+  assert.equal(s.gravity, 1); assert.ok(s.vy > 0);
+  step(s, false, STEP, true); assert.equal(s.gravity, 1);
+  step(s, true);
   for (let i = 0; i < 120; i++) step(s, true);
-  assert.equal(s.gravity, -1); assert.equal(s.y, 0); assert.equal(s.status, 'playing');
+  assert.equal(s.gravity, 1); assert.equal(s.y, 7 - SIZE); assert.ok(s.grounded); assert.equal(s.status, 'playing');
+  step(s, false); step(s, true); assert.equal(s.gravity, -1);
+  for (let i = 0; i < 120; i++) step(s, true);
+  assert.equal(s.gravity, -1); assert.equal(s.y, 0); assert.ok(s.grounded);
   assert.equal(createState(empty).gravity, -1);
   // A tap that begins and ends between physics frames still has an explicit input edge.
   step(s, false, STEP, true); assert.equal(s.gravity, 1);
+});
+
+test('wheel can flip from every block top, but not after rolling off its edge', () => {
+  for (const type of ['block', 'grid', 'black']) {
+    const s = { ...createState({ ...empty, objects: [object(type, 5, 2)] }), mode: 'wheel', x: 5, y: 3.01, vy: -2, grounded: false };
+    step(s, false); assert.ok(s.grounded); step(s, true); assert.equal(s.gravity, 1);
+    const edge = { ...createState(s.level), mode: 'wheel', x: 5.98, y: 3 };
+    step(edge, false); assert.equal(edge.grounded, false);
+    step(edge, true); assert.equal(edge.gravity, -1);
+  }
 });
 
 test('upside-down square, plane and wheel physics mirror normal gravity', () => {

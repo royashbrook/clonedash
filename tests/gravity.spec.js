@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 
-test('wheel reacts to brief touch once, ignores held key repeats, and resets on retry', async ({ browser }) => {
+test('wheel rejects midair taps and held landing flips, accepts fresh surface taps, and resets on retry', async ({ browser }) => {
   const context = await browser.newContext({ viewport: { width: 932, height: 430 }, hasTouch: true });
   const page = await context.newPage();
   await page.clock.install();
@@ -13,11 +13,18 @@ test('wheel reacts to brief touch once, ignores held key repeats, and resets on 
   await page.touchscreen.tap(700, 200); await page.clock.runFor(100);
   await expect(page.locator('#level-name')).toContainText('WHEEL ↑');
   await page.clock.runFor(200); await expect(page.locator('#level-name')).toContainText('WHEEL ↑');
+  await page.touchscreen.tap(700, 200); await page.clock.runFor(80);
+  await expect(page.locator('#level-name')).toContainText('WHEEL ↑');
   await page.keyboard.down('Space'); await page.clock.runFor(80);
-  await expect(page.locator('#level-name')).toContainText('WHEEL ↓');
+  await expect(page.locator('#level-name')).toContainText('WHEEL ↑');
+  await page.clock.runFor(1000);
+  await expect(page.locator('#level-name')).toContainText('WHEEL ↑');
   await page.keyboard.down('Space'); await page.clock.runFor(80);
-  await expect(page.locator('#level-name')).toContainText('WHEEL ↓');
+  await expect(page.locator('#level-name')).toContainText('WHEEL ↑');
   await page.keyboard.up('Space'); await page.keyboard.down('Space'); await page.clock.runFor(80);
+  await expect(page.locator('#level-name')).toContainText('WHEEL ↓'); await page.keyboard.up('Space');
+  await page.clock.runFor(1100);
+  await page.touchscreen.tap(700, 200); await page.clock.runFor(80);
   await expect(page.locator('#level-name')).toContainText('WHEEL ↑'); await page.keyboard.up('Space');
   await page.locator('#pause').click();
   await page.getByRole('button', { name: 'RESTART LEVEL', exact: true }).click(); await page.clock.runFor(900);

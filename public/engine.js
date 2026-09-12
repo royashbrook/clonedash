@@ -34,7 +34,7 @@ export function step(s, held, dt = STEP, tapped = held && !s.inputHeld) {
   if (s.status !== 'playing') return s;
   s.inputHeld = held;
   const oldY = s.y;
-  if (s.mode === 'wheel' && tapped) { s.gravity *= -1; s.vy = 0; s.grounded = false; }
+  if (s.mode === 'wheel' && s.grounded && tapped) { s.gravity *= -1; s.vy = 0; s.grounded = false; }
   if (s.mode === 'square' && s.grounded && held) { s.vy = -s.gravity * JUMP; s.grounded = false; }
   const acceleration = s.mode === 'plane' ? -s.gravity * (held ? 14 : -12) : s.gravity * GRAVITY;
   s.x += SPEED * dt; s.time += dt;
