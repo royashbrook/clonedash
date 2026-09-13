@@ -223,7 +223,7 @@ function editAt(e) {
   // Input can arrive before the next animation frame after opening, panning or resizing.
   const view = draw();
   const x = view.x(e.clientX), y = view.y(e.clientY);
-  if (y < 0 || y > levelHeight(draft) - 1) return;
+  if (y < 0 || y >= levelHeight(draft)) return;
   const layer = $('layer').value === 'background' ? 'background' : undefined;
   if (tool === 'select') {
     selected = draft.objects.findLastIndex(o => { const b = bounds(o); return o.layer === layer && x >= b.left - .2 && x <= b.right + .2 && y >= b.bottom - .2 && y <= b.top + .2; });

@@ -27,11 +27,13 @@ test('My Levels preserves a legacy draft, creates independent levels and reopens
   await page.locator('#layer').selectOption('background'); await place(page, 6, 12);
   await page.locator('#layer').selectOption('play'); await place(page, 6, 12);
   await expect(page.locator('#selection')).toContainText('y 12.00');
-  await page.locator('#level-settings').click(); await page.locator('#level-height').fill('7'); await page.locator('#level-height').blur();
+  await page.locator('#pan-y').fill('13'); await place(page, 9, 19);
+  await expect(page.locator('#selection')).toContainText('y 19.00');
+  await page.locator('#level-settings').click(); await page.locator('#level-height').fill('19'); await page.locator('#level-height').blur();
   await expect(page.locator('#level-height')).toHaveValue('20');
   await page.locator('#sheet-close').click();
   const before = await stored(page);
-  expect(before.customLevels).toHaveLength(2); expect(before.draft.objects.map(o => o.layer ?? 'play')).toEqual(['background', 'play']);
+  expect(before.customLevels).toHaveLength(2); expect(before.draft.objects.map(o => o.layer ?? 'play')).toEqual(['background', 'play', 'play']);
   expect(before.draft.song).toBe(5); expect(before.best[0]).toBe(100);
   await page.locator('#editor-back').click(); await page.setViewportSize({ width: 430, height: 932 });
   await expect(page.locator('#rotate')).toBeHidden(); await expect(page.locator('.custom-card')).toHaveCount(2);
