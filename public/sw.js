@@ -1,5 +1,5 @@
 const CACHE = 'clonedash-BUILD_ID';
-const SHELL = ['/', '/index.html', '/app.css?v=BUILD_ID', '/app.js?v=BUILD_ID', '/engine.js', '/levels.js', '/render.js', '/music.js', '/install.js', '/manifest.json', '/icon.svg', '/icon-180.png', '/icon-192.png', '/icon-512.png', '/icon-maskable-512.png'];
+const SHELL = ['/', '/index.html', '/app.css?v=BUILD_ID', '/app.js?v=BUILD_ID', '/engine.js', '/levels.js', '/library.js', '/render.js', '/music.js', '/install.js', '/manifest.json', '/icon.svg', '/icon-180.png', '/icon-192.png', '/icon-512.png', '/icon-maskable-512.png'];
 self.addEventListener('install', event => { event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(SHELL)).then(() => self.skipWaiting())); });
 self.addEventListener('activate', event => { event.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k => k.startsWith('clonedash-') && k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim())); });
 self.addEventListener('fetch', event => {

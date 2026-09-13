@@ -1,32 +1,27 @@
-import { createState, step, STEP, object, transform, validateLevel, bounds, duplicateObject } from './engine.js';
+import { createState, step, STEP, object, transform, validateLevel, bounds, duplicateObject, levelHeight } from './engine.js';
 import { LEVELS } from './levels.js';
 import { render } from './render.js';
 import { wireInstall } from './install.js';
-import { Soundtrack } from './music.js';
+import { Soundtrack, TRACKS, trackFor } from './music.js';
+import { SAVE, readSave, storeDraft, selectLevel, newLevel } from './library.js';
 
 const $ = id => document.getElementById(id), canvas = $('world');
 const reduced = matchMedia('(prefers-reduced-motion: reduce)');
-const SAVE = 'clonedash.v1';
-let save = { version: 1, best: {}, draft: { name: 'My trail', length: 40, objects: [] }, sound: false }, storageOK = true;
+let save = readSave(null, LEVELS.length), storageOK = true;
 try {
-  const raw = localStorage.getItem(SAVE);
-  if (raw) {
-    const p = JSON.parse(raw);
-    if (p.version !== 1 || !p.best || typeof p.best !== 'object' || Array.isArray(p.best)) throw Error();
-    validateLevel(p.draft);
-    if (Object.entries(p.best).some(([k, v]) => !/^\d+$/.test(k) || +k >= LEVELS.length || !Number.isFinite(v) || v < 0 || v > 100)) throw Error();
-    save = p;
-  }
+  save = readSave(localStorage.getItem(SAVE), LEVELS.length);
 } catch { storageOK = false; }
 function persist() {
   if (storageOK) try { localStorage.setItem(SAVE, JSON.stringify(save)); } catch { storageOK = false; }
   $('draft-status').textContent = storageOK ? 'Saved on this device' : 'NOT SAVED · storage unavailable';
+  $('library-status').textContent = storageOK ? 'Saved on this device. Each new level gets its own original song.' : 'NOT SAVED · storage unavailable. Keep this page open to keep your work.';
   if (!storageOK) toast('Storage unavailable. You can still play; progress is not saved.');
 }
 let toastTimer;
 function toast(message) { $('notice').textContent = message; $('notice').hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => $('notice').hidden = true, 4200); }
 let mode = 'home', state, current = 0, custom = false, paused = false, held = false, jumpBuffer = 0, attempt = 1, deathTime = 0, readyTime = 0, acc = 0, last = 0, camera = 0, learned = false, cueUntil = 5;
-let draft = structuredClone(save.draft), selected = -1, tool = 'block', tab = 'blocks';
+let draft = structuredClone(save.draft), selected = -1, tool = 'block', tab = 'blocks', cameraY = 0;
+const draftSong = () => draft.song ?? 8 + save.activeLevel;
 let audio;
 const music = new Soundtrack();
 function tone(freq, duration = .08, volume = .03) {
@@ -53,7 +48,7 @@ function updateHome() {
 }
 function setMode(m) {
   mode = m; document.body.dataset.mode = m;
-  $('home').hidden = m !== 'home'; $('editor').hidden = m !== 'editor'; $('hud').hidden = m !== 'play';
+  $('home').hidden = m !== 'home'; $('library').hidden = m !== 'library'; $('editor').hidden = m !== 'editor'; $('hud').hidden = m !== 'play';
   $('cue').hidden = true; held = false; acc = 0; orientation();
 }
 function start(index, isCustom = false) {
@@ -63,6 +58,7 @@ function start(index, isCustom = false) {
 }
 function resetRun() {
   music.stop();
+  cameraY = 0;
   state = createState(custom ? structuredClone(draft) : LEVELS[current]); deathTime = 0; readyTime = .4; held = false; jumpBuffer = 0; acc = 0; cueUntil = 5;
   $('level-name').textContent = state.level.name; $('attempt').textContent = `TRY ${attempt}`;
 }
@@ -93,7 +89,7 @@ function pause() {
 function resume() { closeSheet(); paused = false; held = false; acc = 0; last = performance.now(); orientation(); }
 $('pause').onclick = pause; $('menu').onclick = pause; $('rotate-menu').onclick = home;
 function orientation() {
-  const narrow = innerHeight > innerWidth && mode !== 'home';
+  const narrow = innerHeight > innerWidth && (mode === 'play' || mode === 'editor');
   $('rotate').hidden = !narrow;
   if (narrow && mode === 'play') { held = false; paused = true; acc = 0; music.stop(); closeSheet(); }
   else if (mode === 'play' && paused && !$('sheet').open && state?.status === 'playing') pause();
@@ -142,8 +138,10 @@ function frame(now) {
       if (state.status === 'complete') complete();
     }
     camera = Math.max(0, state.x - 3);
+    const targetY = Math.max(0, Math.min(levelHeight(state.level) - 7, state.y - 3));
+    cameraY += (targetY - cameraY) * (1 - Math.exp(-10 * dt));
   }
-  music.sync(mode === 'play' && !custom ? current : 0, !document.hidden && (mode === 'home' || mode === 'editor' || (mode === 'play' && !paused && $('rotate').hidden && state.status === 'playing' && readyTime <= 0)), mode === 'play' ? state.time : now / 1000);
+  music.sync(mode === 'editor' || (mode === 'play' && custom) ? draftSong() : mode === 'play' ? current : 0, !document.hidden && (mode === 'home' || mode === 'library' || (mode === 'editor' && $('rotate').hidden) || (mode === 'play' && !paused && $('rotate').hidden && state.status === 'playing' && readyTime <= 0)), mode === 'play' ? state.time : now / 1000);
   draw();
   if (mode === 'play') {
     $('run-progress').value = Math.min(100, (state.x - 1) / (state.level.length - 1) * 100);
@@ -158,14 +156,52 @@ function frame(now) {
 }
 function draw() {
   const level = mode === 'editor' ? draft : mode === 'play' ? state.level : LEVELS[0];
-  return render(canvas, { level, state: mode === 'play' ? state : mode === 'home' ? { ...createState(level), x: 9, y: 1.3, grounded: false, time: 0 } : null, camera: mode === 'editor' ? +$('pan').value : mode === 'play' ? camera : 0, editing: mode === 'editor', selected, time: deathTime, reduced: reduced.matches, areaTop: $('editor').hidden ? 0 : $('editor').querySelector('header').getBoundingClientRect().bottom, areaBottom: $('editor').hidden ? undefined : $('editor').querySelector('.editor-controls').getBoundingClientRect().top });
+  return render(canvas, { level, state: mode === 'play' ? state : mode === 'home' ? { ...createState(level), x: 9, y: 1.3, grounded: false, time: 0 } : null, camera: mode === 'editor' ? +$('pan').value : mode === 'play' ? camera : 0, cameraY: mode === 'editor' ? +$('pan-y').value : mode === 'play' ? cameraY : 0, editing: mode === 'editor', layer: $('layer').value, selected, time: deathTime, reduced: reduced.matches, areaTop: $('editor').hidden ? 0 : $('editor').querySelector('header').getBoundingClientRect().bottom, areaBottom: $('editor').hidden ? undefined : $('editor').querySelector('.editor-controls').getBoundingClientRect().top });
 }
 function saveDraft() {
-  try { validateLevel(draft); save.draft = structuredClone(draft); persist(); } catch { toast('Keep objects inside the trail, after the start and before the finish.'); }
+  try { storeDraft(save, draft); persist(); } catch { toast('Keep objects inside the trail, after the start and before the finish.'); }
   updateSelection();
 }
-function openEditor() { closeSheet(); paused = false; setMode('editor'); $('level-title').value = draft.name; $('level-length').value = draft.length; $('pan').max = draft.length - 8; palette(); updateSelection(); }
-$('editor-open').onclick = openEditor; $('editor-back').onclick = home;
+function editorHeight() { $('pan-y').max = levelHeight(draft) - 7; $('vertical-scroll').hidden = levelHeight(draft) === 7; }
+function openEditor() { closeSheet(); paused = false; setMode('editor'); $('level-title').value = draft.name; $('level-length').value = draft.length; $('pan').max = draft.length - 8; editorHeight(); palette(); updateSelection(); }
+function loadCustom(id) { draft = selectLevel(save, id); selected = -1; $('pan').value = 0; $('pan-y').value = 0; persist(); }
+function library() {
+  closeSheet(); paused = false; setMode('library');
+  $('custom-levels').replaceChildren(...save.customLevels.map(({ id, level }) => {
+    const card = document.createElement('article'); card.className = 'custom-card';
+    const title = document.createElement('h2'); title.textContent = level.name;
+    const details = document.createElement('p'); details.textContent = `${level.length} × ${levelHeight(level)} blocks · ${level.objects.length} pieces · ♪ ${trackFor(level.song ?? 8 + id).name}`;
+    const buttons = document.createElement('div'); buttons.className = 'buttons';
+    const play = document.createElement('button'); play.className = 'primary'; play.textContent = '▶ PLAY'; play.setAttribute('aria-label', `Play ${level.name}`); play.onclick = () => { loadCustom(id); start(0, true); };
+    const edit = document.createElement('button'); edit.textContent = 'EDIT'; edit.setAttribute('aria-label', `Edit ${level.name}`); edit.onclick = () => { loadCustom(id); openEditor(); };
+    buttons.append(play, edit); card.append(title, details, buttons); return card;
+  }));
+}
+$('my-levels').onclick = library; $('library-back').onclick = home;
+$('new-level').onclick = () => { try { draft = newLevel(save); selected = -1; $('pan').value = 0; $('pan-y').value = 0; persist(); openEditor(); } catch (error) { toast(error.message); } };
+$('editor-open').onclick = openEditor; $('editor-back').onclick = library;
+$('level-settings').onclick = () => {
+  sheet('Level settings', 'Make room above your trail. Background blocks are decoration, never obstacles. Songs are original instrumental electronic loops.');
+  const form = document.createElement('div'); form.className = 'level-settings';
+  const heightLabel = document.createElement('label'); heightLabel.textContent = 'Height (7–40 blocks)';
+  const height = document.createElement('input'); height.id = 'level-height'; height.type = 'number'; height.min = '7'; height.max = '40'; height.step = '1'; height.value = levelHeight(draft); heightLabel.append(height);
+  height.onchange = () => {
+    const n = Number(height.value);
+    try { validateLevel({ ...draft, height: n }); } catch { height.value = levelHeight(draft); toast('Height must be 7–40 whole blocks and include every object.'); return; }
+    draft.height = n; editorHeight(); saveDraft();
+  };
+  const songLabel = document.createElement('label'); songLabel.textContent = 'Song';
+  const song = document.createElement('select'); song.id = 'level-song';
+  const choices = [...TRACKS.map((_, i) => i), ...save.customLevels.map(e => 8 + e.id)];
+  if (!choices.includes(draftSong())) choices.push(draftSong());
+  for (const index of choices) { const option = document.createElement('option'); option.value = index; option.textContent = trackFor(index).name + (index === 8 + save.activeLevel ? ' · this level’s original' : ''); song.append(option); }
+  song.value = draftSong(); song.onchange = () => { draft.song = Number(song.value); saveDraft(); };
+  songLabel.append(song);
+  const preview = document.createElement('button'); preview.textContent = save.sound ? 'MUTE PREVIEW' : 'LISTEN';
+  preview.onclick = () => { save.sound = !save.sound; soundLabel(); persist(); music.unlock(save.sound); preview.textContent = save.sound ? 'MUTE PREVIEW' : 'LISTEN'; };
+  form.append(heightLabel, songLabel, preview); $('sheet-content').append(form);
+};
+$('layer').onchange = () => { selected = -1; if ($('layer').value === 'background') { tab = 'blocks'; tool = 'block'; } palette(); updateSelection(); };
 $('level-title').onchange = () => { draft.name = $('level-title').value.trim() || 'My trail'; $('level-title').value = draft.name; saveDraft(); };
 $('level-length').onchange = () => {
   const n = Number($('level-length').value);
@@ -178,6 +214,7 @@ function palette() {
   $('palette').replaceChildren(...choices.map(([type, name]) => { const b = document.createElement('button'); b.textContent = name; b.setAttribute('aria-pressed', String(tool === type)); b.onclick = () => { tool = type; palette(); updateSelection(); }; return b; }));
   $('select-tool').setAttribute('aria-pressed', String(tool === 'select'));
   for (const b of document.querySelectorAll('[data-tab]')) b.setAttribute('aria-selected', String(b.dataset.tab === tab));
+  for (const b of document.querySelectorAll('[data-tab]')) b.disabled = $('layer').value === 'background' && b.dataset.tab !== 'blocks';
 }
 for (const b of document.querySelectorAll('[data-tab]')) b.onclick = () => { tab = b.dataset.tab; tool = { blocks: 'block', spikes: 'spike', portals: 'plane', gravity: 'gravity-up', rings: 'ring', ramp: 'ramp' }[tab]; palette(); updateSelection(); };
 $('select-tool').onclick = () => { tool = 'select'; palette(); updateSelection(); };
@@ -186,20 +223,25 @@ function editAt(e) {
   // Input can arrive before the next animation frame after opening, panning or resizing.
   const view = draw();
   const x = view.x(e.clientX), y = view.y(e.clientY);
-  if (y < 0 || y > 6) return;
+  if (y < 0 || y > levelHeight(draft) - 1) return;
+  const layer = $('layer').value === 'background' ? 'background' : undefined;
   if (tool === 'select') {
-    selected = draft.objects.findLastIndex(o => { const b = bounds(o); return x >= b.left - .2 && x <= b.right + .2 && y >= b.bottom - .2 && y <= b.top + .2; });
+    selected = draft.objects.findLastIndex(o => { const b = bounds(o); return o.layer === layer && x >= b.left - .2 && x <= b.right + .2 && y >= b.bottom - .2 && y <= b.top + .2; });
     updateSelection(); return;
   }
   const unit = +$('step-size').value, ox = Math.round(x / unit) * unit, oy = Math.floor(y / unit) * unit;
   if (ox < 3 || ox > draft.length - 2) { toast('Leave three blocks at the start and two at the finish.'); return; }
   if (draft.objects.length >= 600) { toast('This trail has reached 600 objects.'); return; }
-  if (draft.objects.some(o => o.x === ox && o.y === oy)) { selected = draft.objects.findIndex(o => o.x === ox && o.y === oy); updateSelection(); return; }
-  draft.objects.push(object(tool, Math.round(ox * 20) / 20, Math.round(oy * 20) / 20)); selected = draft.objects.length - 1; saveDraft();
+  const existing = draft.objects.findIndex(o => o.layer === layer && o.x === ox && o.y === oy);
+  if (existing >= 0) { selected = existing; updateSelection(); return; }
+  const piece = object(tool, Math.round(ox * 20) / 20, Math.round(oy * 20) / 20);
+  if (layer) piece.layer = layer;
+  try { validateLevel({ ...draft, objects: [...draft.objects, piece] }); } catch { toast('That piece extends above the ceiling. Increase the height or place it lower.'); return; }
+  draft.objects.push(piece); selected = draft.objects.length - 1; saveDraft();
 }
 function updateSelection() {
   const o = draft.objects[selected];
-  $('selection').textContent = o ? `${o.type.toUpperCase()} · x ${o.x.toFixed(2)} / y ${o.y.toFixed(2)} · ${o.rotation}°` : tool === 'select' ? 'Tap an object to select it.' : `Tap the grid to place ${tool === 'half' ? 'a half spike' : 'a ' + tool}.`;
+  $('selection').textContent = (o ? `${o.type.toUpperCase()} · x ${o.x.toFixed(2)} / y ${o.y.toFixed(2)} · ${o.rotation}°` : tool === 'select' ? 'Tap an object to select it.' : `Tap the grid to place ${tool === 'half' ? 'a half spike' : 'a ' + tool}.`) + ($('layer').value === 'background' ? ' · BACKGROUND: no collision' : '');
   for (const b of document.querySelectorAll('[data-action],#delete-object,#duplicate-object')) b.disabled = !o;
   $('delete-all').disabled = draft.objects.length === 0;
 }

@@ -1,14 +1,14 @@
-import { polygon, bounds, PORTALS, RAMPS, SIZE, ringReady } from './engine.js';
+import { polygon, bounds, PORTALS, RAMPS, SIZE, ringReady, levelHeight } from './engine.js';
 const portalLook = { plane: ['#ffd166', 'FLY', '▷'], square: ['#72f7dc', 'JUMP', '□'], wheel: ['#ff8ac4', 'WHEEL', '⊙'], jumper: ['#53e3ff', 'JUMPER', '⇈'], 'gravity-up': ['#53e3ff', 'UP', '↑'], 'gravity-down': ['#ffb477', 'DOWN', '↓'] };
-export function render(canvas, { state, level, camera = 0, editing = false, selected = -1, time = 0, reduced = false, areaBottom, areaTop = 0 }) {
+export function render(canvas, { state, level, camera = 0, cameraY = 0, editing = false, selected = -1, layer, time = 0, reduced = false, areaBottom, areaTop = 0 }) {
   const w = innerWidth, h = innerHeight, dpr = Math.min(devicePixelRatio || 1, 2);
   if (canvas.width !== Math.round(w * dpr) || canvas.height !== Math.round(h * dpr)) { canvas.width = Math.round(w * dpr); canvas.height = Math.round(h * dpr); }
   const ctx = canvas.getContext('2d'); ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   const floor = editing ? (areaBottom ?? h - 180) - 18 : h - Math.max(42, h * .16);
-  const hasGravity = level.objects.some(o => ['wheel', 'gravity-up', 'gravity-down'].includes(o.type));
+  const height = levelHeight(level), hasGravity = height > 7 || level.objects.some(o => ['wheel', 'gravity-up', 'gravity-down'].includes(o.type));
   const top = !editing && hasGravity ? Math.max(84, areaTop) : areaTop;
   const unit = Math.max(12, Math.min((floor - top - 14) / 7, w / 13.5, 82));
-  const X = x => (x - camera) * unit, Y = y => floor - y * unit;
+  const X = x => (x - camera) * unit, Y = y => floor - (y - cameraY) * unit, ground = Y(0);
   const color = level.color || '#9aff6b';
   const bg = ctx.createLinearGradient(0, 0, w, h); bg.addColorStop(0, '#101825'); bg.addColorStop(1, '#172c3d');
   ctx.fillStyle = bg; ctx.fillRect(0, 0, w, h);
@@ -30,17 +30,19 @@ export function render(canvas, { state, level, camera = 0, editing = false, sele
       ctx.beginPath(); ctx.moveTo(X(x), areaTop); ctx.lineTo(X(x), floor); ctx.stroke();
       if (x % 5 === 0) { ctx.fillStyle = '#b6c5d8'; ctx.font = '12px monospace'; ctx.fillText(String(x), X(x) + 3, floor + 14); }
     }
-    for (let y = 0; y <= 7; y++) { ctx.beginPath(); ctx.moveTo(0, Y(y)); ctx.lineTo(w, Y(y)); ctx.stroke(); }
-    ctx.fillStyle = '#9aff6b12'; ctx.fillRect(X(0), Y(7), 3 * unit, 7 * unit);
+    for (let y = Math.ceil(cameraY); y <= Math.min(height, cameraY + 8); y++) { ctx.beginPath(); ctx.moveTo(0, Y(y)); ctx.lineTo(w, Y(y)); ctx.stroke(); ctx.fillStyle = '#b6c5d8'; ctx.font = '12px monospace'; ctx.fillText(String(y), 4, Y(y) - 3); }
+    ctx.fillStyle = '#9aff6b12'; ctx.fillRect(X(0), Y(height), 3 * unit, height * unit);
   }
-  ctx.fillStyle = '#0a111c'; ctx.fillRect(0, floor, w, h - floor);
+  ctx.fillStyle = '#0a111c'; ctx.fillRect(0, ground, w, Math.max(0, h - ground));
   ctx.strokeStyle = `${color}30`; ctx.lineWidth = 1;
-  for (let x = -(camera * unit % (unit / 2)); x < w; x += unit / 2) { ctx.beginPath(); ctx.moveTo(x, floor); ctx.lineTo(x - h * .2, h); ctx.stroke(); }
-  for (let y = floor + 14; y < h; y += 18) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke(); }
-  ctx.fillStyle = color; ctx.fillRect(0, floor, w, 2);
-  if (hasGravity) { ctx.fillStyle = '#0a111c'; ctx.fillRect(0, Y(7) - 12, w, 12); ctx.fillStyle = color; ctx.fillRect(0, Y(7) - 2, w, 2); }
-  level.objects.forEach((o, index) => {
+  if (ground < h) for (let x = -(camera * unit % (unit / 2)); x < w; x += unit / 2) { ctx.beginPath(); ctx.moveTo(x, ground); ctx.lineTo(x - h * .2, h); ctx.stroke(); }
+  for (let y = ground + 14; y < h; y += 18) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke(); }
+  ctx.fillStyle = color; ctx.fillRect(0, ground, w, 2);
+  if (hasGravity) { ctx.fillStyle = '#0a111c'; ctx.fillRect(0, Y(height) - 12, w, 12); ctx.fillStyle = color; ctx.fillRect(0, Y(height) - 2, w, 2); }
+  for (const background of [true, false]) level.objects.forEach((o, index) => {
+    if ((o.layer === 'background') !== background) return;
     if (X(o.x) < -unit * 2 || X(o.x) > w + unit) return;
+    ctx.save(); ctx.globalAlpha = background ? (editing && layer === 'background' ? .65 : .3) : 1;
     if (o.type === 'ring') {
       const active = state && ringReady(state, o, index), used = state?.usedRings.includes(index);
       ctx.save(); ctx.globalAlpha = used ? .25 : 1; ctx.strokeStyle = active ? '#ffffff' : '#ffd166'; ctx.lineWidth = active ? 4 : 3;
@@ -69,12 +71,14 @@ export function render(canvas, { state, level, camera = 0, editing = false, sele
       if (RAMPS.includes(o.type)) { ctx.beginPath(); ctx.moveTo(X(p[0][0]), Y(p[0][1])); ctx.lineTo(X(p[2][0]), Y(p[2][1])); ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2; ctx.stroke(); }
     }
     if (editing && index === selected) {
+      ctx.globalAlpha = 1;
       const b = bounds(o);
       ctx.strokeStyle = '#9aff6b'; ctx.lineWidth = 3; ctx.setLineDash([5, 3]); ctx.strokeRect(X(b.left) - 5, Y(b.top) - 5, (b.right - b.left) * unit + 10, (b.top - b.bottom) * unit + 10); ctx.setLineDash([]);
     }
+    ctx.restore();
   });
   if (X(level.length) < w + 100) {
-    ctx.fillStyle = `${color}12`; ctx.fillRect(X(level.length), Y(7), unit * 2, unit * 7);
+    ctx.fillStyle = `${color}12`; ctx.fillRect(X(level.length), Y(height), unit * 2, unit * height);
     ctx.fillStyle = color; ctx.font = 'bold 14px system-ui'; ctx.fillText('FINISH', X(level.length) - 12, Y(3));
     for (let y = 0; y < 6; y++) for (let x = 0; x < 2; x++) if ((x + y) % 2 === 0) ctx.fillRect(X(level.length + x * .18), Y(y * .25 + .25), unit * .18, unit * .25);
   }
@@ -113,5 +117,5 @@ export function render(canvas, { state, level, camera = 0, editing = false, sele
     }
     ctx.restore();
   }
-  return { unit, floor, camera, x: x => x / unit + camera, y: y => (floor - y) / unit };
+  return { unit, floor, camera, cameraY, x: x => x / unit + camera, y: y => (floor - y) / unit + cameraY };
 }

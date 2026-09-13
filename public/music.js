@@ -13,8 +13,17 @@ export const TRACKS = [
 ];
 const BEAT = .4, BARS = 16, LENGTH = BARS * 4 * BEAT;
 const hz = n => 440 * 2 ** ((n - 69) / 12);
+export function trackFor(index) {
+  if (TRACKS[index]) return TRACKS[index];
+  // A unique two-note opening for each of the 100 custom originals, then a seeded riff.
+  const n = index - TRACKS.length, scale = [0, 3, 5, 7, 10, 12, 15, 17, 19, 22];
+  let seed = 3571 + n * 7919;
+  const melody = [scale[n % 10], scale[Math.floor(n / 10) % 10]];
+  while (melody.length < 8) { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; melody.push(scale[seed % scale.length]); }
+  return { name: `Original ${n + 1}`, root: 38 + n % 9, melody, wobble: [2, 3, 4, 6][n % 4] };
+}
 export async function compose(index, Offline = globalThis.OfflineAudioContext) {
-  const song = TRACKS[index % TRACKS.length];
+  const song = trackFor(index);
   const c = new Offline(2, Math.ceil(LENGTH * 44100), 44100);
   const master = c.createDynamicsCompressor(); master.threshold.value = -12; master.knee.value = 15; master.ratio.value = 5;
   const volume = c.createGain(); volume.gain.value = .68; master.connect(volume).connect(c.destination);
@@ -55,7 +64,7 @@ export async function compose(index, Offline = globalThis.OfflineAudioContext) {
       note(hz(song.root + chord - 12), at, BEAT - .03, .18, 'sine');
     }
     for (let j = 0; j < 8; j++) {
-      if (bar < 2 && j % 2) continue;
+      if (bar < 2 && j % 2 && index < TRACKS.length) continue;
       const at = t + j * BEAT / 2, pitch = song.root + 24 + song.melody[(j + bar % 2 * 2) % 8];
       const out = c.createGain(); out.gain.value = 1; out.connect(master); out.connect(echo);
       note(hz(pitch), at, BEAT * .42, drop ? .055 : .04, 'triangle', out);
@@ -79,7 +88,8 @@ export class Soundtrack {
     if (this.source && this.track === index) return;
     this.stop();
     if (!this.buffers.has(index)) {
-      if (!this.pending.has(index)) { this.pending.add(index); compose(index).then(buffer => { this.pending.delete(index); this.buffers.set(index, buffer); const i = this.intent; this.sync(i.index, i.running, i.offset); }).catch(() => this.pending.delete(index)); }
+      // One render at a time; a big level library must not turn into a big audio cache.
+      if (!this.pending.size) { this.pending.add(index); compose(index).then(buffer => { this.pending.delete(index); this.buffers.set(index, buffer); if (this.buffers.size > 3) this.buffers.delete(this.buffers.keys().next().value); const i = this.intent; this.sync(i.index, i.running, i.offset); }).catch(() => { this.pending.delete(index); this.enabled = false; }); }
       return;
     }
     this.source = this.context.createBufferSource(); this.source.buffer = this.buffers.get(index); this.source.loop = true; this.source.connect(this.context.destination); this.source.start(0, Math.max(0, offset) % this.source.buffer.duration); this.track = index;

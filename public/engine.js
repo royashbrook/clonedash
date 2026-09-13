@@ -6,6 +6,7 @@ export const RAMPS = ['ramp', 'ramp-grid', 'ramp-black'];
 export const SPIKES = ['spike', 'half', 'small', 'quarter'];
 export const PORTALS = ['plane', 'square', 'wheel', 'jumper', 'gravity-up', 'gravity-down'];
 export const TYPES = [...BLOCKS, ...SPIKES, ...PORTALS, ...RAMPS, 'ring'];
+export const levelHeight = level => level.height ?? 7;
 export function object(type, x, y = 0) { return { type, x, y, rotation: 0, flipX: false, flipY: false }; }
 export function polygon(o) {
   const portal = PORTALS.includes(o.type), scale = o.type === 'small' ? 2 / 3 : o.type === 'quarter' ? .25 : 1;
@@ -57,7 +58,7 @@ function playerPolygon(s, inset = 0) {
 export function step(s, held, dt = STEP, tapped = held && !s.inputHeld) {
   if (s.status !== 'playing') return s;
   s.inputHeld = held;
-  const oldY = s.y, oldX = s.x, wasGrounded = s.grounded;
+  const oldY = s.y, oldX = s.x, wasGrounded = s.grounded, height = levelHeight(s.level);
   const ring = tapped ? s.level.objects.findIndex((o, i) => o.type === 'ring' && ringReady(s, o, i)) : -1;
   if (ring >= 0) { s.usedRings.push(ring); s.vy = -s.gravity * JUMP; s.grounded = false; }
   if (ring < 0 && s.mode === 'wheel' && s.grounded && tapped) { s.gravity *= -1; s.vy = 0; s.grounded = false; }
@@ -72,13 +73,14 @@ export function step(s, held, dt = STEP, tapped = held && !s.inputHeld) {
     s.y = 0; s.vy = 0; s.grounded = s.gravity < 0;
     if (s.gravity > 0 && s.mode !== 'plane' && s.mode !== 'jumper') s.status = 'dead';
   }
-  if (s.y + SIZE > 7) {
-    if (s.gravity > 0 || s.mode === 'plane' || s.mode === 'jumper') { s.y = 7 - SIZE; s.vy = 0; s.grounded = s.gravity > 0; }
+  if (s.y + SIZE > height) {
+    if (s.gravity > 0 || s.mode === 'plane' || s.mode === 'jumper') { s.y = height - SIZE; s.vy = 0; s.grounded = s.gravity > 0; }
     else s.status = 'dead';
   }
   const touching = [];
   for (let i = 0; i < s.level.objects.length; i++) {
     const o = s.level.objects[i];
+    if (o.layer === 'background') continue;
     if (o.type === 'ring') continue;
     if (o.x > s.x + 2 || o.x < s.x - 2) continue;
     if (PORTALS.includes(o.type)) {
@@ -89,7 +91,7 @@ export function step(s, held, dt = STEP, tapped = held && !s.inputHeld) {
           if (o.type.startsWith('gravity-')) { s.gravity = o.type === 'gravity-up' ? 1 : -1; s.vy = 0; s.grounded = false; }
           else {
             s.mode = o.type;
-            if (o.type === 'plane') { s.y = Math.max(.5, Math.min(7 - SIZE - .5, s.y)); s.vy = -s.gravity * 3; s.grounded = false; }
+            if (o.type === 'plane') { s.y = Math.max(.5, Math.min(height - SIZE - .5, s.y)); s.vy = -s.gravity * 3; s.grounded = false; }
           }
         }
       }
@@ -131,8 +133,13 @@ export function step(s, held, dt = STEP, tapped = held && !s.inputHeld) {
 }
 export function validateLevel(raw) {
   if (!raw || typeof raw.name !== 'string' || raw.name.length > 40 || !Number.isFinite(raw.length) || raw.length < 20 || raw.length > 200 || !Array.isArray(raw.objects) || raw.objects.length > 600) throw Error('Invalid level');
+  const height = levelHeight(raw);
+  if (!Number.isInteger(height) || height < 7 || height > 40 || (raw.song !== undefined && (!Number.isInteger(raw.song) || raw.song < 0 || raw.song > 108))) throw Error('Invalid level settings');
   for (const o of raw.objects) {
-    if (!o || !TYPES.includes(o.type) || !Number.isFinite(o.x) || !Number.isFinite(o.y) || o.x < 3 || o.x > raw.length - 2 || o.y < -.5 || o.y > 6 || ![0, 90, 180, 270].includes(o.rotation) || typeof o.flipX !== 'boolean' || typeof o.flipY !== 'boolean') throw Error('Invalid object');
+    if (!o || !TYPES.includes(o.type) || !Number.isFinite(o.x) || !Number.isFinite(o.y) || o.x < 3 || o.x > raw.length - 2 || o.y < -.5 || o.y > height - 1 || ![0, 90, 180, 270].includes(o.rotation) || typeof o.flipX !== 'boolean' || typeof o.flipY !== 'boolean') throw Error('Invalid object');
+    if (o.layer !== undefined && o.layer !== 'background') throw Error('Invalid layer');
+    if (o.layer === 'background' && !BLOCKS.includes(o.type)) throw Error('Only blocks go in the background');
+    if (raw.height !== undefined && bounds(o).top > height + .00001) throw Error('Object above ceiling');
   }
   return structuredClone(raw);
 }
@@ -156,7 +163,7 @@ export function duplicateObject(level, index) {
   do {
     copy.x = Math.round((copy.x + stride) * 20) / 20;
     if (copy.x > level.length - 2) throw Error('No room to the right. Move the object or lengthen the trail.');
-  } while (level.objects.some(o => intersects(polygon(copy), polygon(o))));
+  } while (level.objects.some(o => o.layer === copy.layer && intersects(polygon(copy), polygon(o))));
   validateLevel({ ...level, objects: [...level.objects, copy] });
   return copy;
 }

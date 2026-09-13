@@ -20,6 +20,14 @@ No runtime dependencies. Engine uses 120 Hz fixed steps in block units. Speed is
 
 Nine original instrumental electronic tracks, composed in `public/music.js`: half-time drums, resonant wobble bass, sub bass, pads and arpeggiated synth melodies. At 150 BPM, one block of travel equals an eighth note. Each trail has a distinct key and melody, with intro, drop and breakdown sections. Music renders on-device into an audio buffer, works offline, starts after a sound/play gesture, and follows run time through pauses and retries. No licensed samples or external music requests.
 
+## My levels
+
+The block-and-spike **MY LEVELS** button opens a library of up to 100 custom levels. Create, name, edit and play each one independently. The old single draft becomes the first library entry without changing its objects or best scores. Saves stay on this device; malformed data and storage failures are reported without overwriting the old save.
+
+**HEIGHT / SONG** sets world height from 7 to 40 blocks and selects music, with a LISTEN toggle. Taller levels get an Up scrollbar in the editor and a following vertical camera in play, not smaller artwork. Lowering the ceiling cannot cut off placed objects. Each custom level starts with its own deterministic original song and riff; the picker can also choose any built-in track or another level's original. Choosing a shared track is an explicit override of the unique default. Only three rendered songs are cached, with one render in flight.
+
+The **Layer** selector switches between PLAY and BACKGROUND. Background blocks paint behind playable pieces and never collide or support a landing. Both layers can occupy the same coordinates; selecting, moving and copying respects the active layer. All five block styles work as decoration. Spikes, portals, rings and ramps stay in the play layer.
+
 ## Wheel and gravity
 
 Wheel mode flips gravity once per tap or Space press while resting on a solid surface (block top, inverted block underside, floor or ceiling). Midair taps are ignored, not queued for landing. Holding does not repeat; keyboard auto-repeat is ignored. UP and DOWN portals set gravity without changing mode. Square jumps and plane controls mirror with gravity; inverted square/wheel landings use block undersides and the ceiling. Mode portals preserve gravity. Every new run resets to square and normal gravity.
