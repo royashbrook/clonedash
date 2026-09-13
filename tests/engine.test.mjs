@@ -21,11 +21,11 @@ test('two-block ledges can be landed on across a useful jump timing window', () 
     assert.equal(s.status, 'playing', `launch ${launch}`); assert.ok(landed, `launch ${launch}`);
   }
 });
-test('planes survive solid top, underside and side contact; can climb past walls; spikes still kill', () => {
+test('planes retain safe solid top and underside contact; spikes still kill', () => {
   for (const type of ['block', 'grid', 'black', 'outline']) for (const rotation of [0, 90, 180, 270]) {
     const block = { ...object(type, 5, 2), rotation };
-    for (const [y, vy, held] of [[3.01, -2, false], [2 - SIZE - .01, 2, true], [2.1, 0, false]]) {
-      const s = { ...createState({ ...empty, objects: [block] }), mode: 'plane', x: y === 2.1 ? 5 - SIZE - .01 : 5, y, vy, grounded: false };
+    for (const [y, vy, held] of [[3.01, -2, false], [2 - SIZE - .01, 2, true]]) {
+      const s = { ...createState({ ...empty, objects: [block] }), mode: 'plane', x: 5, y, vy, grounded: false };
       for (let i = 0; i < 6; i++) step(s, held);
       assert.equal(s.status, 'playing');
       assert.ok(!intersects([[s.x,s.y],[s.x+SIZE,s.y],[s.x+SIZE,s.y+SIZE],[s.x,s.y+SIZE]], polygon(block)));

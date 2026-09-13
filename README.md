@@ -14,7 +14,7 @@ Node 22+. `npm ci`, `npm test`, `npm run build`, `npm run dev` (localhost:4191).
 `npx playwright install chromium`, then `npm run test:browser`.
 `npm run deploy` uses Cloudflare Workers static assets. Automatic deployment uses the configured `CLOUDFLARE_API_TOKEN` repository secret, only after main-branch physics and browser checks pass, and publishes that exact tested commit. Pull-request runs cannot deploy; superseded commits are refused. Manual deployment is main-only and repeats the checks.
 
-No runtime dependencies. Engine uses 120 Hz fixed steps in block units. Speed is 5 blocks/sec. Gravity is 16 blocks/sec²; the square reaches 2.25 blocks, giving two-block ledges a quarter-block clearance margin. Plane contact with solid blocks, floor and ceiling is safe: land, slide underneath, or climb past a wall. Spikes remain lethal; square side collisions remain lethal. Transformed polygons are shared by rendering and collision. Build IDs come from asset content, not a manually bumped version constant. Service worker uses network-first fetches with offline fallback and a live-shell update toast.
+No runtime dependencies. Engine uses 120 Hz fixed steps in block units. Speed is 5 blocks/sec. Gravity is 16 blocks/sec²; the square reaches 2.25 blocks, giving two-block ledges a quarter-block clearance margin. Plane landings, floor and ceiling contact are safe. Wall impacts kill in every mode: square, plane, wheel and jumper, including vertical ramp faces. Spikes remain lethal. Transformed polygons are shared by rendering and collision. Build IDs come from asset content, not a manually bumped version constant. Service worker uses network-first fetches with offline fallback and a live-shell update toast.
 
 ## Music
 
@@ -36,7 +36,7 @@ The editor includes wheel portals, a separate GRAVITY tab, completely black outl
 
 ## Jumper and Air Steps
 
-Jumper mode has square movement, but each fresh tap or Space press restarts the jump even in midair. There is no extra-jump limit. Holding only repeats on landing, not in the air; keyboard auto-repeat is ignored. Air jumps also work with inverted gravity. Like planes, jumpers survive solid contact: land, bump a ceiling or stop at a wall, then jump clear. They do not pass through blocks. The jumper has a double-chevron icon and its own portal in the editor.
+Jumper mode has square movement, but each fresh tap or Space press restarts the jump even in midair. There is no extra-jump limit. Holding only repeats on landing, not in the air; keyboard auto-repeat is ignored. Air jumps also work with inverted gravity. Like planes, jumpers can land or bump a ceiling safely, but hitting a wall kills. Jump before impact to clear it. The jumper has a double-chevron icon and its own portal in the editor.
 
 Hazard contact uses an inner 0.40-block player box, inset 0.12 blocks on each side of the visible 0.64-block body. This forgives small edge grazes without making direct spike hits safe. Landing, safe solid contact and portals still use the full body; jump reach and platform support are unchanged.
 
@@ -46,6 +46,6 @@ Outline blocks have a transparent interior and white outline, with the same soli
 
 RINGS contains a jump ring. Tap/click it (or press Space) as the player reaches its glow to jump in midair. A ring triggers once per run, dims after use, and resets on retry. Holding alone does not activate it, and distant taps cannot use it. The impulse follows gravity without changing gamemode; plane speed limits still apply.
 
-RAMP contains gradient, grid and black solid 45-degree ramps. Only the diagonal slope edge has a white outline. Rotations/flips transform the actual triangle used for both drawing and contact. Players can climb, descend, land and jump from slopes, including inverted slopes; planes and jumpers retain safe solid contact. BLOCKS also includes NO BORDER, a completely black solid block without a white outline, separately from the original outlined BLACK block. All new objects support editor copy/paste, transforms and persisted drafts. No existing trail or save index changed.
+RAMP contains gradient, grid and black solid 45-degree ramps. Only the diagonal slope edge has a white outline. Rotations/flips transform the actual triangle used for both drawing and contact. Players can climb, descend, land and jump from slopes, including inverted slopes; vertical ramp walls kill in every mode. BLOCKS also includes NO BORDER, a completely black solid block without a white outline, separately from the original outlined BLACK block. All new objects support editor copy/paste, transforms and persisted drafts. No existing trail or save index changed.
 
 no ads, no lives, no timers, nothing to buy, no accounts, no cookies, nothing sold or shared.

@@ -29,16 +29,19 @@ test('copy + paste preserves transforms; delete all cancels safely and clears on
   await page.reload(); await page.locator('#editor-open').click(); expect(await saved()).toEqual(cleared);
 });
 
-test('jumper stops safely at a real block wall and a tap jumps over it', async ({ page }) => {
+for (const mode of ['square', 'plane', 'wheel', 'jumper']) test(`${mode} wall impact dies and restarts instead of stopping at the wall`, async ({ page }) => {
   await page.clock.install();
-  await page.addInitScript(() => localStorage.setItem('clonedash.v1', JSON.stringify({ version: 1, best: {}, sound: false, draft: { name: 'Safe wall', length: 20, objects: ['jumper', 'outline'].map((type, i) => ({ type, x: i ? 6 : 3, y: 0, rotation: 0, flipX: false, flipY: false })) } })));
+  await page.addInitScript(mode => {
+    const piece = (type, x, y = 0) => ({ type, x, y, rotation: 0, flipX: false, flipY: false });
+    localStorage.setItem('clonedash.v1', JSON.stringify({ version: 1, best: {}, sound: false, draft: { name: 'Wall impact', length: 20, objects: [piece(mode, 3), ...[0, 1, 2, 3].map(y => piece('outline', 6, y))] } }));
+  }, mode);
   await page.goto('/'); await page.locator('#editor-open').click(); await page.locator('#test-level').click();
-  await page.clock.runFor(2200); await expect(page.locator('#attempt')).toHaveText('TRY 1');
-  await expect(page.locator('#level-name')).toContainText('JUMPER');
+  await page.clock.runFor(1500); await expect(page.locator('#attempt')).toHaveText('TRY 1');
+  await expect(page.locator('#level-name')).toContainText(mode.toUpperCase());
   const x = () => page.locator('#run-progress').evaluate(e => 1 + e.value / 100 * 19);
-  expect(await x()).toBeCloseTo(6 - .64, 3);
-  await page.keyboard.down('Space'); await page.clock.runFor(40); await page.keyboard.up('Space');
-  await page.clock.runFor(850); expect(await x()).toBeGreaterThan(7);
-  await expect(page.locator('#attempt')).toHaveText('TRY 1');
-  await page.clock.runFor(3000); await expect(page.getByRole('heading', { name: 'Level Complete!' })).toBeVisible();
+  const hit = await x(); expect(hit).toBeGreaterThan(6 - .64); expect(hit).toBeLessThan(6);
+  await page.keyboard.down('Space'); await page.clock.runFor(120); await page.keyboard.up('Space');
+  expect(await x()).toBe(hit);
+  await page.clock.runFor(700); await expect(page.locator('#attempt')).toHaveText('TRY 2');
+  expect(await x()).toBeLessThan(3);
 });

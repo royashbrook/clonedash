@@ -118,13 +118,11 @@ export function step(s, held, dt = STEP, tapped = held && !s.inputHeld) {
         s.y = b.bottom - SIZE; s.vy = 0; s.grounded = s.gravity > 0;
       }
     }
-    const player = playerPolygon(s, safeSolid ? 0 : DEATH_INSET);
+    const player = playerPolygon(s, DEATH_INSET);
     if (intersects(player, p)) {
-      if (safeSolid) {
-        // Solid contact is safe: slide underneath or stop at a wall until the player climbs.
-        if (oldY + SIZE <= b.bottom + .015 && s.vy > 0) { s.y = b.bottom - SIZE; s.vy = 0; }
-        else s.x = b.left - SIZE;
-      } else s.status = 'dead';
+      // Vertical support is resolved above. Wall impacts kill in every mode.
+      if (safeSolid && oldY + SIZE <= b.bottom + .015 && s.vy > 0) { s.y = b.bottom - SIZE; s.vy = 0; }
+      else s.status = 'dead';
     }
   }
   s.touchingPortals = touching;

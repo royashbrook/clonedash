@@ -55,11 +55,12 @@ test('jumping off a ramp releases its surface and its high vertical side is not 
   assert.equal(side.status, 'dead');
 });
 
-test('planes and jumpers retain safe ramp wall and underside contact', () => {
+test('planes and jumpers die at ramp walls but retain safe underside contact', () => {
   for (const mode of ['plane', 'jumper']) for (const type of RAMPS) {
     const wall = { ...object(type, 5, 2), flipX: true };
     const s = { ...createState({ ...empty, objects: [wall] }), mode, x: 5 - SIZE, y: 2.1, grounded: false };
-    step(s, false); assert.equal(s.status, 'playing'); assert.equal(s.x, 5 - SIZE);
+    for (let i = 0; i < 6; i++) step(s, false);
+    assert.equal(s.status, 'dead');
     const underside = { ...createState({ ...empty, objects: [object(type, 5, 2)] }), mode, x: 5.2, y: 2 - SIZE - .01, vy: 2, grounded: false };
     step(underside, false); assert.equal(underside.status, 'playing'); assert.equal(underside.y, 2 - SIZE);
   }
