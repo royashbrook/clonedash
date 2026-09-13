@@ -24,6 +24,8 @@ Nine original instrumental electronic tracks, composed in `public/music.js`: hal
 
 The block-and-spike **MY LEVELS** button opens a library of up to 100 custom levels. Create, name, edit and play each one independently. The old single draft becomes the first library entry without changing its objects or best scores. Saves stay on this device; malformed data and storage failures are reported without overwriting the old save.
 
+While testing, **← MY LEVELS** at the top left returns directly to the library. The pause menu, completion panel and portrait rotation prompt also offer **MY LEVELS**. Returning leaves your saved level intact; **BACK TO EDITOR** remains available from pause and completion.
+
 **HEIGHT / SONG** sets world height from 7 to 40 blocks and selects music, with a LISTEN toggle. Taller levels get an Up scrollbar in the editor and a following vertical camera in play, not smaller artwork. Lowering the ceiling cannot cut off placed objects. Each custom level starts with its own deterministic original song and riff; the picker can also choose any built-in track or another level's original. Choosing a shared track is an explicit override of the unique default. Only three rendered songs are cached, with one render in flight.
 
 The **Layer** selector switches between PLAY and BACKGROUND. Background blocks paint behind playable pieces and never collide or support a landing. Both layers can occupy the same coordinates; selecting, moving and copying respects the active layer. All five block styles work as decoration. Spikes, portals, rings and ramps stay in the play layer.

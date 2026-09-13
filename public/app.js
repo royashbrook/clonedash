@@ -49,6 +49,9 @@ function updateHome() {
 function setMode(m) {
   mode = m; document.body.dataset.mode = m;
   $('home').hidden = m !== 'home'; $('library').hidden = m !== 'library'; $('editor').hidden = m !== 'editor'; $('hud').hidden = m !== 'play';
+  $('menu').textContent = custom ? '← MY LEVELS' : '☰';
+  $('menu').setAttribute('aria-label', custom ? 'Return to My Levels' : 'Pause and open menu');
+  $('menu').classList.toggle('back-to-levels', custom);
   $('cue').hidden = true; held = false; acc = 0; orientation();
 }
 function start(index, isCustom = false) {
@@ -84,13 +87,15 @@ $('sheet').addEventListener('cancel', event => { if (mode === 'play') { event.pr
 function pause() {
   if (mode !== 'play' || state.status === 'complete') return;
   held = false; jumpBuffer = 0; paused = true; acc = 0; music.stop();
-  sheet('Paused', 'Your run is right where you left it.', [['RESUME', resume, true], ['RESTART LEVEL', () => { closeSheet(); attempt++; resetRun(); paused = false; orientation(); }], [custom ? 'BACK TO EDITOR' : 'MAIN MENU', custom ? openEditor : home]], false);
+  sheet('Paused', 'Your run is right where you left it.', [['RESUME', resume, true], ['RESTART LEVEL', () => { closeSheet(); attempt++; resetRun(); paused = false; orientation(); }], [custom ? 'BACK TO EDITOR' : 'MAIN MENU', custom ? openEditor : home], ...(custom ? [['MY LEVELS', library]] : [])], false);
 }
 function resume() { closeSheet(); paused = false; held = false; acc = 0; last = performance.now(); orientation(); }
-$('pause').onclick = pause; $('menu').onclick = pause; $('rotate-menu').onclick = home;
+$('pause').onclick = pause; $('menu').onclick = () => custom ? library() : pause();
+$('rotate-menu').onclick = () => mode === 'editor' || (mode === 'play' && custom) ? library() : home();
 function orientation() {
   const narrow = innerHeight > innerWidth && (mode === 'play' || mode === 'editor');
   $('rotate').hidden = !narrow;
+  $('rotate-menu').textContent = mode === 'editor' || (mode === 'play' && custom) ? 'MY LEVELS' : 'MAIN MENU';
   if (narrow && mode === 'play') { held = false; paused = true; acc = 0; music.stop(); closeSheet(); }
   else if (mode === 'play' && paused && !$('sheet').open && state?.status === 'playing') pause();
 }
@@ -100,7 +105,7 @@ addEventListener('pagehide', () => { pause(); held = false; music.stop(); });
 addEventListener('blur', () => { held = false; if (mode === 'play') pause(); });
 function complete() {
   record(); held = false; tone(784, .2); setTimeout(() => tone(1047, .3), 130);
-  const actions = custom ? [['BACK TO EDITOR', openEditor, true], ['Restart Level', () => start(current, true)], ['Main Menu', home]] : [['Main Menu', home, true], ['Restart Level', () => start(current)], ...(current < LEVELS.length - 1 ? [['NEXT TRAIL', () => start(current + 1)]] : [])];
+  const actions = custom ? [['BACK TO EDITOR', openEditor, true], ['MY LEVELS', library], ['Restart Level', () => start(current, true)], ['Main Menu', home]] : [['Main Menu', home, true], ['Restart Level', () => start(current)], ...(current < LEVELS.length - 1 ? [['NEXT TRAIL', () => start(current + 1)]] : [])];
   sheet('Level Complete!', custom ? 'Your trail works. Keep building!' : `${state.level.name} cleared. Nice flow.`, actions, false);
 }
 function press() {
