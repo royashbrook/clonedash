@@ -158,6 +158,14 @@ test("compressed bomb is refused at the inflated-byte bound", async () => {
   );
 });
 
+test("encoded bound rejects an otherwise valid code with excessive padding", async () => {
+  const code = await encodeLevel(level());
+  await assert.rejects(
+    () => decodeLevel(code + " ".repeat(MAX_CODE)),
+    /too large/,
+  );
+});
+
 test("inflation stops and cancels before collecting the full oversized stream", async (t) => {
   let pulls = 0,
     cancelled = false;

@@ -7,24 +7,25 @@ import assert from "node:assert/strict";
 const dir = await mkdtemp(join(tmpdir(), "clonedash-mutants-"));
 try {
   await cp("src", join(dir, "src"), { recursive: true });
-  await cp("tests/migration.test.mjs", join(dir, "migration.test.mjs"));
   // Keep relative imports valid, and run git reads from the real repository below.
-  const testSource = (
-    await readFile(join(dir, "migration.test.mjs"), "utf8")
-  ).replaceAll("../src/", "./src/");
-  await writeFile(join(dir, "migration.test.mjs"), testSource);
-  const run = (pattern) =>
+  for (const testFile of ["migration.test.mjs", "transfer.test.mjs"]) {
+    const testSource = (
+      await readFile(join("tests", testFile), "utf8")
+    ).replaceAll("../src/", "./src/");
+    await writeFile(join(dir, testFile), testSource);
+  }
+  const run = (pattern, testFile) =>
     spawnSync(
       process.execPath,
       [
         "--experimental-strip-types",
         "--test",
         `--test-name-pattern=${pattern}`,
-        join(dir, "migration.test.mjs"),
+        join(dir, testFile),
       ],
       { encoding: "utf8" },
     );
-  for (const [file, from, to, pattern] of [
+  for (const [file, from, to, pattern, testFile = "migration.test.mjs"] of [
     ["engine.ts", "SPEED = 5,", "SPEED = 5.1,", "typed engine matches"],
     [
       "render.ts",
@@ -56,14 +57,42 @@ try {
       "return raw;",
       "isolated from the object it was built from",
     ],
+    [
+      "transfer.ts",
+      "size > MAX_LEVEL_BYTES",
+      "size > MAX_LEVEL_BYTES * 100",
+      "inflation stops and cancels",
+      "transfer.test.mjs",
+    ],
+    [
+      "transfer.ts",
+      "text.length > MAX_CODE",
+      "text.length > MAX_CODE * 100",
+      "encoded bound rejects",
+      "transfer.test.mjs",
+    ],
+    [
+      "transfer.ts",
+      "storage.getItem(SAVE) ?? JSON.stringify(fallback)",
+      "JSON.stringify(fallback)",
+      "confirmation rereads storage",
+      "transfer.test.mjs",
+    ],
+    [
+      "transfer.ts",
+      "...structuredClone(save.customLevels),",
+      "",
+      "import appends independently",
+      "transfer.test.mjs",
+    ],
   ]) {
     const path = join(dir, "src", file),
       original = await readFile(path, "utf8");
     assert(original.includes(from), `mutant target moved: ${file}`);
-    let result = run(pattern);
+    let result = run(pattern, testFile);
     assert.equal(result.status, 0, result.stderr + result.stdout);
     await writeFile(path, original.replace(from, to));
-    result = run(pattern);
+    result = run(pattern, testFile);
     assert.equal(
       result.status,
       1,
