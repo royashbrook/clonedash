@@ -15,7 +15,7 @@ const types = {
   ".svg": "image/svg+xml",
   ".png": "image/png",
 };
-async function origin(root) {
+async function origin(root, redirectCredits = true) {
   let folder = root,
     unavailable = false,
     variant = false,
@@ -28,7 +28,17 @@ async function origin(root) {
     // but that redirected response cannot answer a manual-redirect navigation.
     if (path === "/index.html")
       return res.writeHead(308, { Location: "/" }).end();
-    const file = resolve(folder, "." + (path === "/" ? "/index.html" : path));
+    if (redirectCredits && path === "/music/credits.html")
+      return res.writeHead(307, { Location: "/music/credits" }).end();
+    const file = resolve(
+      folder,
+      "." +
+        (path === "/"
+          ? "/index.html"
+          : path === "/music/credits"
+            ? "/music/credits.html"
+            : path),
+    );
     if (!file.startsWith(folder + "/")) return res.writeHead(403).end();
     try {
       let bytes = await readFile(file);
@@ -95,6 +105,55 @@ test("canonical index redirect still permits a controlled offline navigation", a
   }
 });
 
+for (const redirected of [false, true]) {
+  test(`About credits navigate offline, host redirect: ${redirected}`, async ({
+    browser,
+  }) => {
+    const server = await origin(resolve("dist"), redirected);
+    const context = await browser.newContext();
+    try {
+      const page = await context.newPage();
+      await page.goto(server.url);
+      await page.evaluate(() => navigator.serviceWorker.ready);
+      await page.waitForFunction(() => !!navigator.serviceWorker.controller);
+      await page.locator("#about").click();
+      const { build } = JSON.parse(await readFile("dist/version.json", "utf8"));
+      const cached = await page.evaluate(async (key) => {
+        const response = await (
+          await caches.open(key)
+        ).match("/music/credits.html");
+        return { redirected: response.redirected, body: await response.text() };
+      }, `clonedash-${build}`);
+      expect(cached.redirected).toBe(redirected);
+      expect(cached.body).toContain("Of Far Different Nature");
+      // Fetching the document proves neither navigation nor what the user sees.
+      // Stop the actual origin instead of relying on WebKit's offline emulation.
+      await server.close();
+      const opened = context.waitForEvent("page");
+      await page
+        .getByRole("link", { name: "Songs and music credits", exact: true })
+        .click();
+      const document = await opened;
+      await expect(document.locator("body")).toContainText(
+        "Of Far Different Nature",
+      );
+      await expect(document.locator("#app")).toHaveCount(0);
+      await expect(document).toHaveTitle("Clone Dash · Music credits");
+      await expect(
+        document.getByRole("link", {
+          name: "Creative Commons Attribution 4.0 International",
+        }),
+      ).toHaveAttribute("href", "https://creativecommons.org/licenses/by/4.0/");
+      await expect(document.locator("li")).toHaveCount(9);
+      await document.getByRole("link", { name: "Back to Clone Dash" }).click();
+      await expect(document.locator("#play")).toBeVisible();
+    } finally {
+      await context.close();
+      await server.close();
+    }
+  });
+}
+
 test("the waiting fix repairs only the shipped redirected snapshot without taking consent or changing saves", async ({
   browser,
 }) => {
@@ -140,7 +199,13 @@ test("the waiting fix repairs only the shipped redirected snapshot without takin
       dirty: false,
       anchor: "v0.7",
     });
-    expect(execFileSync("git", ["-C", scratch, "rev-parse", "--is-shallow-repository"], { encoding: "utf8" }).trim()).toBe("false");
+    expect(
+      execFileSync(
+        "git",
+        ["-C", scratch, "rev-parse", "--is-shallow-repository"],
+        { encoding: "utf8" },
+      ).trim(),
+    ).toBe("false");
     execFileSync(process.execPath, ["scripts/build.mjs"], {
       cwd: scratch,
       env: { ...process.env, RELEASE_BUILD: "1" },
