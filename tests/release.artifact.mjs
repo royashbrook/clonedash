@@ -31,6 +31,12 @@ test("artifact has one identity, a complete offline shell and the installed runt
     shipped.includes(installed),
     "complete installed Svelte licence missing",
   );
+  assert(
+    shipped.includes(
+      (await readFile("node_modules/qrcode/license", "utf8")).trim(),
+    ),
+    "complete installed QR licence missing",
+  );
   assert.match(html, /rel="license"/);
   assert(worker.includes("/licenses.md"));
   const originalManifest = JSON.parse(

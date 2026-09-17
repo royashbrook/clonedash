@@ -22,7 +22,9 @@
   } from "./library.ts";
   import { installControl } from "./install.ts";
   import { updateControl } from "./pwa.ts";
-  import type { ObjectType, Transform } from "./types.ts";
+  import LevelTransfer from "./LevelTransfer.svelte";
+  import { importLevel } from "./transfer.ts";
+  import type { Level, ObjectType, Transform } from "./types.ts";
 
   type Screen = "home" | "library" | "editor" | "play";
   type Action = [label: string, handler: () => void, primary?: boolean];
@@ -31,7 +33,7 @@
     text: string;
     actions: Action[];
     closable: boolean;
-    extra?: "about" | "settings";
+    extra?: "about" | "settings" | "transfer";
   };
   const choices = {
     blocks: [
@@ -107,6 +109,7 @@
     installVisible = $state(false),
     updateReady = $state(false),
     updating = $state(false);
+  let transfer = $state.raw<{ level?: Level; initial?: string }>({});
   let canvas: HTMLCanvasElement,
     dialog: HTMLDialogElement,
     editorHead: HTMLElement,
@@ -237,6 +240,34 @@
     closeSheet();
     paused = false;
     setMode("library");
+  }
+  function sharing(level?: Level, initial = "") {
+    library();
+    transfer = { level, initial };
+    void sheet(
+      level ? "Share level" : "Import level",
+      "",
+      [],
+      true,
+      "transfer",
+    );
+  }
+  function receiveLevel() {
+    const params = new URLSearchParams(location.hash.slice(1));
+    if (!params.has("level")) return;
+    const initial = location.href;
+    history.replaceState(null, "", location.pathname + location.search);
+    sharing(undefined, initial);
+  }
+  function addSharedLevel(level: Level) {
+    if (!storageOK)
+      throw Error(
+        "Storage is unavailable. Enable it before importing a level.",
+      );
+    save = importLevel(localStorage, save, level, LEVELS.length);
+    draft = structuredClone(save.draft);
+    library();
+    toast("Level added. Find it in My Levels.");
   }
   function start(index: number, isCustom = false) {
     music.unlock(save.sound);
@@ -717,6 +748,7 @@
       { signal },
     );
     window.addEventListener("keydown", keydown, { signal });
+    window.addEventListener("hashchange", receiveLevel, { signal });
     window.addEventListener(
       "keyup",
       (e) => {
@@ -745,6 +777,7 @@
       Number.isInteger(requested)
     )
       start(requested - 1);
+    receiveLevel();
     raf = requestAnimationFrame(frame);
     return () => {
       alive = false;
@@ -870,6 +903,7 @@
     <button id="new-level" class="primary" onclick={createLevel}
       >＋ NEW LEVEL</button
     >
+    <button id="import-level" onclick={() => sharing()}>IMPORT LEVEL</button>
   </header>
   <p id="library-status">
     {storageOK
@@ -897,6 +931,11 @@
               loadCustom(id);
               openEditor();
             }}>EDIT</button
+          >
+          <button
+            aria-label={`Share ${level.name}`}
+            onclick={() => sharing({ ...level, song: level.song ?? 8 + id })}
+            >SHARE</button
           >
         </div>
       </article>{/each}
@@ -1080,6 +1119,7 @@
 </section>
 <dialog
   id="sheet"
+  aria-labelledby="sheet-title"
   bind:this={dialog}
   oncancel={(e) => {
     if (mode === "play") {
@@ -1089,7 +1129,7 @@
   }}
 >
   <div id="sheet-content">
-    {#if panel}<h2>{panel.title}</h2>
+    {#if panel}<h2 id="sheet-title">{panel.title}</h2>
       {#if panel.text}<p>{panel.text}</p>{/if}
       <div class="buttons">
         {#each panel.actions as [label, handler, primary]}<button
@@ -1097,6 +1137,10 @@
             onclick={handler}>{label}</button
           >{/each}
       </div>
+      {#if panel.extra === "transfer"}{#key transfer}<LevelTransfer
+            {...transfer}
+            add={addSharedLevel}
+          />{/key}{/if}
       {#if panel.extra === "settings"}<div class="level-settings">
           <label
             >Height (7–40 blocks)<input

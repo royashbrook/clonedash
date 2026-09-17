@@ -331,6 +331,13 @@ dialog .buttons {
   display: grid;
   gap: 4px;
 }
+dialog:has(.transfer) #sheet-close {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  background: var(--surface-raised);
+  box-shadow: 0 -8px 0 var(--surface-raised);
+}
 .maker {
   border-top: 1px solid var(--line);
   padding-top: 15px;
@@ -692,10 +699,12 @@ body[data-mode="editor"] #world {
 }
 .custom-card .buttons {
   display: flex;
+  flex-wrap: wrap;
   gap: 10px;
 }
 .custom-card button {
   flex: 1;
+  padding-inline: 12px;
 }
 .level-settings {
   display: grid;
