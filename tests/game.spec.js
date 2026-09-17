@@ -159,7 +159,7 @@ test('sound on starts actual menu music; nine original tracks have audible, dist
   await page.evaluate(() => { Object.defineProperty(document, 'hidden', { configurable: true, value: false }); document.dispatchEvent(new Event('visibilitychange')); });
   await page.getByRole('button', { name: 'Turn sound off', exact: true }).click();
 });
-test('touch anywhere triggers jump input and releases cleanly', async ({ browser }) => {
+test('touch anywhere triggers jump input and releases cleanly', async ({ browser, baseURL }) => {
   const context = await browser.newContext({ viewport: { width: 932, height: 430 }, hasTouch: true });
   await context.addInitScript(() => {
     window.playerPaintY = [];
@@ -169,7 +169,7 @@ test('touch anywhere triggers jump input and releases cleanly', async ({ browser
       return fill.call(this, x, y, w, h);
     };
   });
-  const page = await context.newPage(); await page.goto(process.env.GAME_URL || 'http://127.0.0.1:4191');
+  const page = await context.newPage(); await page.goto(baseURL);
   await page.getByRole('button', { name: 'Play First Spark', exact: true }).click();
   await page.waitForTimeout(500); await expect(page.locator('#cue')).toBeVisible();
   const ground = await page.evaluate(() => { const y = window.playerPaintY.at(-1); window.playerPaintY = []; return y; });

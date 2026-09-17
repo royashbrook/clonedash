@@ -1,7 +1,7 @@
-# Clone Dash: proposed release-stack migration
+# Clone Dash: release-stack migration
 
-status: architecture recommendation for review, not implementation or a performance claim.
-implementation waits for approval of the release rules and this project plan.
+status: approved; implementation and preservation checks in progress in #13.
+level sharing follows independently in #14. this is not a measured performance claim.
 source inspected: `c00928c1c005aad711b752690881b9b5f332a089`.
 
 ## keep the game; improve its boundaries
@@ -48,4 +48,35 @@ named `npm run dev`, but `scripts/serve.mjs` actually serves the built directory
 that artifact-testing property after replacing the copy-only build with Vite. test names
 and script labels alone are not evidence of what executes.
 
-no source files, deployed builds or saves are changed by this recommendation.
+## implementation record
+
+The original artifact passed 43 unit tests and 62 browser tests on Chromium/WebKit.
+The port now compiles the actual UI with Svelte and strict TypeScript, bundles with Vite,
+and keeps the fixed-step engine, drawing and synthesized music separate from reactivity.
+The save key and PWA identity are unchanged. There is no SvelteKit or added physics engine.
+
+`tests/migration.test.mjs` reads the original modules from the pinned git objects, not a
+second copy of the new code. It compares authored levels, thousands of per-step states,
+all transformed object shapes, saved-data cases and every original song recipe.
+The old editor/game browser assertions are retained. New tests cover lifecycle teardown,
+an actual legacy-to-new installed update, failed candidate downloads, open-tab cache
+retention, offline play/editor access, milestone versioning and emitted runtime licences.
+
+Release gates and independent review are still pending. Do not describe this branch as
+deployed, child-playtested, faster, or proof that every possible physics path is identical.
+
+### measurement scope
+
+`npm run measure:migration` compares the pinned original and built candidate in fresh
+desktop Chromium contexts on the same empty custom trail (932×430, sound off). A local
+smoke run measured 0.10 ms median / 0.20 ms p95 synchronous frame-callback work for both;
+first interaction ready was about 41 ms for each. Pointer-event-to-player-draw was 0.5 ms
+original / 1.7 ms candidate in that single run. These small samples are diagnostics, not
+a speedup claim: they exclude actual display scanout and asynchronous UI work, ran on a
+desktop, and do not establish iPhone performance. Real phone playtesting remains required.
+
+The release tests intentionally break speed and ground height in disposable copies and
+require the pinned physics/drawing oracles to fail. They run in CI, not just this receipt.
+Browser teardown also completes an in-flight music render after unmount and checks that
+it starts no playback; the remount owns one frame loop and one canvas. The new update
+interaction is reachable inside the native pause dialog, not inert behind its backdrop.

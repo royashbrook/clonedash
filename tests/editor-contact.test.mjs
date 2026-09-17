@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createState, step, SIZE, DEATH_INSET, BLOCKS, RAMPS, SPIKES, object, polygon, intersects, duplicateObject } from '../public/engine.js';
+import { createState, step, SIZE, DEATH_INSET, BLOCKS, RAMPS, SPIKES, object, polygon, intersects, duplicateObject } from '../src/engine.ts';
 const empty = { name: 'Contact', length: 40, objects: [] };
 
 test('jumper keeps safe top and underside contact under either gravity', () => {

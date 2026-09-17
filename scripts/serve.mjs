@@ -6,6 +6,7 @@ const types = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/cs
 http.createServer(async (req, res) => {
   try {
     const path = decodeURIComponent(new URL(req.url, 'http://localhost').pathname);
+    if (path === '/_headers' || path.startsWith('/.')) { res.writeHead(404).end(); return; }
     const file = resolve(root, `.${path === '/' ? '/index.html' : path}`);
     if (!file.startsWith(root + '/')) { res.writeHead(403).end(); return; }
     const data = await readFile(file); res.writeHead(200, { 'content-type': types[extname(file)] || 'application/octet-stream', 'cache-control': 'no-store' }); res.end(data);

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createState, step, SIZE, STEP, TYPES, object, polygon, bounds, intersects, transform, validateLevel } from '../public/engine.js';
+import { createState, step, SIZE, STEP, TYPES, object, polygon, bounds, intersects, transform, validateLevel } from '../src/engine.ts';
 const empty = { name: 'Gravity checks', length: 100, objects: [] };
 
 test('wheel requires surface contact, ignores midair taps, and never queues a held flip on landing', () => {

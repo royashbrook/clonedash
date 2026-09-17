@@ -10,17 +10,22 @@ Editor: choose Blocks, Spikes, Portals or Gravity, then tap the grid to place. S
 
 ## Develop
 
-The [proposed release-stack migration](docs/migration.md) records the Svelte/TypeScript/Vite boundary and preservation checks. It is a plan, not a change to the current implementation.
+The [release-stack migration](docs/migration.md) records the Svelte/TypeScript/Vite boundary and preservation checks. Level sharing is a separate follow-up; this migration preserves existing gameplay and saved work.
 
-Node 22+. `npm ci`, `npm test`, `npm run build`, `npm run dev` (localhost:4191).
-`npx playwright install chromium`, then `npm run test:browser`.
-`npm run deploy` uses Cloudflare Workers static assets. Automatic deployment uses the configured `CLOUDFLARE_API_TOKEN` repository secret, only after main-branch physics and browser checks pass, and publishes that exact tested commit. Pull-request runs cannot deploy; superseded commits are refused. Manual deployment is main-only and repeats the checks.
+Node 22.18+. `npm ci`, `npm run check`, `npm test`, `npm run build`, `npm run test:release`.
+`npm run dev` runs Vite at localhost:4192; `npm run preview` serves the built artifact at localhost:4191.
+`npx playwright install chromium webkit`, then `npm run test:browser`. The suite starts its own artifact server and refuses an occupied port. Set `PORT` for a separate review lane, or `GAME_URL` to test an already-owned server. Full git history is required for the pinned baseline oracle.
+Deployment uses Cloudflare Workers static assets and the configured `CLOUDFLARE_API_TOKEN` repository secret. Trusted successful main pushes or manual main runs queue a deployment of the current main tip, repeat strict/unit/artifact/browser checks, and refuse a superseded checkout. A late successful check for an older commit cannot cancel the newer deploy. PR runs cannot deploy.
 
-No runtime dependencies. Engine uses 120 Hz fixed steps in block units. Speed is 5 blocks/sec. Gravity is 16 blocks/sec²; the square reaches 2.25 blocks, giving two-block ledges a quarter-block clearance margin. Plane landings, floor and ceiling contact are safe. Wall impacts kill in every mode: square, plane, wheel and jumper, including vertical ramp faces. Spikes remain lethal. Transformed polygons are shared by rendering and collision. Build IDs come from asset content, not a manually bumped version constant. Service worker uses network-first fetches with offline fallback and a live-shell update toast.
+Releases require a clean checkout, complete history and an immutable `vMAJOR.MINOR` milestone on first-parent ancestry. Patch counts **all** commits since that milestone, including merged work. The UI shows that derived version; About also exposes source and content identity. `RELEASE_BUILD=1 npm run build` refuses missing prerequisites. Normal local builds are explicitly `-dev`, never silently published as a release.
+
+Svelte is the UI runtime, with strict TypeScript and a Vite build. No game engine, router or physics dependency. `src/App.svelte` owns menus/editor/dialogs and a disposable frame/input lifetime; `src/run.ts` owns mutable simulation scheduling; `src/engine.ts`, `src/render.ts`, `src/music.ts` and `src/library.ts` stay independent of Svelte. The engine uses 120 Hz fixed steps in block units. Speed is 5 blocks/sec. Gravity is 16 blocks/sec²; the square reaches 2.25 blocks, giving two-block ledges a quarter-block clearance margin. Plane landings, floor and ceiling contact are safe. Wall impacts kill in every mode, including vertical ramp faces. Transformed polygons are shared by rendering and collision.
+
+The worker precaches a complete emitted build, including dependency licences. It never mixes newly fetched HTML into an old offline snapshot. A foreground/60-second probe offers updates without interrupting the run; consent downloads and activates the new worker before reload. Failed downloads leave the current build playable. Old caches remain while another tab may need them; a lone current-build client releases them on a subsequent foreground/check. The pre-migration updater's direct reload is handled by matching the waiting worker to the already-loaded page. Origin, manifest identity and `clonedash.v1` are unchanged.
 
 ## Music
 
-Nine original instrumental electronic tracks, composed in `public/music.js`: half-time drums, resonant wobble bass, sub bass, pads and arpeggiated synth melodies. At 150 BPM, one block of travel equals an eighth note. Each trail has a distinct key and melody, with intro, drop and breakdown sections. Music renders on-device into an audio buffer, works offline, starts after a sound/play gesture, and follows run time through pauses and retries. No licensed samples or external music requests.
+Nine original instrumental electronic tracks, composed in `src/music.ts`: half-time drums, resonant wobble bass, sub bass, pads and arpeggiated synth melodies. At 150 BPM, one block of travel equals an eighth note. Each trail has a distinct key and melody, with intro, drop and breakdown sections. Music renders on-device into an audio buffer, works offline, starts after a sound/play gesture, and follows run time through pauses and retries. No licensed samples or external music requests.
 
 ## My levels
 

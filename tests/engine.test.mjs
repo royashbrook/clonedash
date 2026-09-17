@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createState, step, STEP, SPEED, SIZE, PORTALS, SPIKES, polygon, intersects, bounds, object, transform, validateLevel } from '../public/engine.js';
-import { LEVELS } from '../public/levels.js';
+import { createState, step, STEP, SPEED, SIZE, PORTALS, SPIKES, polygon, intersects, bounds, object, transform, validateLevel } from '../src/engine.ts';
+import { LEVELS } from '../src/levels.ts';
 const empty = { name: 'Test', length: 100, objects: [] };
 test('auto-run is 5 blocks/sec; jump clears two blocks with a quarter-block margin', () => {
   const s = createState(empty); step(s, true); let peak = s.y;
