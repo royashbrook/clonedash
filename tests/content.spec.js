@@ -90,8 +90,10 @@ test('every licensed recording decodes to distinct non-silent audio and has offl
   await page.locator('#about').click();
   await expect(page.getByRole('link',{name:'Songs and music credits'})).toHaveAttribute('href','/music/credits.html');
 });
-test('a recorded soundtrack pauses, resumes at run time, and restarts at zero', async ({page}) => {
+test('without newer AbortSignal helpers, a recorded soundtrack pauses, resumes at run time, and restarts at zero', async ({page}) => {
   await page.addInitScript(()=>{
+    Object.defineProperty(AbortSignal,'any',{configurable:true,value:undefined});
+    Object.defineProperty(AbortSignal,'timeout',{configurable:true,value:undefined});
     window.recordedStarts=[];window.recordedStops=0;
     const start=AudioBufferSourceNode.prototype.start,stop=AudioBufferSourceNode.prototype.stop;
     AudioBufferSourceNode.prototype.start=function(...args){if(this.loop&&this.buffer?.duration>29)window.recordedStarts.push({offset:args[1]??0,duration:this.buffer.duration});return start.apply(this,args);};

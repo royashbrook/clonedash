@@ -242,17 +242,17 @@ export class Soundtrack {
   track = -1;
   intent = { index: 0, running: false, offset: 0 };
   private disposed = false;
-  private lifetime = new AbortController();
+  private request: AbortController | null = null;
   fallback = false;
   private async load(index: number) {
     const song = recordingFor(index);
     if (song && this.context) {
+      // One pending load, with cancellation usable on older Safari too.
+      const request = (this.request = new AbortController());
+      const deadline = setTimeout(() => request.abort(), 8000);
       try {
         const response = await fetch(`/music/${song.file}.mp3`, {
-          signal: AbortSignal.any([
-            this.lifetime.signal,
-            AbortSignal.timeout(8000),
-          ]),
+          signal: request.signal,
         });
         if (!response.ok) throw Error("Recording unavailable");
         return await this.context.decodeAudioData(await response.arrayBuffer());
@@ -261,6 +261,9 @@ export class Soundtrack {
         // A failed download must not silence a run. Originals remain available offline.
         this.fallback = true;
         return compose((index - 109) % TRACKS.length);
+      } finally {
+        clearTimeout(deadline);
+        this.request = null;
       }
     }
     return compose(index);
@@ -289,7 +292,7 @@ export class Soundtrack {
   }
   dispose() {
     this.disposed = true;
-    this.lifetime.abort();
+    this.request?.abort();
     this.enabled = false;
     this.stop();
     this.buffers.clear();
