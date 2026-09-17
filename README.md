@@ -10,6 +10,8 @@ Editor: choose Blocks, Spikes, Portals or Gravity, then tap the grid to place. S
 
 ## Develop
 
+The [proposed release-stack migration](docs/migration.md) records the Svelte/TypeScript/Vite boundary and preservation checks. It is a plan, not a change to the current implementation.
+
 Node 22+. `npm ci`, `npm test`, `npm run build`, `npm run dev` (localhost:4191).
 `npx playwright install chromium`, then `npm run test:browser`.
 `npm run deploy` uses Cloudflare Workers static assets. Automatic deployment uses the configured `CLOUDFLARE_API_TOKEN` repository secret, only after main-branch physics and browser checks pass, and publishes that exact tested commit. Pull-request runs cannot deploy; superseded commits are refused. Manual deployment is main-only and repeats the checks.
