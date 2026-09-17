@@ -358,8 +358,13 @@ test("share and import sheets fit phone widths with owned touch targets and no h
 }) => {
   await seed(page);
   await page.locator("#my-levels").click();
-  for (const width of [360, 430]) {
-    await page.setViewportSize({ width, height: 740 });
+  for (const [width, height] of [
+    [360, 640],
+    [360, 740],
+    [430, 932],
+    [932, 430],
+  ]) {
+    await page.setViewportSize({ width, height });
     await page.getByRole("button", { name: "Share Sky workshop" }).click();
     await expect(page.locator(".level-qr")).toBeVisible();
     const bounds = await page.evaluate(() => {
@@ -381,7 +386,7 @@ test("share and import sheets fit phone widths with owned touch targets and no h
     expect(bounds.sheet).toBeLessThanOrEqual(bounds.client);
     expect(bounds.heights.every((height) => height >= 44)).toBe(true);
     const close = await page.locator("#sheet-close").boundingBox();
-    expect(close.y + close.height).toBeLessThanOrEqual(740);
+    expect(close.y + close.height).toBeLessThanOrEqual(height);
     expect(
       await page.evaluate(
         ({ x, y, width, height }) =>
@@ -389,14 +394,37 @@ test("share and import sheets fit phone widths with owned touch targets and no h
         close,
       ),
     ).toBe("sheet-close");
+    for (const selector of [
+      "#send-level",
+      "#copy-level",
+      ".download-level",
+      "summary",
+    ]) {
+      await page.locator(selector).scrollIntoViewIfNeeded();
+      expect(
+        await page.locator(selector).evaluate((element) => {
+          const box = element.getBoundingClientRect();
+          return element.contains(
+            document.elementFromPoint(
+              box.x + box.width / 2,
+              box.y + box.height / 2,
+            ),
+          );
+        }),
+        `${selector} owns its visible tap target`,
+      ).toBe(true);
+    }
+    await page.locator("#sheet-content").evaluate((element) => {
+      element.scrollTop = 0;
+    });
     await page.screenshot({
-      path: `test-results/share-${width}-${test.info().project.name}.png`,
+      path: `test-results/share-${width}x${height}-${test.info().project.name}.png`,
     });
     await page.locator("#sheet-close").click();
     await page.locator("#import-level").click();
     await preview(page, await encodeLevel(portable));
     await page.screenshot({
-      path: `test-results/import-${width}-${test.info().project.name}.png`,
+      path: `test-results/import-${width}x${height}-${test.info().project.name}.png`,
     });
     expect(
       await page.evaluate(

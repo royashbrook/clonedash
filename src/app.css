@@ -331,12 +331,20 @@ dialog .buttons {
   display: grid;
   gap: 4px;
 }
+dialog[open]:has(.transfer) {
+  display: flex;
+  flex-direction: column;
+  width: min(480px, calc(100vw - 32px));
+  padding: 20px;
+  overflow: hidden;
+}
+dialog:has(.transfer) #sheet-content {
+  min-height: 0;
+  overflow: auto;
+  padding: 8px;
+}
 dialog:has(.transfer) #sheet-close {
-  position: sticky;
-  bottom: 0;
-  z-index: 1;
-  background: var(--surface-raised);
-  box-shadow: 0 -8px 0 var(--surface-raised);
+  flex-shrink: 0;
 }
 .maker {
   border-top: 1px solid var(--line);
