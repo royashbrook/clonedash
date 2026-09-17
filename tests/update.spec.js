@@ -103,10 +103,15 @@ test("the waiting fix repairs only the shipped redirected snapshot without takin
   );
   let server, context;
   try {
-    // Rebuild the real tagged release, not a reimplementation of the broken worker.
+    // Transfer only the tagged release's ancestry. A shared clone also inherits
+    // shallow metadata for unrelated synthetic PR heads, even when this history is complete.
+    // The SHA, identity, full-history guard and rebuilt fingerprint stay pinned below.
     execFileSync(
       "git",
-      ["clone", "--shared", "--no-checkout", process.cwd(), scratch],
+      [
+        "clone", "--no-local", "--single-branch", "--branch", "v0.7",
+        "--no-checkout", process.cwd(), scratch,
+      ],
       { stdio: "pipe" },
     );
     execFileSync(
