@@ -4,6 +4,7 @@ import { mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve, extname } from "node:path";
 import http from "node:http";
+import { releaseIdentity } from "../scripts/version.mjs";
 
 const baseline = "c00928c1c005aad711b752690881b9b5f332a089";
 const types = {
@@ -133,6 +134,13 @@ test("the waiting fix repairs only the shipped redirected snapshot without takin
         encoding: "utf8",
       }),
     ).toBe("");
+    expect(releaseIdentity(scratch)).toEqual({
+      version: "0.7.0-dev",
+      source: "1fd9f6c3b63be2b9b2519373ff812768996500a7",
+      dirty: false,
+      anchor: "v0.7",
+    });
+    expect(execFileSync("git", ["-C", scratch, "rev-parse", "--is-shallow-repository"], { encoding: "utf8" }).trim()).toBe("false");
     execFileSync(process.execPath, ["scripts/build.mjs"], {
       cwd: scratch,
       env: { ...process.env, RELEASE_BUILD: "1" },
@@ -371,6 +379,9 @@ test("candidate download failure keeps the current build; consent installs a ful
     await expect(page.locator("meta[name=build]")).toHaveAttribute(
       "content",
       "fedcba987654",
+      // apply() has a 10s download deadline followed by 8s for activation.
+      // A 5s test deadline could fail before either app deadline had fired.
+      { timeout: 20000 },
     );
     // The untouched tab still runs the old module; don't collect its cache under it.
     await expect(other.locator("meta[name=build]")).toHaveAttribute(

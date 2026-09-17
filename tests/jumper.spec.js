@@ -35,6 +35,10 @@ test('jumper accepts brief midair touches but held and repeated Space do not fly
 
 test('outline is transparent with white edges; new editor objects transform and survive reload', async ({ page }) => {
   await page.goto('/'); await page.locator('#editor-open').click();
+  // DOM selection updates before the next canvas frame. Sample rendered pixels,
+  // not the previous frame; keep the exact colour/alpha assertions below.
+  const painted = () => page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  await painted();
   const point = await page.evaluate(() => {
     const top = document.querySelector('.editor-head').getBoundingClientRect().bottom;
     const floor = document.querySelector('.editor-controls').getBoundingClientRect().top - 18;
@@ -53,6 +57,7 @@ test('outline is transparent with white edges; new editor objects transform and 
     await page.mouse.click((x + .1) * point.unit, point.floor - .1 * point.unit);
     await expect(page.locator('#selection')).toContainText(type.toUpperCase());
     if (type === 'outline') {
+      await painted();
       expect(await pixel(5.5 * point.unit, point.floor - .5 * point.unit)).toEqual(background);
       expect(await pixel(5 * point.unit, point.floor - .5 * point.unit)).toEqual([255, 255, 255, 255]);
     }
