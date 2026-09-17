@@ -9,7 +9,7 @@ permissions:
   contents: read
 concurrency:
   group: clonedash-production
-  cancel-in-progress: true
+  cancel-in-progress: false
 jobs:
   deploy:
     if: >-
@@ -22,18 +22,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          # A late check for an old merge must never displace the newest release.
+          ref: main
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
       - run: npm ci
+      - run: npm run check
       - run: npm test
-      - run: npm run build
-      - if: github.event_name == 'workflow_dispatch'
-        run: npx playwright install --with-deps chromium webkit
-      - if: github.event_name == 'workflow_dispatch'
-        run: npm run test:browser
+      - run: npm run test:mutations
+      - run: RELEASE_BUILD=1 npm run build
+      - run: npm run test:release
+      - run: npx playwright install --with-deps chromium webkit
+      - run: npm run test:browser
       - name: Refuse a superseded release
         run: |
           git fetch origin main

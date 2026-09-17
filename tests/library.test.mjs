@@ -1,8 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readSave, storeDraft, selectLevel, newLevel } from '../public/library.js';
-import { object, createState, step, STEP, SIZE, validateLevel, duplicateObject } from '../public/engine.js';
-import { trackFor } from '../public/music.js';
+import { readSave, storeDraft, selectLevel, newLevel } from '../src/library.ts';
+import { object, createState, step, STEP, SIZE, validateLevel, duplicateObject } from '../src/engine.ts';
+import { trackFor } from '../src/music.ts';
 
 test('legacy draft migrates intact, independent levels survive a round trip, progress stays', () => {
   const draft = { name: 'My old level', length: 80, objects: [object('grid', 10, 2)] };

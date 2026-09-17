@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createState, step, object, polygon, RAMPS, SIZE, JUMP, GRAVITY, STEP, ringReady, rampSurface, validateLevel, duplicateObject } from '../public/engine.js';
+import { createState, step, object, polygon, RAMPS, SIZE, JUMP, GRAVITY, STEP, ringReady, rampSurface, validateLevel, duplicateObject } from '../src/engine.ts';
 const empty = { name: 'Ramps', length: 40, objects: [] };
 
 test('ring needs a fresh nearby tap, respects gravity, grants one boost and resets per run', () => {

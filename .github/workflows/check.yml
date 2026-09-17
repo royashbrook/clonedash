@@ -7,12 +7,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # The baseline oracle and milestone version both require real history.
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
       - run: npm ci
+      - run: npm run check
       - run: npm test
+      - run: npm run test:mutations
       - run: npm run build
+      - run: npm run test:release
       - run: npx playwright install --with-deps chromium webkit
       - run: npm run test:browser

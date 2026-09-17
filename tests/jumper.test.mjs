@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createState, step, STEP, JUMP, GRAVITY, SIZE, object, polygon, bounds, transform, validateLevel } from '../public/engine.js';
+import { createState, step, STEP, JUMP, GRAVITY, SIZE, object, polygon, bounds, transform, validateLevel } from '../src/engine.ts';
 const empty = { name: 'Jumper test', length: 100, objects: [] };
 
 test('jumper matches square on the ground, but fresh midair taps restart its jump', () => {
