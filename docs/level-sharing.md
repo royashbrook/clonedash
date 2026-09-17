@@ -45,10 +45,12 @@ what the user chooses to send.
 
 input is capped at 192 KiB (characters for pasted text; bytes for files); decoded JSON at
 128 KiB. the decompression reader stops at the output bound and has a five-second deadline.
-the engine's existing limits still apply: 600 objects, 20–200 blocks long, 7–40 blocks high,
+the engine's existing limits still apply: 600 objects, 20–600 blocks long, 7–40 blocks high,
 known object types, transforms, layers and song IDs. the code whitelist excludes progress,
 other levels and arbitrary extra fields. old levels retain an implicit height; their source
 song is made explicit so the recipient hears the same track under a different local ID.
+recipients need the current app to open levels longer than 200 blocks or using the new
+recorded soundtracks; older versions reject those values rather than silently changing them.
 
 QR codes use medium error correction and at most version 15 for phone readability. larger
 payloads keep the complete code/file alternatives. native sharing uses a self-contained link
