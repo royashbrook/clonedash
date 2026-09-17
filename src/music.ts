@@ -242,13 +242,17 @@ export class Soundtrack {
   track = -1;
   intent = { index: 0, running: false, offset: 0 };
   private disposed = false;
+  private lifetime = new AbortController();
   fallback = false;
   private async load(index: number) {
     const song = recordingFor(index);
     if (song && this.context) {
       try {
         const response = await fetch(`/music/${song.file}.mp3`, {
-          signal: AbortSignal.timeout(8000),
+          signal: AbortSignal.any([
+            this.lifetime.signal,
+            AbortSignal.timeout(8000),
+          ]),
         });
         if (!response.ok) throw Error("Recording unavailable");
         return await this.context.decodeAudioData(await response.arrayBuffer());
@@ -285,6 +289,7 @@ export class Soundtrack {
   }
   dispose() {
     this.disposed = true;
+    this.lifetime.abort();
     this.enabled = false;
     this.stop();
     this.buffers.clear();
