@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile, readdir } from "node:fs/promises";
+import { RECORDINGS } from '../src/recordings.ts';
 // Run after build. The emitted artifact, not the source template, is the contract.
 test("artifact has one identity, a complete offline shell and the installed runtime licence", async () => {
   const version = JSON.parse(await readFile("dist/version.json", "utf8"));
@@ -50,4 +51,22 @@ test("artifact has one identity, a complete offline shell and the installed runt
     await readFile("dist/_headers", "utf8"),
     /\/assets\/\*\s+Cache-Control: public, max-age=31536000, immutable/,
   );
+});
+
+test('all recordings and their attribution ship offline within a mobile download budget', async () => {
+  const worker=await readFile('dist/sw.js','utf8');
+  const credits=await readFile('dist/music/credits.html','utf8');
+  assert.match(credits,/Of Far Different Nature/);
+  assert.match(credits,/https:\/\/creativecommons.org\/licenses\/by\/4.0\//);
+  assert.match(credits,/Changes:/);
+  assert(worker.includes('/music/credits.html'));
+  let bytes=0;
+  for(const song of RECORDINGS) {
+    const file=`/music/${song.file}.mp3`;
+    const audio=await readFile(`dist${file}`); bytes+=audio.length;
+    assert(audio.length>100000,`${song.name}: missing audio`);
+    assert(worker.includes(file),`${song.name}: missing precache`);
+    assert(credits.includes(song.name),`${song.name}: missing credit`);
+  }
+  assert(bytes<8*1024*1024,`recordings too large: ${bytes}`);
 });

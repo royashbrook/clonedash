@@ -7,6 +7,7 @@ import type {
   Point,
   Transform,
 } from "./types.ts";
+import { recordingFor } from "./recordings.ts";
 // Quarter-block clearance makes a two-block ledge landable, not just reachable at one instant.
 export const SPEED = 5,
   GRAVITY = 16,
@@ -14,6 +15,7 @@ export const SPEED = 5,
   SIZE = 0.64,
   STEP = 1 / 120;
 export const DEATH_INSET = 0.12; // 0.40-block hazard box; full size still supports landings.
+export const MAX_LENGTH = 600;
 export const BLOCKS = ["block", "grid", "black", "outline", "plain-black"];
 export const RAMPS = ["ramp", "ramp-grid", "ramp-black"];
 export const SPIKES = ["spike", "half", "small", "quarter"];
@@ -313,7 +315,7 @@ export function validateLevel(input: unknown): Level {
     raw.name.length > 40 ||
     !Number.isFinite(raw.length) ||
     raw.length < 20 ||
-    raw.length > 200 ||
+    raw.length > MAX_LENGTH ||
     !Array.isArray(raw.objects) ||
     raw.objects.length > 600
   )
@@ -324,7 +326,9 @@ export function validateLevel(input: unknown): Level {
     height < 7 ||
     height > 40 ||
     (raw.song !== undefined &&
-      (!Number.isInteger(raw.song) || raw.song < 0 || raw.song > 108))
+      (!Number.isInteger(raw.song) ||
+        raw.song < 0 ||
+        (raw.song > 108 && !recordingFor(raw.song))))
   )
     throw Error("Invalid level settings");
   for (const o of raw.objects) {

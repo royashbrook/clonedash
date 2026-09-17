@@ -14,9 +14,9 @@ async function startServer(change = (_file, data) => data) {
   await new Promise(r => server.listen(0, '127.0.0.1', r));
   return { url: `http://127.0.0.1:${server.address().port}/`, close: () => server.listening ? new Promise(r => { server.close(r); server.closeAllConnections(); }) : Promise.resolve() };
 }
-test('home is a nine-trail picker; play fills the screen; pause and rotate preserve progress', async ({ page }) => {
+test('home is an eighteen-trail picker; play fills the screen; pause and rotate preserve progress', async ({ page }) => {
   const errors = []; page.on('pageerror', e => errors.push(e.message));
-  await page.goto('/'); await expect(page.locator('.level-card')).toHaveCount(9);
+  await page.goto('/'); await expect(page.locator('.level-card')).toHaveCount(18);
   await page.screenshot({ path: 'test-results/home-landscape.png' });
   await page.getByRole('button', { name: 'Play First Spark', exact: true }).click();
   await page.waitForTimeout(700);
@@ -126,8 +126,15 @@ test('offline shell reopens after the actual server goes away', async ({ browser
     await page.goto(server.url); await page.evaluate(() => navigator.serviceWorker.ready);
     await page.reload(); await page.waitForFunction(() => !!navigator.serviceWorker.controller);
     expect(await page.evaluate(async () => !!(await caches.match('/index.html')))).toBe(true);
+    expect(await page.evaluate(async () => !!(await caches.match('/music/zero-to-100.mp3')))).toBe(true);
     await server.close();
-    await page.reload(); await expect(page.locator('.level-card')).toHaveCount(9);
+    await page.reload(); await expect(page.locator('.level-card')).toHaveCount(18);
+    const duration = await page.evaluate(async () => {
+      const c = new AudioContext();
+      try { return (await c.decodeAudioData(await (await fetch('/music/zero-to-100.mp3')).arrayBuffer())).duration; }
+      finally { await c.close(); }
+    });
+    expect(duration).toBeGreaterThan(29);
     await page.getByRole('button', { name: 'Play First Spark', exact: true }).click(); await expect(page.locator('#hud')).toBeVisible();
   } finally { await context.close(); await server.close(); }
 });

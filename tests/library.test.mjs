@@ -21,7 +21,7 @@ test('malformed libraries and invalid dimensions/layers/songs fail closed', () =
   for (const change of [s => s.customLevels = null, s => s.customLevels = [], s => s.activeLevel = 9, s => s.customLevels.push(s.customLevels[0]), s => s.customLevels[0].level.height = 100]) {
     const s = structuredClone(good); change(s); assert.throws(() => readSave(JSON.stringify(s), 9));
   }
-  for (const change of [l => l.height = 6, l => l.height = 40.1, l => l.height = NaN, l => l.song = -1, l => l.song = 109, l => l.objects.push({ ...object('spike', 5), layer: 'background' }), l => l.objects.push({ ...object('block', 5), layer: 'wat' })]) {
+  for (const change of [l => l.height = 6, l => l.height = 40.1, l => l.height = NaN, l => l.song = -1, l => l.song = 118, l => l.objects.push({ ...object('spike', 5), layer: 'background' }), l => l.objects.push({ ...object('block', 5), layer: 'wat' })]) {
     const l = structuredClone(good.draft); change(l); assert.throws(() => validateLevel(l));
   }
   const tall = { ...good.draft, height: 20, objects: [object('block', 8, 19)] };

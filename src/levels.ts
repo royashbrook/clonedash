@@ -1,5 +1,6 @@
 import { object as o } from "./engine.ts";
 import type { Level } from "./types.ts";
+import { COURSES } from "./courses.ts";
 export const LEVELS: Level[] = [
   {
     name: "First Spark",
@@ -167,3 +168,25 @@ export const LEVELS: Level[] = [
     ],
   },
 ];
+// Append only: persisted progress and old ?level= links use these indices.
+LEVELS.push(...COURSES);
+export const COLLECTIONS = [
+  { name: "Easy", note: "Room to learn the rhythm", indices: [9, 10, 11] },
+  {
+    name: "Medium",
+    note: "Longer combinations and gravity changes",
+    indices: [12, 13, 14],
+  },
+  {
+    name: "Hard",
+    note: "Tighter timing and faster transitions",
+    indices: [15, 16, 17],
+  },
+  {
+    name: "Warmups",
+    note: "Short introductions to each shape",
+    indices: [0, 1, 2, 3, 4, 5, 6, 7, 8],
+  },
+];
+export const COURSE_ORDER = COLLECTIONS.flatMap((group) => group.indices);
+export const courseSong = (index: number) => LEVELS[index].song ?? index;

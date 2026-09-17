@@ -126,10 +126,10 @@ test("external schema rejects every unsafe field without relaxing the engine val
   const changes = [
     (l) => (l.name = 1),
     (l) => (l.name = "x".repeat(41)),
-    (l) => (l.length = 201),
+    (l) => (l.length = 601),
     (l) => (l.height = null),
     (l) => (l.height = 6),
-    (l) => (l.song = 109),
+    (l) => (l.song = 118),
     (l) => (l.song = "2"),
     (l) => (l.note = {}),
     (l) => (l.color = "url(evil)"),

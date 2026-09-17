@@ -8,11 +8,13 @@
     bounds,
     duplicateObject,
     levelHeight,
+    MAX_LENGTH,
   } from "./engine.ts";
-  import { LEVELS } from "./levels.ts";
+  import { LEVELS, COLLECTIONS, COURSE_ORDER, courseSong } from "./levels.ts";
   import { render } from "./render.ts";
   import { Run } from "./run.ts";
-  import { Soundtrack, TRACKS, trackFor } from "./music.ts";
+  import { Soundtrack, TRACKS, trackName } from "./music.ts";
+  import { RECORDINGS } from "./recordings.ts";
   import {
     SAVE,
     readSave,
@@ -132,6 +134,7 @@
   const draftSong = () => draft.song ?? 8 + save.activeLevel;
   const songs = $derived([
     ...new Set([
+      ...RECORDINGS.map((song) => song.id),
       ...TRACKS.map((_, i) => i),
       ...save.customLevels.map((e) => 8 + e.id),
       draft.song ?? 8 + save.activeLevel,
@@ -192,8 +195,7 @@
     music.unlock(save.sound);
   }
   function nextTrail() {
-    const next = LEVELS.findIndex((_, i) => save.best[i] !== 100);
-    current = next < 0 ? 0 : next;
+    current = COURSE_ORDER.find((i) => save.best[i] !== 100) ?? COURSE_ORDER[0];
   }
   function setMode(next: Screen) {
     mode = next;
@@ -281,6 +283,38 @@
     snapshot();
     tone(523, 0.1);
   }
+  function copyPlayedLevel() {
+    try {
+      if (!storageOK)
+        throw Error(
+          "Storage is unavailable. Your current level was not replaced.",
+        );
+      const source = run.state.level;
+      // Import uses a fresh storage read, a new ID, and verified writes. Only then
+      // select the copy; the previous draft remains in its original library slot.
+      save = importLevel(
+        localStorage,
+        save,
+        {
+          ...source,
+          name: `${source.name.slice(0, 33)} (copy)`,
+          song: custom ? draftSong() : courseSong(current),
+        },
+        LEVELS.length,
+        true,
+      );
+      draft = structuredClone(save.draft);
+      selected = -1;
+      pan = panY = 0;
+      openEditor();
+      toast("Your copy is saved in My Levels. The original is unchanged.");
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Cannot copy level.";
+      if (panel) panel = { ...panel, text: message };
+      else toast(message);
+    }
+  }
   function resume() {
     closeSheet();
     paused = false;
@@ -311,6 +345,7 @@
           },
         ],
         [custom ? "BACK TO EDITOR" : "MAIN MENU", custom ? openEditor : home],
+        ["EDIT A COPY", copyPlayedLevel],
         ...(custom ? [["MY LEVELS", library] as Action] : []),
       ],
       false,
@@ -348,12 +383,19 @@
           ["MY LEVELS", library],
           ["Restart Level", () => start(current, true)],
           ["Main Menu", home],
+          ["EDIT A COPY", copyPlayedLevel],
         ]
       : [
           ["Main Menu", home, true],
           ["Restart Level", () => start(current)],
-          ...(current < LEVELS.length - 1
-            ? [["NEXT TRAIL", () => start(current + 1)] as Action]
+          ["EDIT A COPY", copyPlayedLevel],
+          ...(COURSE_ORDER.indexOf(current) < COURSE_ORDER.length - 1
+            ? [
+                [
+                  "NEXT TRAIL",
+                  () => start(COURSE_ORDER[COURSE_ORDER.indexOf(current) + 1]),
+                ] as Action,
+              ]
             : []),
         ];
     void sheet(
@@ -469,6 +511,10 @@
   }
   function frame(now: number) {
     if (!alive) return;
+    if (music.fallback) {
+      music.fallback = false;
+      toast("Recording unavailable. Playing an original soundtrack instead.");
+    }
     const dt = Math.min(0.05, (now - (last || now)) / 1000);
     last = now;
     if (mode === "play" && !paused && !rotate && !document.hidden) {
@@ -484,8 +530,8 @@
       mode === "editor" || (mode === "play" && custom)
         ? draftSong()
         : mode === "play"
-          ? current
-          : 0,
+          ? courseSong(current)
+          : 109,
       !document.hidden &&
         (mode === "home" ||
           mode === "library" ||
@@ -555,12 +601,12 @@
       n = Number(input.value);
     if (
       n < 20 ||
-      n > 200 ||
+      n > MAX_LENGTH ||
       !Number.isFinite(n) ||
       draft.objects.some((o) => o.x > n - 2)
     ) {
       input.value = String(draft.length);
-      toast("Length must be 20–200 and include every object.");
+      toast(`Length must be 20–${MAX_LENGTH} and include every object.`);
       return;
     }
     draft = { ...draft, length: n };
@@ -677,26 +723,6 @@
         ],
         false,
       );
-  }
-  async function shareTrail() {
-    const url = new URL(location.href);
-    url.search = `level=${current + 1}`;
-    url.hash = "";
-    try {
-      if (navigator.share)
-        await navigator.share({
-          title: "Clone Dash",
-          text: `Try ${LEVELS[current].name}`,
-          url: url.href,
-        });
-      else {
-        await navigator.clipboard.writeText(url.href);
-        toast("Trail link copied.");
-      }
-    } catch (e) {
-      if (!(e instanceof Error && e.name === "AbortError"))
-        void sheet("Share this trail", url.href);
-    }
   }
   function how() {
     void sheet(
@@ -832,7 +858,7 @@
   </header>
   <section class="home-content">
     <div class="intro">
-      <p class="eyebrow">ONE BUTTON. NINE TRAILS.</p>
+      <p class="eyebrow">ONE BUTTON. {LEVELS.length} TRAILS.</p>
       <h1>Find your<br /><span>flow.</span></h1>
       <p>
         Jump the spikes. Flip the world.<br />Then build your own impossible.
@@ -851,16 +877,32 @@
         Pick your trail <span id="stars">{completed} / {LEVELS.length}</span>
       </h2>
       <div id="levels">
-        {#each LEVELS as level, i}<button
-            class="level-card"
-            aria-label={`Play ${level.name}`}
-            onclick={() => start(i)}
-            ><span class="number">{String(i + 1).padStart(2, "0")}</span><span
-              class="title">{level.name}<small>{level.note}</small></span
-            ><span class="score"
-              >{save.best[i] === 100 ? "✓" : `${save.best[i] || 0}%`}</span
-            ></button
-          >{/each}
+        {#each COLLECTIONS as collection}
+          <h3 class="course-heading">
+            {collection.name}<small>{collection.note}</small>
+          </h3>
+          {#each collection.indices as i}
+            {@const level = LEVELS[i]}
+            <button
+              class="level-card"
+              aria-label={`Play ${level.name}`}
+              onclick={() => start(i)}
+              ><span class="number"
+                >{collection.name === "Warmups"
+                  ? `W${i + 1}`
+                  : String(COURSE_ORDER.indexOf(i) + 1).padStart(2, "0")}</span
+              ><span class="title"
+                >{level.name}<small>{level.note}</small><span
+                  class="course-meta"
+                  >{collection.name} · {Math.round(
+                    (level.length - 1) / 5,
+                  )}s</span
+                ></span
+              ><span class="score"
+                >{save.best[i] === 100 ? "✓" : `${save.best[i] || 0}%`}</span
+              ></button
+            >{/each}
+        {/each}
       </div>
     </div>
   </section>
@@ -877,9 +919,6 @@
       > MY LEVELS</button
     ><button id="editor-open" onclick={openEditor}>＋ LEVEL EDITOR</button
     ><button id="how" onclick={how}>HOW TO PLAY</button><button
-      id="share"
-      onclick={shareTrail}>PLAY WITH FRIENDS</button
-    ><button
       id="install"
       hidden={!installVisible}
       onclick={() => installer?.prompt()}>INSTALL</button
@@ -888,7 +927,7 @@
       onclick={() =>
         sheet(
           "Clone Dash",
-          "Nine one-button trails and a place to build your own. An original geometric platformer inspired by Geometry Dash, made from a kid’s game idea.",
+          `${LEVELS.length} one-button trails, from warmups to hard, and a place to build your own. An original geometric platformer inspired by Geometry Dash, made from a kid’s game idea.`,
           [],
           true,
           "about",
@@ -915,7 +954,7 @@
         <h2>{level.name}</h2>
         <p>
           {level.length} × {levelHeight(level)} blocks · {level.objects.length} pieces
-          · ♪ {trackFor(level.song ?? 8 + id).name}
+          · ♪ {trackName(level.song ?? 8 + id)}
         </p>
         <div class="buttons">
           <button
@@ -986,7 +1025,7 @@
         id="level-length"
         type="number"
         min="20"
-        max="200"
+        max={MAX_LENGTH}
         value={draft.length}
         onchange={changeLength}
       /></label
@@ -995,7 +1034,7 @@
       onclick={() =>
         sheet(
           "Level settings",
-          "Make room above your trail. Background blocks are decoration, never obstacles. Songs are original instrumental electronic loops.",
+          "Make room above your trail. Background blocks never collide. Pick a licensed electronic track or an original loop.",
           [],
           true,
           "settings",
@@ -1161,7 +1200,7 @@
                 saveDraft();
               }}
               >{#each songs as index}<option value={index}
-                  >{trackFor(index).name}{index === 8 + save.activeLevel
+                  >{trackName(index)}{index === 8 + save.activeLevel
                     ? " · this level’s original"
                     : ""}</option
                 >{/each}</select
@@ -1181,6 +1220,16 @@
           href="/licenses.md"
           target="_blank"
           rel="noopener">Licences</a
+        >
+        <p>
+          Music by <a
+            href="https://fardifferent.carrd.co/"
+            target="_blank"
+            rel="noopener">Of Far Different Nature</a
+          >, licensed under CC BY 4.0.
+        </p>
+        <a href="/music/credits.html" target="_blank" rel="noopener"
+          >Songs and music credits</a
         >
         <div class="maker">
           <svg viewBox="0 0 24 24" aria-hidden="true"

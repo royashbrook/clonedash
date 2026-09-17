@@ -1,5 +1,5 @@
 import { validateLevel } from "./engine.ts";
-import { SAVE, readSave } from "./library.ts";
+import { SAVE, readSave, selectLevel } from "./library.ts";
 import type { Level, SaveData } from "./types.ts";
 
 export const MAX_CODE = 192 * 1024;
@@ -174,14 +174,16 @@ export function importLevel(
   fallback: SaveData,
   input: Level,
   trailCount: number,
+  openInEditor = false,
 ): SaveData {
   // Re-read at confirmation: a second tab may have saved since this sheet opened.
   const latest = readSave(
     storage.getItem(SAVE) ?? JSON.stringify(fallback),
     trailCount,
   );
-  const next = appendLevel(latest, input),
-    raw = JSON.stringify(next);
+  const next = appendLevel(latest, input);
+  if (openInEditor) selectLevel(next, next.customLevels.at(-1)!.id);
+  const raw = JSON.stringify(next);
   storage.setItem(SAVE, raw);
   if (storage.getItem(SAVE) !== raw)
     throw Error(

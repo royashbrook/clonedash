@@ -1,3 +1,4 @@
+import { recordingFor } from "./recordings.ts";
 // Original 150 BPM compositions: one block is an eighth note at 5 blocks/second.
 // Render locally once per trail, then play a buffer. No network, samples or audio timer drift.
 export const TRACKS = [
@@ -60,6 +61,8 @@ const BEAT = 0.4,
   BARS = 16,
   LENGTH = BARS * 4 * BEAT;
 const hz = (n: number) => 440 * 2 ** ((n - 69) / 12);
+export const trackName = (index: number) =>
+  recordingFor(index)?.name ?? trackFor(index).name;
 export function trackFor(index: number) {
   if (TRACKS[index]) return TRACKS[index];
   // A unique two-note opening for each of the 100 custom originals, then a seeded riff.
@@ -239,6 +242,32 @@ export class Soundtrack {
   track = -1;
   intent = { index: 0, running: false, offset: 0 };
   private disposed = false;
+  private request: AbortController | null = null;
+  fallback = false;
+  private async load(index: number) {
+    const song = recordingFor(index);
+    if (song && this.context) {
+      // One pending load, with cancellation usable on older Safari too.
+      const request = (this.request = new AbortController());
+      const deadline = setTimeout(() => request.abort(), 8000);
+      try {
+        const response = await fetch(`/music/${song.file}.mp3`, {
+          signal: request.signal,
+        });
+        if (!response.ok) throw Error("Recording unavailable");
+        return await this.context.decodeAudioData(await response.arrayBuffer());
+      } catch {
+        if (this.disposed) throw Error("Soundtrack disposed");
+        // A failed download must not silence a run. Originals remain available offline.
+        this.fallback = true;
+        return compose((index - 109) % TRACKS.length);
+      } finally {
+        clearTimeout(deadline);
+        this.request = null;
+      }
+    }
+    return compose(index);
+  }
   unlock(enabled = this.enabled) {
     if (this.disposed) return;
     this.enabled = enabled;
@@ -263,6 +292,7 @@ export class Soundtrack {
   }
   dispose() {
     this.disposed = true;
+    this.request?.abort();
     this.enabled = false;
     this.stop();
     this.buffers.clear();
@@ -281,13 +311,13 @@ export class Soundtrack {
       // One render at a time; a big level library must not turn into a big audio cache.
       if (!this.pending.size) {
         this.pending.add(index);
-        compose(index)
+        this.load(index)
           .then((buffer) => {
             this.pending.delete(index);
             if (this.disposed) return;
+            // Long recordings decode to tens of MB. Retain only the current track.
+            this.buffers.clear();
             this.buffers.set(index, buffer);
-            if (this.buffers.size > 3)
-              this.buffers.delete(this.buffers.keys().next().value!);
             const i = this.intent;
             this.sync(i.index, i.running, i.offset);
           })
