@@ -1,6 +1,7 @@
 # Clone Dash: release-stack migration
 
-status: approved; implementation and preservation checks in progress in #13.
+status: shipped. #13 is closed and the migrated build is live; #17 fixed a host-only
+canonical-navigation defect found by the live pass and is live and verified.
 level sharing follows independently in #14. this is not a measured performance claim.
 source inspected: `c00928c1c005aad711b752690881b9b5f332a089`.
 
@@ -62,8 +63,10 @@ The old editor/game browser assertions are retained. New tests cover lifecycle t
 an actual legacy-to-new installed update, failed candidate downloads, open-tab cache
 retention, offline play/editor access, milestone versioning and emitted runtime licences.
 
-Release gates and independent review are still pending. Do not describe this branch as
-deployed, child-playtested, faster, or proof that every possible physics path is identical.
+Release gates passed and independent review is complete: hosted checks green, a real-origin
+old-to-new update verified on both engines, and the served worker, bundle, headers and bundled
+licence checked at the origin. Do not describe it as child-playtested, faster, or proof that every possible
+physics path is identical.
 
 ### measurement scope
 
