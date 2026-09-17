@@ -8,7 +8,7 @@ const dir = await mkdtemp(join(tmpdir(), "clonedash-mutants-"));
 try {
   await cp("src", join(dir, "src"), { recursive: true });
   // Keep relative imports valid, and run git reads from the real repository below.
-  for (const testFile of ["migration.test.mjs", "transfer.test.mjs"]) {
+  for (const testFile of ["migration.test.mjs", "transfer.test.mjs", "courses.test.mjs", "course-input.mjs"]) {
     const testSource = (
       await readFile(join("tests", testFile), "utf8")
     ).replaceAll("../src/", "./src/");
@@ -85,6 +85,9 @@ try {
       "import appends independently",
       "transfer.test.mjs",
     ],
+    ["transfer.ts", "if (openInEditor) selectLevel", "if (false) selectLevel", "copy re-reads", "courses.test.mjs"],
+    ["levels.ts", "LEVELS.push(...COURSES)", "LEVELS.unshift(...COURSES)", "groups preserve", "courses.test.mjs"],
+    ["courses.ts", "song: 109", "song: 110", "groups preserve", "courses.test.mjs"],
   ]) {
     const path = join(dir, "src", file),
       original = await readFile(path, "utf8");

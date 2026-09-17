@@ -1,6 +1,6 @@
 # Clone Dash
 
-A one-button, geometric platformer from a kid's idea. Nine hand-authored trails, square, plane, wheel and jumper modes, and a touch-friendly level editor. Original art and synthesized sound; no copied Geometry Dash assets.
+A one-button, geometric platformer from a kid's idea. Eighteen trails, square, plane, wheel and jumper modes, and a touch-friendly level editor. Original art, licensed electronic recordings and synthesized originals; no copied Geometry Dash assets.
 
 **Play:** https://clonedash.royashbrook.com
 
@@ -25,7 +25,13 @@ The worker precaches a complete emitted build, including dependency licences. It
 
 ## Music
 
-Nine original instrumental electronic tracks, composed in `src/music.ts`: half-time drums, resonant wobble bass, sub bass, pads and arpeggiated synth melodies. At 150 BPM, one block of travel equals an eighth note. Each trail has a distinct key and melody, with intro, drop and breakdown sections. Music renders on-device into an audio buffer, works offline, starts after a sound/play gesture, and follows run time through pauses and retries. No licensed samples or external music requests.
+Nine self-hosted electronic recordings by Of Far Different Nature accompany the new courses, under CC BY 4.0. Credits are visible in About and packaged offline with the music. See [the soundtrack inventory](docs/soundtrack.md) for source, licence and encoding details. The nine original 150 BPM compositions and 100 custom-level originals remain available. Sound starts after a sound/play gesture and follows simulation time through pauses and retries. No third-party music requests at runtime.
+
+## course progression
+
+Easy: Pulseway, Skyline, Runway (48 seconds each). Medium: Switchyard, Orbitworks, Airloom (60 seconds). Hard: Overdrive, Polarity, Afterburn (72 seconds). The original nine short layouts remain under Warmups, with unchanged save indices. Difficulty labels are authored design judgements, not a measured comparison to another game's rankings. Every new course has a completion witness using normal press/release controls through the shipped run loop. See `tests/courses.test.mjs`.
+
+Pause any played level, or finish it, then choose **EDIT A COPY**. It saves a new independent entry and opens the editor. The source, prior draft and progress remain intact. Full or unavailable storage refuses the copy; nothing is replaced. This also works for imported levels. Copies preserve geometry and soundtrack and can be shared from My Levels.
 
 ## My levels
 
@@ -35,7 +41,7 @@ The block-and-spike **MY LEVELS** button opens a library of up to 100 custom lev
 
 While testing, **← MY LEVELS** at the top left returns directly to the library. The pause menu, completion panel and portrait rotation prompt also offer **MY LEVELS**. Returning leaves your saved level intact; **BACK TO EDITOR** remains available from pause and completion.
 
-**HEIGHT / SONG** sets world height from 7 to 40 blocks and selects music, with a LISTEN toggle. Taller levels get an Up scrollbar in the editor and a following vertical camera in play, not smaller artwork. Lowering the ceiling cannot cut off placed objects. Each custom level starts with its own deterministic original song and riff; the picker can also choose any built-in track or another level's original. Choosing a shared track is an explicit override of the unique default. Only three rendered songs are cached, with one render in flight.
+**HEIGHT / SONG** sets world height from 7 to 40 blocks and selects music, with a LISTEN toggle. Length can be 20–600 blocks. Taller levels get an Up scrollbar in the editor and a following vertical camera in play, not smaller artwork. Lowering the ceiling cannot cut off placed objects. Each custom level starts with its own deterministic original song and riff; the picker can also choose a licensed recording, any built-in original or another level's original. Choosing a shared track is an explicit override of the unique default. One decoded song is retained, with one load/render in flight.
 
 The **Layer** selector switches between PLAY and BACKGROUND. Background blocks paint behind playable pieces and never collide or support a landing. Both layers can occupy the same coordinates; selecting, moving and copying respects the active layer. All five block styles work as decoration. Spikes, portals, rings and ramps stay in the play layer.
 

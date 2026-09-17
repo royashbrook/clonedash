@@ -89,7 +89,8 @@ export function inputFor(s) {
     return b.top > s.y + .05 && b.bottom < s.y + 1.1 && b.left - s.x > lead - .5 && b.left - s.x < lead;
   });
 }
-for (const [i, level] of LEVELS.entries()) test(`completion witness ${i + 1}: ${level.name}`, () => {
+// New long courses have separate human-rate input witnesses in courses.test.mjs.
+for (const [i, level] of LEVELS.slice(0, 9).entries()) test(`completion witness ${i + 1}: ${level.name}`, () => {
   const s = createState(level);
   for (let tick = 0; tick < 6000 && s.status === 'playing'; tick++) step(s, inputFor(s), STEP);
   assert.equal(s.status, 'complete', `stopped at x=${s.x.toFixed(2)} y=${s.y.toFixed(2)} mode=${s.mode}`);
