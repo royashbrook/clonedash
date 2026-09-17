@@ -331,6 +331,21 @@ dialog .buttons {
   display: grid;
   gap: 4px;
 }
+dialog[open]:has(.transfer) {
+  display: flex;
+  flex-direction: column;
+  width: min(480px, calc(100vw - 32px));
+  padding: 20px;
+  overflow: hidden;
+}
+dialog:has(.transfer) #sheet-content {
+  min-height: 0;
+  overflow: auto;
+  padding: 8px;
+}
+dialog:has(.transfer) #sheet-close {
+  flex-shrink: 0;
+}
 .maker {
   border-top: 1px solid var(--line);
   padding-top: 15px;
@@ -692,10 +707,12 @@ body[data-mode="editor"] #world {
 }
 .custom-card .buttons {
   display: flex;
+  flex-wrap: wrap;
   gap: 10px;
 }
 .custom-card button {
   flex: 1;
+  padding-inline: 12px;
 }
 .level-settings {
   display: grid;

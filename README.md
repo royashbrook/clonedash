@@ -10,7 +10,7 @@ Editor: choose Blocks, Spikes, Portals or Gravity, then tap the grid to place. S
 
 ## Develop
 
-The [release-stack migration](docs/migration.md) records the Svelte/TypeScript/Vite boundary and preservation checks. Level sharing is a separate follow-up; this migration preserves existing gameplay and saved work.
+The [release-stack migration](docs/migration.md) records the Svelte/TypeScript/Vite boundary and preservation checks. [Level sharing](docs/level-sharing.md) documents the separately tested portable-level format and import limits.
 
 Node 22.18+. `npm ci`, `npm run check`, `npm test`, `npm run build`, `npm run test:release`.
 `npm run dev` runs Vite at localhost:4192; `npm run preview` serves the built artifact at localhost:4191.
@@ -30,6 +30,8 @@ Nine original instrumental electronic tracks, composed in `src/music.ts`: half-t
 ## My levels
 
 The block-and-spike **MY LEVELS** button opens a library of up to 100 custom levels. Create, name, edit and play each one independently. The old single draft becomes the first library entry without changing its objects or best scores. Saves stay on this device; malformed data and storage failures are reported without overwriting the old save.
+
+**SHARE** sends just the selected level through the device share sheet, a QR, a copyable code or a file. Detailed levels use the complete code/file instead of an overly dense QR. On the receiving device, open the link or choose **IMPORT LEVEL** to paste the code or open the file. Preview it, then choose **ADD TO MY LEVELS**. Import adds a new entry without replacing existing levels, the active draft or progress; a full library refuses the addition. Geometry and the original selected song travel with the level. No account or level-data server is involved. Sharing sends only what you explicitly choose, not your save library.
 
 While testing, **← MY LEVELS** at the top left returns directly to the library. The pause menu, completion panel and portrait rotation prompt also offer **MY LEVELS**. Returning leaves your saved level intact; **BACK TO EDITOR** remains available from pause and completion.
 

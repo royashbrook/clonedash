@@ -22,6 +22,8 @@
     "@playwright/test": "1.62.1",
     "@sveltejs/vite-plugin-svelte": "7.2.0",
     "@types/node": "22.19.19",
+    "@types/qrcode": "1.5.6",
+    "jsqr": "1.4.0",
     "prettier": "3.9.7",
     "prettier-plugin-svelte": "4.1.1",
     "svelte-check": "4.7.3",
@@ -30,6 +32,7 @@
     "wrangler": "^4.0.0"
   },
   "dependencies": {
+    "qrcode": "1.5.4",
     "svelte": "5.56.8"
   }
 }
