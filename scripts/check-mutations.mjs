@@ -32,6 +32,30 @@ try {
       "h - Math.max(42, h * 0.18)",
       "drawing commands match",
     ],
+    [
+      "engine.ts",
+      "Math.min(...bb) + 0.00001",
+      "Math.min(...bb) + 0.0001",
+      "contact, ramp span and ceiling tolerances",
+    ],
+    [
+      "engine.ts",
+      "hi <= lo + 0.00001",
+      "hi <= lo + 0.0001",
+      "contact, ramp span and ceiling tolerances",
+    ],
+    [
+      "engine.ts",
+      "bounds(o).top > height + 0.00001",
+      "bounds(o).top > height + 0.01",
+      "contact, ramp span and ceiling tolerances",
+    ],
+    [
+      "engine.ts",
+      "return structuredClone(raw);",
+      "return raw;",
+      "isolated from the object it was built from",
+    ],
   ]) {
     const path = join(dir, "src", file),
       original = await readFile(path, "utf8");

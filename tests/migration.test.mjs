@@ -225,3 +225,95 @@ test("fixed-step run is stable across render cadence after the ready interval", 
   assert.deepEqual(snapshots[0], snapshots[1]);
   assert.deepEqual(snapshots[1], snapshots[2]);
 });
+
+test("contact, ramp span and ceiling tolerances match the pinned original", async () => {
+  await withLegacy((old) => {
+    const block = (x) => ({
+      type: "block",
+      x,
+      y: 1,
+      rotation: 0,
+      flipX: false,
+      flipY: false,
+    });
+    // Separation either side of the contact tolerance, which no other test drives.
+    for (const gap of [0, 0.000005, 0.00001, 0.00002, 0.0001, 0.5]) {
+      assert.equal(
+        engine.intersects(
+          engine.polygon(block(3)),
+          engine.polygon(block(4 - gap)),
+        ),
+        old.intersects(old.polygon(block(3)), old.polygon(block(4 - gap))),
+        `contact at gap ${gap}`,
+      );
+    }
+    // A ramp span narrower than the tolerance reports no surface at all.
+    const ramp = {
+      type: "ramp",
+      x: 3,
+      y: 1,
+      rotation: 0,
+      flipX: false,
+      flipY: false,
+    };
+    for (const span of [0.000005, 0.00001, 0.00002, 0.0001, 0.001]) {
+      assert.equal(
+        engine.rampSurface(ramp, 3.5, 3.5 + span, true),
+        old.rampSurface(ramp, 3.5, 3.5 + span, true),
+        `ramp span ${span}`,
+      );
+    }
+    // The per-object vertical bound refuses a one-high block before the ceiling check
+    // runs, so reaching that tolerance needs a tall shape in a tall world.
+    const attempt = (validate, level) => {
+      try {
+        validate(level);
+        return "accepted";
+      } catch (error) {
+        return error.message;
+      }
+    };
+    for (const dy of [-0.001, -0.00001, 0, 0.00001, 0.00002, 0.001]) {
+      const level = {
+        name: "Ceiling",
+        length: 40,
+        height: 10,
+        objects: [
+          {
+            type: "plane",
+            x: 5,
+            y: 10 - 2.5 + dy,
+            rotation: 0,
+            flipX: false,
+            flipY: false,
+          },
+        ],
+      };
+      assert.equal(
+        attempt(engine.validateLevel, level),
+        attempt(old.validateLevel, level),
+        `ceiling at ${dy}`,
+      );
+    }
+  });
+});
+
+test("a validated level is isolated from the object it was built from", async () => {
+  await withLegacy((old) => {
+    // The difference between a deep and a shallow return is invisible until something
+    // writes to the result, so write to it and read the source back.
+    for (const validate of [engine.validateLevel, old.validateLevel]) {
+      const source = {
+        name: "Isolated",
+        length: 40,
+        height: 7,
+        objects: [engine.object("block", 5)],
+      };
+      const validated = validate(source);
+      validated.objects[0].x = 99;
+      validated.name = "Changed";
+      assert.equal(source.objects[0].x, 5);
+      assert.equal(source.name, "Isolated");
+    }
+  });
+});
