@@ -77,10 +77,22 @@ worker.addEventListener("fetch", (event) => {
     (async () => {
       const cache = await caches.open(CACHE);
       // A complete build is immutable: a background fetch must not mix tomorrow's HTML into it.
-      // The asset host redirects /index.html to /. A cached redirected response is
-      // invalid for a navigation's manual redirect mode; the canonical root is not.
-      const cached = await cache.match(req.mode === "navigate" ? "/" : req);
-      if (cached) return cached;
+      // Only app entry URLs use the root shell. Credits and licences are documents,
+      // not routes into the game, and must keep their own cached content.
+      const navigation = req.mode === "navigate";
+      const shell = navigation && ["/", "/index.html"].includes(url.pathname);
+      const cached = await cache.match(shell ? "/" : req);
+      if (cached) {
+        // The asset host redirects HTML paths. Their cached bytes are correct, but
+        // a redirected Response cannot answer a manual-redirect navigation.
+        return navigation && cached.redirected
+          ? new Response(cached.body, {
+              status: cached.status,
+              statusText: cached.statusText,
+              headers: cached.headers,
+            })
+          : cached;
+      }
       try {
         return await fetch(req);
       } catch {
