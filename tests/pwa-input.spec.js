@@ -27,13 +27,22 @@ test("play surface blocks selection and the zoom gesture; text inputs stay edita
   });
   expect(prevented).toBe(true);
 
-  // text fields (the editor's level title) must stay selectable / editable
-  const inputSelect = await page.evaluate(() => {
+  // text fields must stay selectable / editable. the one that matters is the readonly share-code
+  // textarea in LevelTransfer ("Select and copy the code below" fallback): select() must still work.
+  const fields = await page.evaluate(() => {
+    const sel = (e) => getComputedStyle(e).userSelect || getComputedStyle(e).webkitUserSelect;
     const i = document.createElement("input");
-    document.body.append(i);
-    const v = getComputedStyle(i).userSelect || getComputedStyle(i).webkitUserSelect;
+    const t = document.createElement("textarea");
+    t.readOnly = true;
+    t.value = "ABC123";
+    document.body.append(i, t);
+    t.select();
+    const out = { input: sel(i), textarea: sel(t), selected: t.selectionEnd - t.selectionStart };
     i.remove();
-    return v;
+    t.remove();
+    return out;
   });
-  expect(inputSelect).toBe("text");
+  expect(fields.input).toBe("text");
+  expect(fields.textarea).toBe("text");
+  expect(fields.selected).toBe(6);
 });
