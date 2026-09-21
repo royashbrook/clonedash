@@ -130,6 +130,7 @@ test("drawing commands match the original for editor, all modes, gravity and dea
               cameraY: 1,
               time: 0.2,
               reduced: false,
+              avatar: engine.SIZE, // draw at the legacy size here; the app default is larger (tests/avatar.test.mjs)
             };
             assert.deepEqual(
               commands(render, options),

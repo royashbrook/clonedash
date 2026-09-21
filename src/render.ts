@@ -16,6 +16,9 @@ const portalLook: Record<string, [string, string, string]> = {
   "gravity-up": ["#53e3ff", "UP", "↑"],
   "gravity-down": ["#ffb477", "DOWN", "↓"],
 };
+// How wide the player is DRAWN, in blocks. The physics body stays SIZE (0.64): this is the
+// visual-only answer to "he looks tiny next to the blocks". A physics retune is a separate call.
+export const AVATAR = 1;
 export interface RenderOptions {
   state: GameState | null;
   level: Level;
@@ -28,6 +31,7 @@ export interface RenderOptions {
   reduced?: boolean;
   areaBottom?: number;
   areaTop?: number;
+  avatar?: number;
 }
 export function render(
   canvas: HTMLCanvasElement,
@@ -43,6 +47,7 @@ export function render(
     reduced = false,
     areaBottom,
     areaTop = 0,
+    avatar = AVATAR,
   }: RenderOptions,
 ) {
   const w = innerWidth,
@@ -302,8 +307,11 @@ export function render(
           );
   }
   if (state) {
+    // Feet sit on the body's bottom edge (head on its top edge when inverted), so an avatar
+    // drawn larger than the physics body never sinks into what it stands on. At
+    // avatar === SIZE this is exactly the body's center, i.e. the legacy drawing.
     const x = X(state.x + SIZE / 2),
-      y = Y(state.y + SIZE / 2);
+      y = Y(state.y + (state.gravity > 0 ? SIZE - avatar / 2 : avatar / 2));
     ctx.save();
     ctx.translate(x, y);
     if (state.status === "dead") {
@@ -321,6 +329,10 @@ export function render(
           );
         }
     } else {
+      // One uniform scale grows every mode's shape together. Not emitted at the legacy size, so
+      // the pre-migration parity pin (migration.test.mjs) stays byte-identical.
+      const k = avatar / SIZE;
+      if (k !== 1) ctx.scale(k, k);
       if (!reduced) {
         ctx.fillStyle = `${color}35`;
         for (let i = 3; i >= 1; i--)

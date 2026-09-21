@@ -2,6 +2,7 @@ import { test, expect } from '@playwright/test';
 import { COURSES } from '../src/courses.ts';
 import { RECORDINGS } from '../src/recordings.ts';
 import { courseInput } from './course-input.mjs';
+import { AVATAR } from '../src/render.ts';
 
 const save = () => ({ version: 1, best: {0:100,8:52}, sound:false,
   draft: {name:'Keep my draft',length:40,objects:[],song:31},
@@ -137,7 +138,7 @@ for (const index of [0,8]) test(`full course through actual keyboard input: ${CO
     if(paint.complete) break;
     expect(paint.attempt,`x=${1+paint.progress/100*(level.length-1)}`).toBe('TRY 1');
     const floor=430-Math.max(42,430*.16),unit=Math.min((floor-14)/7,932/13.5,82);
-    const y=(floor-paint.point.y)/unit-.32,mode=paint.name.includes('PLANE')?'plane':'square';
+    const y=(floor-paint.point.y)/unit-AVATAR/2,mode=paint.name.includes('PLANE')?'plane':'square';
     const next=courseInput({level,x:1+paint.progress/100*(level.length-1),y,
       vy:mode==='plane'?-paint.tilt/.06:0,mode,gravity:-1,grounded:y<.001,inputHeld:held});
     if(next!==held) {next?await page.keyboard.down('Space'):await page.keyboard.up('Space');held=next;}
