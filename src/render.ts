@@ -12,7 +12,7 @@ const portalLook: Record<string, [string, string, string]> = {
   plane: ["#ffd166", "FLY", "▷"],
   square: ["#72f7dc", "JUMP", "□"],
   wheel: ["#ff8ac4", "WHEEL", "⊙"],
-  jumper: ["#53e3ff", "JUMPER", "⇈"],
+  jumper: ["#53e3ff", "POGO", "⇈"],
   "gravity-up": ["#53e3ff", "UP", "↑"],
   "gravity-down": ["#ffb477", "DOWN", "↓"],
 };

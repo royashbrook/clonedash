@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { labelOf } from '../src/types.ts';
 
 test('new tabs place and persist every new object; black blocks and ramps paint the requested edges', async ({ page }) => {
   await page.goto('/'); await page.locator('#editor-open').click();
@@ -15,7 +16,7 @@ test('new tabs place and persist every new object; black blocks and ramps paint 
     await page.getByRole('tab', { name: tab, exact: true }).click();
     await page.getByRole('button', { name, exact: true }).click();
     await page.mouse.click((x + .1) * view.unit, view.floor - 1.1 * view.unit);
-    await expect(page.locator('#selection')).toContainText(type.toUpperCase());
+    await expect(page.locator('#selection')).toContainText(labelOf(type)); // shown name, not the stored id
     if (type === 'plain-black') {
       await expect.poll(() => pixel(5.5, 1.5)).toEqual([0, 0, 0, 255]);
       expect((await pixel(5, 1.5))[0]).toBeLessThan(100);

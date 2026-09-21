@@ -16,7 +16,7 @@ test('jumper accepts brief midair touches but held and repeated Space do not fly
   await page.addInitScript(() => localStorage.setItem('clonedash.v1', JSON.stringify({ version: 1, sound: false, best: { 0: 100 }, draft: { name: 'Air taps', length: 40, objects: [{ type: 'jumper', x: 3, y: 0, rotation: 0, flipX: false, flipY: false }] } })));
   await page.goto(process.env.GAME_URL || 'http://127.0.0.1:4191');
   await page.locator('#editor-open').click(); await page.locator('#test-level').click();
-  await page.clock.runFor(900); await expect(page.locator('#level-name')).toContainText('JUMPER ↓');
+  await page.clock.runFor(900); await expect(page.locator('#level-name')).toContainText('POGO ↓');
   await expect(page.locator('#cue')).toContainText('TAP AGAIN IN MIDAIR');
   const ground = await page.evaluate(() => window.playerPaint.y);
   await page.keyboard.down('Space'); await page.clock.runFor(550);
@@ -50,12 +50,13 @@ test('outline is transparent with white edges; new editor objects transform and 
     return [...canvas.getContext('2d').getImageData(Math.floor(p.x * ratio), Math.floor(p.y * ratio), 1, 1).data];
   }, { x, y });
   const background = await pixel(5.5 * point.unit, point.floor - .5 * point.unit);
-  for (const [tab, name, type, x] of [['BLOCKS', '□ OUTLINE', 'outline', 5], ['SPIKES', '▴ ¼ SIZE', 'quarter', 7], ['PORTALS', '⇈ JUMPER', 'jumper', 9]]) {
+  // readout is what the editor SHOWS; type is what gets STORED. they differ for jumper (shown as POGO).
+  for (const [tab, name, type, x, readout] of [['BLOCKS', '□ OUTLINE', 'outline', 5, 'OUTLINE'], ['SPIKES', '▴ ¼ SIZE', 'quarter', 7, 'QUARTER'], ['PORTALS', '⇈ POGO', 'jumper', 9, 'POGO']]) {
     await page.locator('#step-size').selectOption('1');
     await page.getByRole('tab', { name: tab, exact: true }).click();
     await page.getByRole('button', { name, exact: true }).click();
     await page.mouse.click((x + .1) * point.unit, point.floor - .1 * point.unit);
-    await expect(page.locator('#selection')).toContainText(type.toUpperCase());
+    await expect(page.locator('#selection')).toContainText(readout);
     if (type === 'outline') {
       await painted();
       expect(await pixel(5.5 * point.unit, point.floor - .5 * point.unit)).toEqual(background);
@@ -109,7 +110,7 @@ test('Air Steps lands on the high outline shelf using real air jumps and saves c
     if (next < jumps.length && x >= jumps[next]) { await page.keyboard.down('Space'); next++; }
     else await page.keyboard.up('Space');
     if (x > 12 && !shelfSeen) {
-      await expect(page.locator('#level-name')).toContainText('JUMPER ↓');
+      await expect(page.locator('#level-name')).toContainText('POGO ↓');
       const shelf = await page.evaluate(() => window.playerPaint);
       expect(ground.y - shelf.y).toBeCloseTo(4 * ground.width / .64, 1);
       await page.screenshot({ path: 'test-results/jumper-high-shelf.png' }); shelfSeen = true;

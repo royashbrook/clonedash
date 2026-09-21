@@ -1,6 +1,6 @@
 # Clone Dash
 
-A one-button, geometric platformer from a kid's idea. Eighteen trails, square, plane, wheel and jumper modes, and a touch-friendly level editor. Original art, licensed electronic recordings and synthesized originals; no copied Geometry Dash assets.
+A one-button, geometric platformer from a kid's idea. Eighteen trails, square, plane, wheel and pogo modes, and a touch-friendly level editor. Original art, licensed electronic recordings and synthesized originals; no copied Geometry Dash assets.
 
 **Play:** https://clonedash.royashbrook.com
 
@@ -51,9 +51,9 @@ Wheel mode flips gravity once per tap or Space press while resting on a solid su
 
 The editor includes wheel portals, a separate GRAVITY tab, completely black outlined blocks, and spikes scaled to 2/3 in both width and height. Shapes, rotations and flips use the same geometry for painting and collision. The bonus Gravity Flip trail demonstrates the new objects; the original seven layouts and save format are unchanged.
 
-## Jumper and Air Steps
+## Pogo and Air Steps
 
-Jumper mode has square movement, but each fresh tap or Space press restarts the jump even in midair. There is no extra-jump limit. Holding only repeats on landing, not in the air; keyboard auto-repeat is ignored. Air jumps also work with inverted gravity. Like planes, jumpers can land or bump a ceiling safely, but hitting a wall kills. Jump before impact to clear it. The jumper has a double-chevron icon and its own portal in the editor.
+Pogo mode has square movement, but each fresh tap or Space press restarts the jump even in midair. There is no extra-jump limit. Holding only repeats on landing, not in the air; keyboard auto-repeat is ignored. Air jumps also work with inverted gravity. Like planes, pogos can land or bump a ceiling safely, but hitting a wall kills. Jump before impact to clear it. The pogo has a double-chevron icon and its own portal in the editor.
 
 Hazard contact uses an inner 0.40-block player box, inset 0.12 blocks on each side of the visible 0.64-block body. This forgives small edge grazes without making direct spike hits safe. Landing, safe solid contact and portals still use the full body; jump reach and platform support are unchanged.
 

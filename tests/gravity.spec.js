@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { labelOf } from '../src/types.ts';
 
 test('wheel rejects midair taps and held landing flips, accepts fresh surface taps, and resets on retry', async ({ browser }) => {
   const context = await browser.newContext({ viewport: { width: 932, height: 430 }, hasTouch: true });
@@ -46,7 +47,7 @@ test('new editor objects place, transform, persist and black blocks paint black'
       return { x: (x + .1) * unit, y: floor - .1 * unit, unit, floor };
     }, x);
     await page.mouse.click(point.x, point.y);
-    await expect(page.locator('#selection')).toContainText(type.toUpperCase());
+    await expect(page.locator('#selection')).toContainText(labelOf(type)); // shown name, not the stored id
     if (type === 'black') {
       const pixel = await page.locator('#world').evaluate((canvas, p) => {
         const ratio = canvas.width / innerWidth;
