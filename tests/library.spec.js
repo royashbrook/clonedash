@@ -91,7 +91,7 @@ test('camera follows a high jumper without shrinking the character or pinning it
     };
   });
   await page.goto('/'); await page.locator('#editor-open').click(); await page.locator('#test-level').click(); await page.clock.runFor(900);
-  await expect(page.locator('#level-name')).toContainText('JUMPER');
+  await expect(page.locator('#level-name')).toContainText('POGO');
   const ground = await page.evaluate(() => ({ player: window.playerPaint, ground: window.groundY }));
   for (let i = 0; i < 18; i++) { await page.keyboard.down('Space'); await page.clock.runFor(20); await page.keyboard.up('Space'); await page.clock.runFor(180); }
   const high = await page.evaluate(() => ({ player: window.playerPaint, ground: window.groundY }));

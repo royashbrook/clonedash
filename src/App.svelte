@@ -13,6 +13,7 @@
   import { LEVELS, COLLECTIONS, COURSE_ORDER, courseSong } from "./levels.ts";
   import { render } from "./render.ts";
   import { Run } from "./run.ts";
+  import { labelOf } from "./types.ts";
   import { Soundtrack, TRACKS, trackName } from "./music.ts";
   import { RECORDINGS } from "./recordings.ts";
   import {
@@ -55,7 +56,7 @@
       ["plane", "▷ PLANE"],
       ["square", "□ SQUARE"],
       ["wheel", "⊙ WHEEL"],
-      ["jumper", "⇈ JUMPER"],
+      ["jumper", "⇈ POGO"],
     ],
     gravity: [
       ["gravity-up", "↑ UPSIDE DOWN"],
@@ -456,7 +457,7 @@
   function snapshot() {
     const s = run.state;
     const next = {
-      label: `${s.level.name} · ${s.mode.toUpperCase()} ${s.gravity > 0 ? "↑" : "↓"}`,
+      label: `${s.level.name} · ${labelOf(s.mode)} ${s.gravity > 0 ? "↑" : "↓"}`,
       progress: Math.min(100, ((s.x - 1) / (s.level.length - 1)) * 100),
       attempt: run.attempt,
       cue:
@@ -727,7 +728,7 @@
   function how() {
     void sheet(
       "One button. Find your flow.",
-      "Square: tap or press Space to jump onto two-block ledges. Hold for another jump when you land. Jumper: same as square, but every fresh tap lets you jump again in midair. Jump before a wall to clear it. Try Air Steps! Plane: hold to fly against gravity; release to fall. Landings and ceiling contact are safe while flying, but wall impacts kill. Wheel: land on a block, floor or ceiling, then tap or press Space to flip gravity. Midair taps are ignored; holding does not flip again when you land. UP and DOWN portals set gravity without changing your shape. Under upside-down gravity, land and jump on ceilings. All spikes kill, including the tiny quarter-size ones. Outline blocks are transparent but solid. Hitting a wall kills in ALL modes, including the vertical face of a ramp. Your smaller hazard hitbox still forgives edge grazes. Background blocks never collide. Rings: tap or press Space while reaching a glowing ring for a midair jump, once per ring per run. Ramps: walk up or down the white diagonal slope. Find RINGS and RAMP tabs in the editor.",
+      "Square: tap or press Space to jump onto two-block ledges. Hold for another jump when you land. Pogo: same as square, but every fresh tap lets you jump again in midair. Jump before a wall to clear it. Try Air Steps! Plane: hold to fly against gravity; release to fall. Landings and ceiling contact are safe while flying, but wall impacts kill. Wheel: land on a block, floor or ceiling, then tap or press Space to flip gravity. Midair taps are ignored; holding does not flip again when you land. UP and DOWN portals set gravity without changing your shape. Under upside-down gravity, land and jump on ceilings. All spikes kill, including the tiny quarter-size ones. Outline blocks are transparent but solid. Hitting a wall kills in ALL modes, including the vertical face of a ramp. Your smaller hazard hitbox still forgives edge grazes. Background blocks never collide. Rings: tap or press Space while reaching a glowing ring for a midair jump, once per ring per run. Ramps: walk up or down the white diagonal slope. Find RINGS and RAMP tabs in the editor.",
     );
   }
   async function applyUpdate() {
@@ -1128,7 +1129,7 @@
         /></label
       ><output id="selection"
         >{selection
-          ? `${selection.type.toUpperCase()} · x ${selection.x.toFixed(2)} / y ${selection.y.toFixed(2)} · ${selection.rotation}°`
+          ? `${labelOf(selection.type)} · x ${selection.x.toFixed(2)} / y ${selection.y.toFixed(2)} · ${selection.rotation}°`
           : tool === "select"
             ? "Tap an object to select it."
             : `Tap the grid to place ${tool === "half" ? "a half spike" : "a " + tool}.`}{layer ===

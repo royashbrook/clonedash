@@ -1,4 +1,8 @@
 export type GameMode = "square" | "plane" | "wheel" | "jumper";
+// What the player SEES for an id. The ids themselves are stored in levels and saves, so a real
+// rename is a breaking (major-version) change; this map is the label-only rename until then.
+const LABELS: Partial<Record<string, string>> = { jumper: "POGO" };
+export const labelOf = (id: string): string => LABELS[id] ?? id.toUpperCase();
 export type ObjectType =
   | GameMode
   | "gravity-up"

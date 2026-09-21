@@ -102,6 +102,15 @@ test("drawing commands match the original for editor, all modes, gravity and dea
       // Gradient functions are instruments, not painted values.
       return JSON.parse(JSON.stringify(log));
     }
+    // Deliberate post-migration label changes. The internal ids are unchanged; only the painted
+    // word differs from the frozen baseline. Keep this list tiny and dated.
+    const RELABEL = { JUMPER: "POGO" }; // 2026-09-21, jumper is shown as POGO
+    const relabel = (log) =>
+      log.map((cmd) =>
+        cmd[0] === "fillText" && cmd[1] in RELABEL
+          ? [cmd[0], RELABEL[cmd[1]], ...cmd.slice(2)]
+          : cmd,
+      );
     for (const level of LEVELS)
       for (const mode of ["square", "plane", "wheel", "jumper"])
         for (const gravity of [-1, 1]) {
@@ -124,7 +133,7 @@ test("drawing commands match the original for editor, all modes, gravity and dea
             };
             assert.deepEqual(
               commands(render, options),
-              commands(legacy.render, options),
+              relabel(commands(legacy.render, options)),
               `${level.name}/${mode}/${gravity}/${status}`,
             );
           }
@@ -141,7 +150,7 @@ test("drawing commands match the original for editor, all modes, gravity and dea
     };
     assert.deepEqual(
       commands(render, options),
-      commands(legacy.render, options),
+      relabel(commands(legacy.render, options)),
     );
   });
 });

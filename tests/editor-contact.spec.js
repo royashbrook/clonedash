@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { labelOf } from '../src/types.ts';
 
 test('copy + paste preserves transforms; delete all cancels safely and clears only the draft when confirmed', async ({ page }) => {
   await page.addInitScript(() => {
@@ -37,7 +38,7 @@ for (const mode of ['square', 'plane', 'wheel', 'jumper']) test(`${mode} wall im
   }, mode);
   await page.goto('/'); await page.locator('#editor-open').click(); await page.locator('#test-level').click();
   await page.clock.runFor(1500); await expect(page.locator('#attempt')).toHaveText('TRY 1');
-  await expect(page.locator('#level-name')).toContainText(mode.toUpperCase());
+  await expect(page.locator('#level-name')).toContainText(labelOf(mode)); // shown name, not the stored id
   const x = () => page.locator('#run-progress').evaluate(e => 1 + e.value / 100 * 19);
   const hit = await x(); expect(hit).toBeGreaterThan(6 - .64); expect(hit).toBeLessThan(6);
   await page.keyboard.down('Space'); await page.clock.runFor(120); await page.keyboard.up('Space');
