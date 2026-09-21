@@ -114,6 +114,8 @@ function press() {
 }
 canvas.addEventListener('pointerdown', e => { if (mode === 'editor') { editAt(e); return; } e.preventDefault(); canvas.setPointerCapture(e.pointerId); press(); });
 for (const event of ['pointerup', 'pointercancel', 'lostpointercapture']) canvas.addEventListener(event, () => held = false);
+// iOS ignores user-scalable=no, so fast taps double-tap-zoom and a hold raises the callout menu: block the gesture directly.
+addEventListener('gesturestart', e => e.preventDefault());
 addEventListener('keydown', e => {
   if (['INPUT', 'SELECT', 'TEXTAREA'].includes(e.target.tagName)) return;
   if (e.code === 'Space' || e.code === 'ArrowUp') { if (mode === 'play') { e.preventDefault(); if (!e.repeat) press(); } }
