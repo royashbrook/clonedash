@@ -214,6 +214,10 @@ h1 span {
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
+  /* the panel caps this list's height and it scrolls. under that constraint a grid sizes its
+     auto rows to each card's MIN-content height (the 55px minimum), and a card whose note
+     wraps on a phone then spills over the next one. size rows to their content instead. */
+  grid-auto-rows: max-content;
 }
 .course-heading {
   grid-column: 1 / -1;
