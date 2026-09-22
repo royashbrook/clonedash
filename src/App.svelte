@@ -22,6 +22,7 @@
     storeDraft,
     selectLevel,
     newLevel,
+    deleteLevel,
   } from "./library.ts";
   import { installControl } from "./install.ts";
   import { updateControl } from "./pwa.ts";
@@ -583,6 +584,28 @@
       toast(error instanceof Error ? error.message : "Cannot create level.");
     }
   }
+  function deleteCustom(id: number, name: string) {
+    void sheet(
+      "Delete this level?",
+      `Remove "${name}" from My Levels? This cannot be undone. Your completed trails will stay.`,
+      [
+        ["CANCEL", closeSheet, true],
+        [
+          "DELETE LEVEL",
+          () => {
+            draft = deleteLevel(save, id);
+            selected = -1;
+            pan = 0;
+            panY = 0;
+            persist();
+            closeSheet();
+            toast(`"${name}" deleted.`);
+          },
+        ],
+      ],
+      false,
+    );
+  }
   function changeHeight(e: Event) {
     const input = e.currentTarget as HTMLInputElement,
       n = Number(input.value);
@@ -976,6 +999,10 @@
             aria-label={`Share ${level.name}`}
             onclick={() => sharing({ ...level, song: level.song ?? 8 + id })}
             >SHARE</button
+          >
+          <button
+            aria-label={`Delete ${level.name}`}
+            onclick={() => deleteCustom(id, level.name)}>DELETE</button
           >
         </div>
       </article>{/each}

@@ -91,3 +91,18 @@ export function newLevel(save: SaveData) {
   save.customLevels.push({ id, level });
   return selectLevel(save, id);
 }
+// Removes one custom level and returns the draft to edit next. readSave enforces that the
+// library is never empty and that the active level exists, so deleting the last level leaves a
+// fresh one and deleting the active level moves to its neighbour.
+export function deleteLevel(save: SaveData, id: number) {
+  const index = save.customLevels.findIndex((e) => e.id === id);
+  if (index < 0) throw Error("Missing level");
+  save.customLevels.splice(index, 1);
+  if (!save.customLevels.length) return newLevel(save);
+  if (save.activeLevel === id)
+    return selectLevel(
+      save,
+      save.customLevels[Math.min(index, save.customLevels.length - 1)].id,
+    );
+  return structuredClone(save.draft);
+}
