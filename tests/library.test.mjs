@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readSave, storeDraft, selectLevel, newLevel } from '../src/library.ts';
+import { readSave, storeDraft, selectLevel, newLevel, deleteLevel } from '../src/library.ts';
 import { object, createState, step, STEP, SIZE, validateLevel, duplicateObject } from '../src/engine.ts';
 import { trackFor } from '../src/music.ts';
 
@@ -68,4 +68,23 @@ test('tall worlds use their real ceiling for flight, inverted gravity and portal
       step(s, false); assert.equal(s.mode, 'plane'); assert.ok(s.y > 10); assert.equal(s.status, 'playing');
     }
   }
+});
+
+test('deleting a level keeps the library non-empty, moves the active level to a neighbour, and round-trips', () => {
+  const save = readSave(null, 9);
+  const first = save.draft; const second = newLevel(save); second.name = 'Second'; storeDraft(save, second);
+  const third = newLevel(save); third.name = 'Third'; storeDraft(save, third);
+  // delete a non-active level: active and draft untouched
+  assert.deepEqual(deleteLevel(save, 1), third); assert.equal(save.activeLevel, 3);
+  assert.deepEqual(save.customLevels.map(e => e.id), [2, 3]); assert.deepEqual(save.draft, third);
+  // delete the active level: the neighbour becomes active and is the returned draft
+  assert.deepEqual(deleteLevel(save, 3), second); assert.equal(save.activeLevel, 2); assert.deepEqual(save.draft, second);
+  // unknown id: throws and changes nothing
+  const before = structuredClone(save); assert.throws(() => deleteLevel(save, 42)); assert.deepEqual(save, before);
+  // delete the last level: a fresh one takes its place, so the save is still valid
+  const fresh = deleteLevel(save, 2);
+  assert.equal(save.customLevels.length, 1); assert.equal(save.customLevels[0].id, save.activeLevel);
+  assert.equal(fresh.name, `My trail ${save.activeLevel}`); assert.deepEqual(fresh.objects, []);
+  assert.deepEqual(readSave(JSON.stringify(save), 9), save);
+  assert.notDeepEqual(fresh, first);
 });

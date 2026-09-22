@@ -144,3 +144,27 @@ test('custom originals are audibly distinct and selecting a song plays that actu
   expect(await page.evaluate(() => window.loopScores.at(-1))).toBe(tracks[2].score);
   expect((await stored(page)).draft.song).toBe(2);
 });
+
+test('a custom level can be deleted after confirming; cancel keeps it; the library never empties', async ({ page }) => {
+  await page.goto('/'); await page.locator('#my-levels').click();
+  await expect(page.locator('.custom-card')).toHaveCount(1);
+  await page.locator('#new-level').click(); await page.locator('#level-title').fill('Doomed'); await page.locator('#level-title').blur();
+  await page.locator('#editor-back').click(); await expect(page.locator('.custom-card')).toHaveCount(2);
+  // Doomed is the active (last edited) level, so this exercises the active-level path.
+  await page.getByRole('button', { name: 'Delete Doomed', exact: true }).click();
+  await page.getByRole('button', { name: 'CANCEL', exact: true }).click();
+  await expect(page.locator('.custom-card')).toHaveCount(2);
+  await page.getByRole('button', { name: 'Delete Doomed', exact: true }).click();
+  await page.getByRole('button', { name: 'DELETE LEVEL', exact: true }).click();
+  await expect(page.locator('.custom-card')).toHaveCount(1); await expect(page.locator('.custom-card')).not.toContainText('Doomed');
+  await page.reload(); await page.locator('#my-levels').click();
+  await expect(page.locator('.custom-card')).toHaveCount(1); await expect(page.locator('.custom-card')).not.toContainText('Doomed');
+  const remaining = (await stored(page)).customLevels[0].level.name;
+  // deleting the last level leaves a fresh one behind: the library is never empty
+  await page.getByRole('button', { name: `Delete ${remaining}`, exact: true }).click();
+  await page.getByRole('button', { name: 'DELETE LEVEL', exact: true }).click();
+  await expect(page.locator('.custom-card')).toHaveCount(1);
+  const after = await stored(page);
+  expect(after.customLevels).toHaveLength(1); expect(after.customLevels[0].level.name).not.toBe(remaining);
+  expect(after.customLevels[0].level.objects).toEqual([]); expect(after.activeLevel).toBe(after.customLevels[0].id);
+});
