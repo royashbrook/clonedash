@@ -167,7 +167,8 @@ export function render(
   for (const background of [true, false])
     level.objects.forEach((o, index) => {
       if ((o.layer === "background") !== background) return;
-      if (X(o.x) < -unit * 2 || X(o.x) > w + unit) return;
+      const k = o.scale ?? 1; // a scaled piece reaches further than its anchor cell
+      if (X(o.x) < -unit * 2 * k || X(o.x) > w + unit * k) return;
       ctx.save();
       ctx.globalAlpha = background
         ? editing && layer === "background"
@@ -240,7 +241,14 @@ export function render(
           i ? ctx.lineTo(X(x), Y(y)) : ctx.moveTo(X(x), Y(y)),
         );
         ctx.closePath();
-        const grad = ctx.createLinearGradient(0, Y(o.y + 1), 0, Y(o.y));
+        // Unscaled pieces keep the literal cell maths so the pre-migration parity pin holds;
+        // a scaled piece shades and grids across its real bounds.
+        const b = o.scale === undefined ? null : bounds(o);
+        const cellTop = b ? b.top : o.y + 1,
+          cellBottom = b ? b.bottom : o.y,
+          cellLeft = b ? b.left : o.x,
+          cellRight = b ? b.right : o.x + 1;
+        const grad = ctx.createLinearGradient(0, Y(cellTop), 0, Y(cellBottom));
         grad.addColorStop(0, "#35465d");
         grad.addColorStop(1, "#03070c");
         ctx.fillStyle = ["black", "plain-black", "ramp-black"].includes(o.type)
@@ -255,12 +263,14 @@ export function render(
           ctx.clip();
           ctx.strokeStyle = "#ffffff35";
           ctx.lineWidth = 1;
+          const span = cellRight - cellLeft,
+            rise = cellTop - cellBottom;
           for (let q = 1; q <= 3; q++) {
             ctx.beginPath();
-            ctx.moveTo(X(o.x + q / 4), Y(o.y));
-            ctx.lineTo(X(o.x + q / 4), Y(o.y + 1));
-            ctx.moveTo(X(o.x), Y(o.y + q / 4));
-            ctx.lineTo(X(o.x + 1), Y(o.y + q / 4));
+            ctx.moveTo(X(cellLeft + (span * q) / 4), Y(cellBottom));
+            ctx.lineTo(X(cellLeft + (span * q) / 4), Y(cellTop));
+            ctx.moveTo(X(cellLeft), Y(cellBottom + (rise * q) / 4));
+            ctx.lineTo(X(cellRight), Y(cellBottom + (rise * q) / 4));
             ctx.stroke();
           }
           ctx.restore();

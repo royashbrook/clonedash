@@ -26,7 +26,7 @@ function portableLevel(input: unknown): Level {
     ...(level.note === undefined ? {} : { note: level.note }),
     ...(level.color === undefined ? {} : { color: level.color }),
     objects: level.objects.map(
-      ({ type, x, y, rotation, flipX, flipY, layer }) => ({
+      ({ type, x, y, rotation, flipX, flipY, layer, scale }) => ({
         type,
         x,
         y,
@@ -34,6 +34,7 @@ function portableLevel(input: unknown): Level {
         flipX,
         flipY,
         ...(layer === undefined ? {} : { layer }),
+        ...(scale === undefined ? {} : { scale }),
       }),
     ),
   };

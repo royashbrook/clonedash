@@ -28,6 +28,7 @@ export const PORTALS = [
   "gravity-down",
 ];
 export const TYPES = [...BLOCKS, ...SPIKES, ...PORTALS, ...RAMPS, "ring"];
+export const SCALABLE = [...BLOCKS, ...SPIKES, ...RAMPS]; // pieces that take a scale; rings and portals stay 1x
 export const levelHeight = (level: Level) => level.height ?? 7;
 export function object(type: ObjectType, x: number, y = 0): Piece {
   return { type, x, y, rotation: 0, flipX: false, flipY: false };
@@ -63,9 +64,13 @@ export function polygon(o: Piece): Point[] {
   const a = (o.rotation * Math.PI) / 180,
     c = Math.round(Math.cos(a)),
     s = Math.round(Math.sin(a));
+  // A scaled piece grows from its own base, in its own rotated frame: a floor spike stays on
+  // the floor and grows up, a ceiling spike stays on the ceiling and grows down, a block grows
+  // up and sideways. At scale 1 the shift is zero and the shape is the legacy one.
+  const k = SCALABLE.includes(o.type) ? (o.scale ?? 1) : 1;
   return points.map(([x, y]) => {
-    x = (x - w / 2) * (o.flipX ? -1 : 1);
-    y = (y - h / 2) * (o.flipY ? -1 : 1);
+    x = (x - w / 2) * k * (o.flipX ? -1 : 1);
+    y = (y - h / 2) * k * (o.flipY ? -1 : 1) + ((k - 1) * h) / 2;
     return [o.x + w / 2 + x * c - y * s, o.y + h / 2 + x * s + y * c];
   });
 }
@@ -215,7 +220,8 @@ export function step(
     const o = s.level.objects[i];
     if (o.layer === "background") continue;
     if (o.type === "ring") continue;
-    if (o.x > s.x + 2 || o.x < s.x - 2) continue;
+    const reach = 2 * (o.scale ?? 1); // a scaled piece is wider than its anchor cell
+    if (o.x > s.x + reach || o.x < s.x - reach) continue;
     if (PORTALS.includes(o.type)) {
       const player = playerPolygon(s);
       if (intersects(player, polygon(o))) {
@@ -346,6 +352,14 @@ export function validateLevel(input: unknown): Level {
       typeof o.flipY !== "boolean"
     )
       throw Error("Invalid object");
+    if (
+      o.scale !== undefined &&
+      (!Number.isFinite(o.scale) ||
+        o.scale < 0.25 ||
+        o.scale > 4 ||
+        !SCALABLE.includes(o.type))
+    )
+      throw Error("Invalid scale");
     if (o.layer !== undefined && o.layer !== "background")
       throw Error("Invalid layer");
     if (o.layer === "background" && !BLOCKS.includes(o.type))
