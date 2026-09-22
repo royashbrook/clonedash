@@ -64,11 +64,13 @@ export function polygon(o: Piece): Point[] {
   const a = (o.rotation * Math.PI) / 180,
     c = Math.round(Math.cos(a)),
     s = Math.round(Math.sin(a));
-  // A scaled piece grows about its own centre, so its anchor cell stays where it was placed.
+  // A scaled piece grows from its own base, in its own rotated frame: a floor spike stays on
+  // the floor and grows up, a ceiling spike stays on the ceiling and grows down, a block grows
+  // up and sideways. At scale 1 the shift is zero and the shape is the legacy one.
   const k = SCALABLE.includes(o.type) ? (o.scale ?? 1) : 1;
   return points.map(([x, y]) => {
     x = (x - w / 2) * k * (o.flipX ? -1 : 1);
-    y = (y - h / 2) * k * (o.flipY ? -1 : 1);
+    y = (y - h / 2) * k * (o.flipY ? -1 : 1) + ((k - 1) * h) / 2;
     return [o.x + w / 2 + x * c - y * s, o.y + h / 2 + x * s + y * c];
   });
 }
