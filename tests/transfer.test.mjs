@@ -137,7 +137,7 @@ test("external schema rejects every unsafe field without relaxing the engine val
     (l) => (l.objects[0].type = "script"),
     (l) => (l.objects[0].x = 2),
     (l) => (l.objects[0].y = 40),
-    (l) => (l.objects[0].rotation = 45),
+    (l) => (l.objects[0].rotation = 400),
     (l) => (l.objects[0].flipX = 1),
     (l) => (l.objects[0].layer = "foreground"),
     (l) => (l.objects = [{ ...object("spike", 5), layer: "background" }]),

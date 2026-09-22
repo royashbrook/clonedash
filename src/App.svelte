@@ -735,6 +735,25 @@
     draft = next;
     saveDraft();
   }
+  // The Angle slider: any whole degree for blocks, spikes and ramps. The quarter-turn buttons
+  // keep working on top of it (they add 90 to whatever angle is set).
+  function setAngle(value: number) {
+    if (selected < 0) return;
+    const piece = structuredClone(draft.objects[selected]);
+    piece.rotation = ((Math.round(value) % 360) + 360) % 360;
+    const next = {
+      ...draft,
+      objects: draft.objects.map((o, i) => (i === selected ? piece : o)),
+    };
+    try {
+      validateLevel(next);
+    } catch {
+      toast("That angle pokes through the ceiling. Move it down first.");
+      return;
+    }
+    draft = next;
+    saveDraft();
+  }
   function deleteSelected() {
     if (selected < 0) return;
     draft.objects.splice(selected, 1);
@@ -1160,6 +1179,18 @@
           value={selection?.scale ?? 1}
           disabled={!selection || !SCALABLE.includes(selection.type)}
           oninput={(e) => setScale(+e.currentTarget.value)}
+        /></label
+      ><label
+        >Angle <input
+          id="angle"
+          type="range"
+          min="0"
+          max="359"
+          step="1"
+          aria-label="Angle"
+          value={selection?.rotation ?? 0}
+          disabled={!selection || !SCALABLE.includes(selection.type)}
+          oninput={(e) => setAngle(+e.currentTarget.value)}
         /></label
       >{#each transforms as [action, label, name]}<button
           data-action={action}

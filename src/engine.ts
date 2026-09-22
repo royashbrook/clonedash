@@ -62,8 +62,11 @@ export function polygon(o: Piece): Point[] {
             [0, h],
           ];
   const a = (o.rotation * Math.PI) / 180,
-    c = Math.round(Math.cos(a)),
-    s = Math.round(Math.sin(a));
+    quarter = o.rotation % 90 === 0,
+    // quarter turns stay exactly axis-aligned (no 6e-17 drift into saved geometry); any other
+    // angle is a real rotation.
+    c = quarter ? Math.round(Math.cos(a)) : Math.cos(a),
+    s = quarter ? Math.round(Math.sin(a)) : Math.sin(a);
   // A scaled piece grows from its own base, in its own rotated frame: a floor spike stays on
   // the floor and grows up, a ceiling spike stays on the ceiling and grows down, a block grows
   // up and sideways. At scale 1 the shift is zero and the shape is the legacy one.
@@ -245,7 +248,8 @@ export function step(
     }
     const p = polygon(o),
       b = bounds(o),
-      ramp = RAMPS.includes(o.type),
+      // a block at a non-quarter angle is supported like a ramp: along its real edges.
+      ramp = RAMPS.includes(o.type) || (BLOCKS.includes(o.type) && o.rotation % 90 !== 0),
       safeSolid =
         (s.mode === "plane" || s.mode === "jumper") &&
         (BLOCKS.includes(o.type) || ramp);
@@ -276,6 +280,7 @@ export function step(
     }
     if (
       BLOCKS.includes(o.type) &&
+      o.rotation % 90 === 0 &&
       s.x + SIZE > b.left + 0.001 &&
       s.x < b.right - 0.001
     ) {
@@ -347,7 +352,9 @@ export function validateLevel(input: unknown): Level {
       o.x > raw.length - 2 ||
       o.y < -0.5 ||
       o.y > height - 1 ||
-      ![0, 90, 180, 270].includes(o.rotation) ||
+      (SCALABLE.includes(o.type)
+        ? !(Number.isFinite(o.rotation) && o.rotation >= 0 && o.rotation < 360)
+        : ![0, 90, 180, 270].includes(o.rotation)) ||
       typeof o.flipX !== "boolean" ||
       typeof o.flipY !== "boolean"
     )

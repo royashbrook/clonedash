@@ -73,7 +73,7 @@ test('editor precise nudges, both rotations, flips and collision geometry agree'
 });
 test('invalid drafts are refused, authored levels validate', () => {
   for (const l of LEVELS) assert.deepEqual(validateLevel(l), l);
-  for (const bad of [null, { ...empty, length: NaN }, { ...empty, objects: [object('bad', 5)] }, { ...empty, objects: [object('spike', 0)] }, { ...empty, objects: [{ ...object('grid', 5), rotation: 45 }] }]) assert.throws(() => validateLevel(bad));
+  for (const bad of [null, { ...empty, length: NaN }, { ...empty, objects: [object('bad', 5)] }, { ...empty, objects: [object('spike', 0)] }, { ...empty, objects: [{ ...object('ring', 5), rotation: 45 }] }, { ...empty, objects: [{ ...object('grid', 5), rotation: 360 }] }]) assert.throws(() => validateLevel(bad));
 });
 // This controller supplies only the same held/not-held input as a player. It cannot teleport,
 // change physics or remove objects. Every authored trail must reach its actual finish alive.
