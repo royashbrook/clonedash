@@ -31,6 +31,7 @@ export interface Piece {
   flipX: boolean;
   flipY: boolean;
   layer?: "background";
+  scale?: number; // blocks, spikes and ramps only; absent means 1 (kept absent so old levels stay byte-identical)
 }
 export interface Level {
   name: string;

@@ -9,6 +9,7 @@
     duplicateObject,
     levelHeight,
     MAX_LENGTH,
+    SCALABLE,
   } from "./engine.ts";
   import { LEVELS, COLLECTIONS, COURSE_ORDER, courseSong } from "./levels.ts";
   import { render } from "./render.ts";
@@ -713,6 +714,27 @@
     draft = next;
     saveDraft();
   }
+  // The Size slider. 1 is stored as "no field" so an unscaled piece stays byte-identical to
+  // one saved before scaling existed (and to the pre-migration parity baseline).
+  function setScale(value: number) {
+    if (selected < 0) return;
+    const piece = structuredClone(draft.objects[selected]);
+    const scale = Math.round(value * 20) / 20;
+    if (scale === 1) delete piece.scale;
+    else piece.scale = scale;
+    const next = {
+      ...draft,
+      objects: draft.objects.map((o, i) => (i === selected ? piece : o)),
+    };
+    try {
+      validateLevel(next);
+    } catch {
+      toast("Too big for that spot. Move it down or lower the ceiling first.");
+      return;
+    }
+    draft = next;
+    saveDraft();
+  }
   function deleteSelected() {
     if (selected < 0) return;
     draft.objects.splice(selected, 1);
@@ -1127,6 +1149,18 @@
           ><option value={1}>1 block</option><option value={0.5}>½ block</option
           ><option value={0.05}>¹⁄₂₀ block</option></select
         ></label
+      ><label
+        >Size <input
+          id="scale"
+          type="range"
+          min="0.25"
+          max="4"
+          step="0.05"
+          aria-label="Size"
+          value={selection?.scale ?? 1}
+          disabled={!selection || !SCALABLE.includes(selection.type)}
+          oninput={(e) => setScale(+e.currentTarget.value)}
+        /></label
       >{#each transforms as [action, label, name]}<button
           data-action={action}
           aria-label={name}
@@ -1156,7 +1190,7 @@
         /></label
       ><output id="selection"
         >{selection
-          ? `${labelOf(selection.type)} · x ${selection.x.toFixed(2)} / y ${selection.y.toFixed(2)} · ${selection.rotation}°`
+          ? `${labelOf(selection.type)} · x ${selection.x.toFixed(2)} / y ${selection.y.toFixed(2)} · ${selection.rotation}° · ×${(selection.scale ?? 1).toFixed(2)}`
           : tool === "select"
             ? "Tap an object to select it."
             : `Tap the grid to place ${tool === "half" ? "a half spike" : "a " + tool}.`}{layer ===
