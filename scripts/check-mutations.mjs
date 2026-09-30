@@ -7,11 +7,18 @@ import assert from "node:assert/strict";
 const dir = await mkdtemp(join(tmpdir(), "clonedash-mutants-"));
 try {
   await cp("src", join(dir, "src"), { recursive: true });
+  await cp("scripts/version.mjs", join(dir, "scripts", "version.mjs"));
   // Keep relative imports valid, and run git reads from the real repository below.
-  for (const testFile of ["migration.test.mjs", "transfer.test.mjs", "courses.test.mjs", "course-input.mjs"]) {
-    const testSource = (
-      await readFile(join("tests", testFile), "utf8")
-    ).replaceAll("../src/", "./src/");
+  for (const testFile of [
+    "migration.test.mjs",
+    "transfer.test.mjs",
+    "courses.test.mjs",
+    "course-input.mjs",
+    "version.test.mjs",
+  ]) {
+    const testSource = (await readFile(join("tests", testFile), "utf8"))
+      .replaceAll("../src/", "./src/")
+      .replaceAll("../scripts/", "./scripts/");
     await writeFile(join(dir, testFile), testSource);
   }
   const run = (pattern, testFile) =>
@@ -88,8 +95,30 @@ try {
     ["transfer.ts", "if (openInEditor) selectLevel", "if (false) selectLevel", "copy re-reads", "courses.test.mjs"],
     ["levels.ts", "LEVELS.push(...COURSES)", "LEVELS.unshift(...COURSES)", "groups preserve", "courses.test.mjs"],
     ["courses.ts", "song: 109", "song: 110", "groups preserve", "courses.test.mjs"],
+    // Release identity guards: each rejection must fail against its broken control.
+    [
+      "scripts/version.mjs",
+      "dirty || shallow || !anchor",
+      "dirty || !anchor",
+      "shallow clone cannot release",
+      "version.test.mjs",
+    ],
+    [
+      "scripts/version.mjs",
+      "dirty || shallow || !anchor",
+      "shallow || !anchor",
+      "first-parent anchors",
+      "version.test.mjs",
+    ],
+    [
+      "scripts/version.mjs",
+      "/^v(0|[1-9]\\d*)\\.(0|[1-9]\\d*)$/",
+      "/^v\\d+\\.\\d+(\\.\\d+)?$/",
+      "look-alikes never satisfy",
+      "version.test.mjs",
+    ],
   ]) {
-    const path = join(dir, "src", file),
+    const path = join(dir, file.includes("/") ? file : join("src", file)),
       original = await readFile(path, "utf8");
     assert(original.includes(from), `mutant target moved: ${file}`);
     let result = run(pattern, testFile);
