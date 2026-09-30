@@ -1,4 +1,4 @@
-export type GameMode = "square" | "plane" | "wheel" | "jumper";
+export type GameMode = "square" | "plane" | "wheel" | "jumper" | "angle";
 // What the player SEES for an id. The ids themselves are stored in levels and saves, so a real
 // rename is a breaking (major-version) change; this map is the label-only rename until then.
 const LABELS: Partial<Record<string, string>> = { jumper: "POGO" };

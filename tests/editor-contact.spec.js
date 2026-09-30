@@ -30,7 +30,7 @@ test('copy + paste preserves transforms; delete all cancels safely and clears on
   await page.reload(); await page.locator('#editor-open').click(); expect(await saved()).toEqual(cleared);
 });
 
-for (const mode of ['square', 'plane', 'wheel', 'jumper']) test(`${mode} wall impact dies and restarts instead of stopping at the wall`, async ({ page }) => {
+for (const mode of ['square', 'plane', 'wheel', 'jumper', 'angle']) test(`${mode} wall impact dies and restarts instead of stopping at the wall`, async ({ page }) => {
   await page.clock.install();
   await page.addInitScript(mode => {
     const piece = (type, x, y = 0) => ({ type, x, y, rotation: 0, flipX: false, flipY: false });

@@ -158,7 +158,8 @@ test("drawing commands match the original for editor, all modes, gravity and dea
 
 test("transforms, geometry, saves and every original song retain baseline results", async () => {
   await withLegacy((old, _, library, music) => {
-    for (const type of engine.TYPES)
+    // The baseline's own types: a piece added since (the angle portal) has no legacy shape.
+    for (const type of old.TYPES)
       for (const rotation of [0, 90, 180, 270])
         for (const flipX of [false, true])
           for (const flipY of [false, true]) {
