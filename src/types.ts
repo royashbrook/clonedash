@@ -32,6 +32,8 @@ export interface Piece {
   flipY: boolean;
   layer?: "background";
   scale?: number; // blocks, spikes and ramps only; absent means 1 (kept absent so old levels stay byte-identical)
+  color?: string; // rings only, #rrggbb; absent means the original yellow
+  bounce?: number; // rings only, peak height in blocks; absent means the original 2.25
 }
 export interface Level {
   name: string;

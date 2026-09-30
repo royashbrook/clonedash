@@ -10,6 +10,7 @@
     levelHeight,
     MAX_LENGTH,
     SCALABLE,
+    RING_BOUNCE,
   } from "./engine.ts";
   import { LEVELS, COLLECTIONS, COURSE_ORDER, courseSong } from "./levels.ts";
   import { render } from "./render.ts";
@@ -29,7 +30,7 @@
   import { updateControl } from "./pwa.ts";
   import LevelTransfer from "./LevelTransfer.svelte";
   import { importLevel } from "./transfer.ts";
-  import type { Level, ObjectType, Transform } from "./types.ts";
+  import type { Level, ObjectType, Piece, Transform } from "./types.ts";
 
   type Screen = "home" | "library" | "editor" | "play";
   type Action = [label: string, handler: () => void, primary?: boolean];
@@ -65,13 +66,37 @@
       ["gravity-up", "↑ UPSIDE DOWN"],
       ["gravity-down", "↓ NORMAL"],
     ],
-    rings: [["ring", "◉ JUMP RING"]],
+    rings: [
+      ["ring", "◉ JUMP RING"],
+      ["purple-ring", "◉ PURPLE · 1"],
+      ["red-ring", "◉ RED · 5"],
+      ["white-ring", "◉ WHITE · CUSTOM"],
+    ],
     ramp: [
       ["ramp", "◩ SOLID"],
       ["ramp-grid", "◩ GRID"],
       ["ramp-black", "◩ BLACK"],
     ],
-  } satisfies Record<string, [ObjectType, string][]>;
+  } satisfies Record<string, [string, string][]>;
+  // Palette presets stamp fields onto a ring; the stored type stays "ring". The original yellow
+  // and the 2.25 block bounce are "no field", so old rings stay byte-identical.
+  const presets: Record<string, Pick<Piece, "color" | "bounce">> = {
+    "purple-ring": { color: "#c77dff", bounce: 1 },
+    "red-ring": { color: "#ff5c7a", bounce: 5 },
+    "white-ring": { color: "#ffffff" },
+  };
+  const RING_COLORS: [string, string][] = [
+    ["#ffd166", "YELLOW"],
+    ["#c77dff", "PURPLE"],
+    ["#ff5c7a", "RED"],
+    ["#ffffff", "WHITE"],
+    ["#9aff6b", "GREEN"],
+    ["#53e3ff", "BLUE"],
+    ["#ff8ac4", "PINK"],
+    ["#ffb477", "ORANGE"],
+  ];
+  const typeOf = (t: string): ObjectType =>
+    t in presets ? "ring" : (t as ObjectType);
   type Tab = keyof typeof choices;
   const tabs = Object.keys(choices) as Tab[];
   const transforms: [Transform, string, string][] = [
@@ -93,7 +118,7 @@
     current = $state(0),
     custom = $state(false);
   let selected = $state(-1),
-    tool = $state<ObjectType | "select">("block"),
+    tool = $state<string>("block"),
     tab = $state<Tab>("blocks");
   let layer = $state("play"),
     stepSize = $state(1),
@@ -684,11 +709,10 @@
       selected = existing;
       return;
     }
-    const piece = object(
-      tool,
-      Math.round(ox * 20) / 20,
-      Math.round(oy * 20) / 20,
-    );
+    const piece = {
+      ...object(typeOf(tool), Math.round(ox * 20) / 20, Math.round(oy * 20) / 20),
+      ...presets[tool],
+    };
     if (activeLayer) piece.layer = activeLayer;
     try {
       validateLevel({ ...draft, objects: [...draft.objects, piece] });
@@ -756,6 +780,26 @@
       toast("That angle pokes through the ceiling. Move it down first.");
       return;
     }
+    draft = next;
+    saveDraft();
+  }
+  // The ring controls: colour and bounce height. The defaults are stored as "no field".
+  function setRing(change: Pick<Piece, "color" | "bounce">) {
+    if (selected < 0) return;
+    const piece = structuredClone(draft.objects[selected]);
+    if (change.color !== undefined) {
+      if (change.color === RING_COLORS[0][0]) delete piece.color;
+      else piece.color = change.color;
+    }
+    if (change.bounce !== undefined) {
+      if (change.bounce === RING_BOUNCE) delete piece.bounce;
+      else piece.bounce = change.bounce;
+    }
+    const next = {
+      ...draft,
+      objects: draft.objects.map((o, i) => (i === selected ? piece : o)),
+    };
+    validateLevel(next);
     draft = next;
     saveDraft();
   }
@@ -1197,6 +1241,28 @@
           disabled={!selection || !SCALABLE.includes(selection.type)}
           oninput={(e) => setAngle(+e.currentTarget.value)}
         /></label
+      ><label
+        >Colour <select
+          id="ring-color"
+          aria-label="Ring colour"
+          value={selection?.color ?? RING_COLORS[0][0]}
+          disabled={selection?.type !== "ring"}
+          onchange={(e) => setRing({ color: e.currentTarget.value })}
+          >{#each RING_COLORS as [hex, name]}<option value={hex}>{name}</option
+            >{/each}</select
+        ></label
+      ><label
+        >Bounce <input
+          id="bounce"
+          type="range"
+          min="0.25"
+          max="10"
+          step="0.25"
+          aria-label="Bounce height"
+          value={selection?.bounce ?? RING_BOUNCE}
+          disabled={selection?.type !== "ring"}
+          oninput={(e) => setRing({ bounce: +e.currentTarget.value })}
+        /></label
       >{#each transforms as [action, label, name]}<button
           data-action={action}
           aria-label={name}
@@ -1226,10 +1292,10 @@
         /></label
       ><output id="selection"
         >{selection
-          ? `${labelOf(selection.type)} · x ${selection.x.toFixed(2)} / y ${selection.y.toFixed(2)} · ${selection.rotation}° · ×${(selection.scale ?? 1).toFixed(2)}`
+          ? `${labelOf(selection.type)} · x ${selection.x.toFixed(2)} / y ${selection.y.toFixed(2)} · ${selection.rotation}° · ×${(selection.scale ?? 1).toFixed(2)}${selection.type === "ring" ? ` · ↑${selection.bounce ?? RING_BOUNCE}` : ""}`
           : tool === "select"
             ? "Tap an object to select it."
-            : `Tap the grid to place ${tool === "half" ? "a half spike" : "a " + tool}.`}{layer ===
+            : `Tap the grid to place ${tool === "half" ? "a half spike" : "a " + (tool in presets ? tool.replace("-", " ") : tool)}.`}{layer ===
         "background"
           ? " · BACKGROUND: no collision"
           : ""}</output
