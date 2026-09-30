@@ -4,12 +4,20 @@ export type GameMode = "square" | "plane" | "wheel" | "pogo" | "angle";
 const LABELS: Partial<Record<string, string>> = {
   "w-block": "W BLOCK",
   "r-block": "R BLOCK",
+  "speed-slow": "SLOW",
+  "speed-normal": "NORMAL SPEED",
+  "speed-fast": "FAST",
+  "speed-faster": "FASTER",
 };
 export const labelOf = (id: string): string => LABELS[id] ?? id.toUpperCase();
 export type ObjectType =
   | GameMode
   | "gravity-up"
   | "gravity-down"
+  | "speed-slow"
+  | "speed-normal"
+  | "speed-fast"
+  | "speed-faster"
   | "block"
   | "grid"
   | "black"
@@ -55,6 +63,7 @@ export interface GameState {
   vy: number;
   mode: GameMode;
   gravity: number;
+  speed: number; // forward speed multiplier, 1 until a speed portal changes it
   inputHeld: boolean;
   grounded: boolean;
   status: "playing" | "dead" | "complete";
