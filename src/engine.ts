@@ -24,9 +24,13 @@ export const PORTALS = [
   "square",
   "wheel",
   "jumper",
+  "angle",
   "gravity-up",
   "gravity-down",
 ];
+// Modes that ride surfaces instead of dying on them: floor, ceiling and block faces are safe,
+// walls still kill.
+export const SOFT = ["plane", "jumper", "angle"];
 export const TYPES = [...BLOCKS, ...SPIKES, ...PORTALS, ...RAMPS, "ring"];
 export const SCALABLE = [...BLOCKS, ...SPIKES, ...RAMPS]; // pieces that take a scale; rings and portals stay 1x
 export const levelHeight = (level: Level) => level.height ?? 7;
@@ -196,8 +200,15 @@ export function step(
     s.vy = -s.gravity * JUMP;
     s.grounded = false;
   }
+  // Angle: a true 45 degrees, so the climb and the dive both move up or down exactly as fast as
+  // the trail moves forward. Gravity only picks which way "up" is.
+  if (s.mode === "angle") s.vy = -s.gravity * (held ? SPEED : -SPEED);
   const acceleration =
-    s.mode === "plane" ? -s.gravity * (held ? 14 : -12) : s.gravity * GRAVITY;
+    s.mode === "plane"
+      ? -s.gravity * (held ? 14 : -12)
+      : s.mode === "angle"
+        ? 0
+        : s.gravity * GRAVITY;
   s.x += SPEED * dt;
   s.time += dt;
   s.y += s.vy * dt + (acceleration * dt * dt) / 2;
@@ -208,11 +219,10 @@ export function step(
     s.y = 0;
     s.vy = 0;
     s.grounded = s.gravity < 0;
-    if (s.gravity > 0 && s.mode !== "plane" && s.mode !== "jumper")
-      s.status = "dead";
+    if (s.gravity > 0 && !SOFT.includes(s.mode)) s.status = "dead";
   }
   if (s.y + SIZE > height) {
-    if (s.gravity > 0 || s.mode === "plane" || s.mode === "jumper") {
+    if (s.gravity > 0 || SOFT.includes(s.mode)) {
       s.y = height - SIZE;
       s.vy = 0;
       s.grounded = s.gravity > 0;
@@ -250,9 +260,7 @@ export function step(
       b = bounds(o),
       // a block at a non-quarter angle is supported like a ramp: along its real edges.
       ramp = RAMPS.includes(o.type) || (BLOCKS.includes(o.type) && o.rotation % 90 !== 0),
-      safeSolid =
-        (s.mode === "plane" || s.mode === "jumper") &&
-        (BLOCKS.includes(o.type) || ramp);
+      safeSolid = SOFT.includes(s.mode) && (BLOCKS.includes(o.type) || ramp);
     if (ramp) {
       for (const upper of [true, false]) {
         if (!(safeSolid || (upper ? s.gravity < 0 : s.gravity > 0))) continue;

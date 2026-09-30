@@ -59,6 +59,7 @@
       ["square", "□ SQUARE"],
       ["wheel", "⊙ WHEEL"],
       ["jumper", "⇈ POGO"],
+      ["angle", "◢ ANGLE"],
     ],
     gravity: [
       ["gravity-up", "↑ UPSIDE DOWN"],
@@ -465,17 +466,21 @@
       cue:
         s.mode === "plane"
           ? "HOLD TO FLY"
-          : s.mode === "wheel"
-            ? "TAP TO FLIP GRAVITY"
-            : "TAP TO JUMP",
+          : s.mode === "angle"
+            ? "HOLD TO CLIMB"
+            : s.mode === "wheel"
+              ? "TAP TO FLIP GRAVITY"
+              : "TAP TO JUMP",
       detail:
         s.mode === "plane"
           ? "RELEASE TO FALL"
-          : s.mode === "wheel"
-            ? "LAND FIRST · THEN TAP"
-            : s.mode === "jumper"
-              ? "TAP AGAIN IN MIDAIR"
-              : "HOLD TO KEEP JUMPING",
+          : s.mode === "angle"
+            ? "RELEASE TO DIVE"
+            : s.mode === "wheel"
+              ? "LAND FIRST · THEN TAP"
+              : s.mode === "jumper"
+                ? "TAP AGAIN IN MIDAIR"
+                : "HOLD TO KEEP JUMPING",
       showCue:
         !paused &&
         !rotate &&
@@ -792,7 +797,7 @@
   function how() {
     void sheet(
       "One button. Find your flow.",
-      "Square: tap or press Space to jump onto two-block ledges. Hold for another jump when you land. Pogo: same as square, but every fresh tap lets you jump again in midair. Jump before a wall to clear it. Try Air Steps! Plane: hold to fly against gravity; release to fall. Landings and ceiling contact are safe while flying, but wall impacts kill. Wheel: land on a block, floor or ceiling, then tap or press Space to flip gravity. Midair taps are ignored; holding does not flip again when you land. UP and DOWN portals set gravity without changing your shape. Under upside-down gravity, land and jump on ceilings. All spikes kill, including the tiny quarter-size ones. Outline blocks are transparent but solid. Hitting a wall kills in ALL modes, including the vertical face of a ramp. Your smaller hazard hitbox still forgives edge grazes. Background blocks never collide. Rings: tap or press Space while reaching a glowing ring for a midair jump, once per ring per run. Ramps: walk up or down the white diagonal slope. Find RINGS and RAMP tabs in the editor.",
+      "Square: tap or press Space to jump onto two-block ledges. Hold for another jump when you land. Pogo: same as square, but every fresh tap lets you jump again in midair. Jump before a wall to clear it. Try Air Steps! Plane: hold to fly against gravity; release to fall. Landings and ceiling contact are safe while flying, but wall impacts kill. Angle: hold to climb at 45 degrees, release to dive at 45 degrees. Floors, ceilings and block faces are safe; walls are not. Wheel: land on a block, floor or ceiling, then tap or press Space to flip gravity. Midair taps are ignored; holding does not flip again when you land. UP and DOWN portals set gravity without changing your shape. Under upside-down gravity, land and jump on ceilings. All spikes kill, including the tiny quarter-size ones. Outline blocks are transparent but solid. Hitting a wall kills in ALL modes, including the vertical face of a ramp. Your smaller hazard hitbox still forgives edge grazes. Background blocks never collide. Rings: tap or press Space while reaching a glowing ring for a midair jump, once per ring per run. Ramps: walk up or down the white diagonal slope. Find RINGS and RAMP tabs in the editor.",
     );
   }
   async function applyUpdate() {

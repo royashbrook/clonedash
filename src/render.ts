@@ -4,6 +4,7 @@ import {
   PORTALS,
   RAMPS,
   SIZE,
+  SPEED,
   ringReady,
   levelHeight,
 } from "./engine.ts";
@@ -13,6 +14,7 @@ const portalLook: Record<string, [string, string, string]> = {
   square: ["#72f7dc", "JUMP", "□"],
   wheel: ["#ff8ac4", "WHEEL", "⊙"],
   jumper: ["#53e3ff", "POGO", "⇈"],
+  angle: ["#c77dff", "ANGLE", "◢"],
   "gravity-up": ["#53e3ff", "UP", "↑"],
   "gravity-down": ["#ffb477", "DOWN", "↓"],
 };
@@ -403,6 +405,19 @@ export function render(
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
         ctx.fillText(state.gravity > 0 ? "↑" : "↓", 0, 0);
+      } else if (state.mode === "angle") {
+        // A dart that points along its own 45 degree line: up while held, down when released.
+        ctx.rotate(-Math.atan2(state.vy, SPEED));
+        ctx.fillStyle = color;
+        ctx.strokeStyle = "#fff";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(unit * 0.45, 0);
+        ctx.lineTo(-unit * 0.3, -unit * 0.22);
+        ctx.lineTo(-unit * 0.3, unit * 0.22);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
       } else {
         if (state.gravity > 0) ctx.scale(1, -1);
         ctx.rotate(-state.vy * 0.06);
