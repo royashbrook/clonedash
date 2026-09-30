@@ -140,6 +140,9 @@ test("external schema rejects every unsafe field without relaxing the engine val
     (l) => (l.objects[0].rotation = 400),
     (l) => (l.objects[0].flipX = 1),
     (l) => (l.objects[0].layer = "foreground"),
+    (l) => (l.objects[0].color = "#ffd166"), // a colour on a non-ring
+    (l) => (l.objects = [{ ...object("ring", 5), color: "url(evil)" }]),
+    (l) => (l.objects = [{ ...object("ring", 5), bounce: 11 }]),
     (l) => (l.objects = [{ ...object("spike", 5), layer: "background" }]),
   ];
   for (const change of changes) {

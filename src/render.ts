@@ -179,20 +179,21 @@ export function render(
         : 1;
       if (o.type === "ring") {
         const active = state && ringReady(state, o, index),
-          used = state?.usedRings.includes(index);
+          used = state?.usedRings.includes(index),
+          c = o.color ?? "#ffd166";
         ctx.save();
         ctx.globalAlpha = used ? 0.25 : 1;
-        ctx.strokeStyle = active ? "#ffffff" : "#ffd166";
+        ctx.strokeStyle = active ? "#ffffff" : c;
         ctx.lineWidth = active ? 4 : 3;
         ctx.beginPath();
         ctx.arc(X(o.x + 0.5), Y(o.y + 0.5), unit * 0.45, 0, Math.PI * 2);
         ctx.stroke();
-        ctx.strokeStyle = "#ffd16666";
+        ctx.strokeStyle = `${c}66`;
         ctx.lineWidth = 1;
         ctx.beginPath();
         ctx.arc(X(o.x + 0.5), Y(o.y + 0.5), unit * 0.6, 0, Math.PI * 2);
         ctx.stroke();
-        ctx.fillStyle = "#ffd166";
+        ctx.fillStyle = c;
         ctx.font = `bold ${unit * 0.4}px system-ui`;
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";

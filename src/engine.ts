@@ -33,6 +33,11 @@ export const PORTALS = [
 export const SOFT = ["plane", "jumper", "angle"];
 export const TYPES = [...BLOCKS, ...SPIKES, ...PORTALS, ...RAMPS, "ring"];
 export const SCALABLE = [...BLOCKS, ...SPIKES, ...RAMPS]; // pieces that take a scale; rings and portals stay 1x
+// A ring with no bounce field is the original: JUMP, a 2.25 block peak. A set bounce is the peak
+// height in blocks, so the launch speed is the one that reaches it under level gravity.
+export const RING_BOUNCE = 2.25;
+export const ringSpeed = (o: Piece) =>
+  o.bounce === undefined ? JUMP : Math.sqrt(2 * GRAVITY * o.bounce);
 export const levelHeight = (level: Level) => level.height ?? 7;
 export function object(type: ObjectType, x: number, y = 0): Piece {
   return { type, x, y, rotation: 0, flipX: false, flipY: false };
@@ -185,7 +190,7 @@ export function step(
     : -1;
   if (ring >= 0) {
     s.usedRings.push(ring);
-    s.vy = -s.gravity * JUMP;
+    s.vy = -s.gravity * ringSpeed(s.level.objects[ring]);
     s.grounded = false;
   }
   if (ring < 0 && s.mode === "wheel" && s.grounded && tapped) {
@@ -375,6 +380,21 @@ export function validateLevel(input: unknown): Level {
         !SCALABLE.includes(o.type))
     )
       throw Error("Invalid scale");
+    if (
+      o.color !== undefined &&
+      (o.type !== "ring" ||
+        typeof o.color !== "string" ||
+        !/^#[\da-f]{6}$/i.test(o.color))
+    )
+      throw Error("Invalid ring colour");
+    if (
+      o.bounce !== undefined &&
+      (o.type !== "ring" ||
+        !Number.isFinite(o.bounce) ||
+        o.bounce < 0.25 ||
+        o.bounce > 10)
+    )
+      throw Error("Invalid ring bounce");
     if (o.layer !== undefined && o.layer !== "background")
       throw Error("Invalid layer");
     if (o.layer === "background" && !BLOCKS.includes(o.type))
