@@ -20,12 +20,12 @@ jobs:
        github.event.workflow_run.head_repository.full_name == github.repository)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           # A late check for an old merge must never displace the newest release.
           ref: main
           fetch-depth: 0
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -37,6 +37,12 @@ jobs:
       - run: npm run test:release
       - run: npx playwright install --with-deps chromium webkit
       - run: npm run test:browser
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: browser-test-results-deploy-${{ github.run_id }}
+          path: test-results/
+          retention-days: 14
       - name: Refuse a superseded release
         run: |
           git fetch origin main
