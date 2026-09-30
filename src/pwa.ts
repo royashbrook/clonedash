@@ -40,14 +40,18 @@ export function updateControl(ready: () => void) {
   }
   async function check() {
     identify();
+    // A plain controller cancels on older Safari too, which lacks AbortSignal.any
+    // and AbortSignal.timeout: a timer keeps the eight-second deadline and the
+    // lifetime signal forwards disposal.
+    const probe = new AbortController();
+    const cancel = () => probe.abort();
+    const deadline = window.setTimeout(cancel, 8000);
+    if (lifetime.signal.aborted) cancel();
+    else lifetime.signal.addEventListener("abort", cancel, { once: true });
     try {
-      const signal = AbortSignal.any([
-        lifetime.signal,
-        AbortSignal.timeout(8000),
-      ]);
       const response = await fetch("/?update-probe", {
         cache: "no-store",
-        signal,
+        signal: probe.signal,
       });
       if (!response.ok) return;
       const doc = new DOMParser().parseFromString(
@@ -59,6 +63,9 @@ export function updateControl(ready: () => void) {
       if (!disposed && next && next !== __BUILD_ID__) ready();
     } catch {
       /* Offline or cancellation leaves the current app intact. */
+    } finally {
+      clearTimeout(deadline);
+      lifetime.signal.removeEventListener("abort", cancel);
     }
   }
   async function apply() {
