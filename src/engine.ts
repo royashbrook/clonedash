@@ -29,6 +29,14 @@ export const BLOCKS = [
 ];
 export const RAMPS = ["ramp", "ramp-grid", "ramp-black"];
 export const SPIKES = ["spike", "half", "small", "quarter"];
+// Speed portals scale forward speed only; mode and gravity carry through. No portal is 1x, so
+// every level made before them plays exactly as it did.
+export const SPEEDS: Record<string, number> = {
+  "speed-slow": 0.8,
+  "speed-normal": 1,
+  "speed-fast": 1.25,
+  "speed-faster": 1.5,
+};
 export const PORTALS = [
   "plane",
   "square",
@@ -37,6 +45,7 @@ export const PORTALS = [
   "angle",
   "gravity-up",
   "gravity-down",
+  ...Object.keys(SPEEDS),
 ];
 // Modes that ride surfaces instead of dying on them: floor, ceiling and block faces are safe,
 // walls still kill.
@@ -135,6 +144,7 @@ export function createState(level: Level): GameState {
     vy: 0,
     mode: "square",
     gravity: -1,
+    speed: 1,
     inputHeld: false,
     grounded: true,
     status: "playing",
@@ -222,14 +232,15 @@ export function step(
   }
   // Angle: a true 45 degrees, so the climb and the dive both move up or down exactly as fast as
   // the trail moves forward. Gravity only picks which way "up" is.
-  if (s.mode === "angle") s.vy = -s.gravity * (held ? SPEED : -SPEED);
+  const forward = SPEED * s.speed;
+  if (s.mode === "angle") s.vy = -s.gravity * (held ? forward : -forward);
   const acceleration =
     s.mode === "plane"
       ? -s.gravity * (held ? 14 : -12)
       : s.mode === "angle"
         ? 0
         : s.gravity * GRAVITY;
-  s.x += SPEED * dt;
+  s.x += forward * dt;
   s.time += dt;
   s.y += s.vy * dt + (acceleration * dt * dt) / 2;
   s.vy += acceleration * dt;
@@ -260,7 +271,8 @@ export function step(
       if (intersects(player, polygon(o))) {
         touching.push(i);
         if (!s.touchingPortals.includes(i)) {
-          if (o.type.startsWith("gravity-")) {
+          if (o.type in SPEEDS) s.speed = SPEEDS[o.type];
+          else if (o.type.startsWith("gravity-")) {
             s.gravity = o.type === "gravity-up" ? 1 : -1;
             s.vy = 0;
             s.grounded = false;
@@ -297,7 +309,7 @@ export function step(
           Math.abs(oldEdge - oldSurface) < 0.02;
         const crossing =
           s.vy * direction <= 0 &&
-          direction * (oldEdge - surface) >= -(SPEED * dt + 0.015) &&
+          direction * (oldEdge - surface) >= -(forward * dt + 0.015) &&
           direction * (edge - surface) <= 0;
         if (following || crossing) {
           s.y = surface - (upper ? 0 : SIZE);

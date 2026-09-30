@@ -67,6 +67,12 @@
       ["gravity-up", "↑ UPSIDE DOWN"],
       ["gravity-down", "↓ NORMAL"],
     ],
+    speed: [
+      ["speed-slow", "< SLOW · 0.8X"],
+      ["speed-normal", "> NORMAL · 1X"],
+      ["speed-fast", ">> FAST · 1.25X"],
+      ["speed-faster", ">>> FASTER · 1.5X"],
+    ],
     rings: [
       ["ring", "◉ JUMP RING"],
       ["purple-ring", "◉ PURPLE · 1"],
@@ -923,7 +929,7 @@
   function how() {
     void sheet(
       "One button. Find your flow.",
-      "Square: tap or press Space to jump onto two-block ledges. Hold for another jump when you land. Pogo: same as square, but every fresh tap lets you jump again in midair. Jump before a wall to clear it. Try Air Steps! Plane: hold to fly against gravity; release to fall. Landings and ceiling contact are safe while flying, but wall impacts kill. Angle: hold to climb at 45 degrees, release to dive at 45 degrees. Floors, ceilings and block faces are safe; walls are not. Wheel: land on a block, floor or ceiling, then tap or press Space to flip gravity. Midair taps are ignored; holding does not flip again when you land. UP and DOWN portals set gravity without changing your shape. Under upside-down gravity, land and jump on ceilings. All spikes kill, including the tiny quarter-size ones. Outline blocks are transparent but solid. Hitting a wall kills in ALL modes, including the vertical face of a ramp. Your smaller hazard hitbox still forgives edge grazes. Background blocks never collide. Rings: tap or press Space while reaching a glowing ring for a midair jump, once per ring per run. Purple and red rings bounce one and five blocks; a white ring takes any colour and height. W and R blocks are invisible in play and can be stood on: walk into a W from the side, jump up through an R. Their other faces still kill. Ramps: walk up or down the white diagonal slope. Find RINGS and RAMP tabs in the editor. In the editor, pinch a selected piece with two fingers to size it and turn it, like cropping a photo; Snap holds 15 degrees and quarter sizes.",
+      "Square: tap or press Space to jump onto two-block ledges. Hold for another jump when you land. Pogo: same as square, but every fresh tap lets you jump again in midair. Jump before a wall to clear it. Try Air Steps! Plane: hold to fly against gravity; release to fall. Landings and ceiling contact are safe while flying, but wall impacts kill. Angle: hold to climb at 45 degrees, release to dive at 45 degrees. Floors, ceilings and block faces are safe; walls are not. Wheel: land on a block, floor or ceiling, then tap or press Space to flip gravity. Midair taps are ignored; holding does not flip again when you land. UP and DOWN portals set gravity without changing your shape. Speed portals change how fast you move forward: SLOW, 1X, FAST and FASTER. Shape and gravity stay the same. Under upside-down gravity, land and jump on ceilings. All spikes kill, including the tiny quarter-size ones. Outline blocks are transparent but solid. Hitting a wall kills in ALL modes, including the vertical face of a ramp. Your smaller hazard hitbox still forgives edge grazes. Background blocks never collide. Rings: tap or press Space while reaching a glowing ring for a midair jump, once per ring per run. Purple and red rings bounce one and five blocks; a white ring takes any colour and height. W and R blocks are invisible in play and can be stood on: walk into a W from the side, jump up through an R. Their other faces still kill. Ramps: walk up or down the white diagonal slope. Find RINGS and RAMP tabs in the editor. In the editor, pinch a selected piece with two fingers to size it and turn it, like cropping a photo; Snap holds 15 degrees and quarter sizes.",
     );
   }
   async function applyUpdate() {
@@ -1399,7 +1405,7 @@
           ? `${labelOf(selection.type)} · x ${selection.x.toFixed(2)} / y ${selection.y.toFixed(2)} · ${selection.rotation}° · ×${(selection.scale ?? 1).toFixed(2)}${selection.type === "ring" ? ` · ↑${selection.bounce ?? RING_BOUNCE}` : ""}`
           : tool === "select"
             ? "Tap an object to select it."
-            : `Tap the grid to place ${tool === "half" ? "a half spike" : "a " + (tool in presets ? tool.replace("-", " ") : tool)}.`}{layer ===
+            : `Tap the grid to place ${tool === "half" ? "a half spike" : "a " + (tool in presets ? tool.replace("-", " ") : tool.startsWith("speed-") ? labelOf(tool).toLowerCase() + " portal" : tool)}.`}{layer ===
         "background"
           ? " · BACKGROUND: no collision"
           : ""}</output

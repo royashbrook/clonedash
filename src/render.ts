@@ -18,6 +18,10 @@ const portalLook: Record<string, [string, string, string]> = {
   angle: ["#c77dff", "ANGLE", "◢"],
   "gravity-up": ["#53e3ff", "UP", "↑"],
   "gravity-down": ["#ffb477", "DOWN", "↓"],
+  "speed-slow": ["#ffb477", "SLOW", "<"],
+  "speed-normal": ["#72f7dc", "1X", ">"],
+  "speed-fast": ["#53e3ff", "FAST", ">>"],
+  "speed-faster": ["#ff8ac4", "FASTER", ">>>"],
 };
 // How wide the player is DRAWN, in blocks. The physics body stays SIZE (0.64): this is the
 // visual-only answer to "he looks tiny next to the blocks". A physics retune is a separate call.
@@ -422,7 +426,7 @@ export function render(
         ctx.fillText(state.gravity > 0 ? "↑" : "↓", 0, 0);
       } else if (state.mode === "angle") {
         // A dart that points along its own 45 degree line: up while held, down when released.
-        ctx.rotate(-Math.atan2(state.vy, SPEED));
+        ctx.rotate(-Math.atan2(state.vy, SPEED * state.speed));
         ctx.fillStyle = color;
         ctx.strokeStyle = "#fff";
         ctx.lineWidth = 2;
