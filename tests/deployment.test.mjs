@@ -60,6 +60,21 @@ test("production accepts only successful trusted main pushes or manual main runs
       'test "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)"',
     ),
   );
+  // Superseded check, then deploy, then the live receipt against the same HEAD.
+  const order = [
+    "Refuse a superseded release",
+    "npx wrangler deploy",
+    'node scripts/verify-live.mjs https://clonedash.royashbrook.com "$(git rev-parse HEAD)"',
+  ].map((step) => workflow.indexOf(step));
+  assert.ok(
+    order.every((at) => at >= 0),
+    String(order),
+  );
+  assert.deepEqual(
+    order,
+    [...order].sort((a, b) => a - b),
+  );
+  assert.ok(!workflow.slice(order[1]).includes("npm run build"));
 });
 
 test("analytics CSP permits only the approved additions and retains object protection", () => {

@@ -50,3 +50,6 @@ jobs:
       - run: npx wrangler deploy
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      - name: Verify the live release receipt
+        # The artifact deployed above, not a rebuild, must be what the origin serves.
+        run: node scripts/verify-live.mjs https://clonedash.royashbrook.com "$(git rev-parse HEAD)"
