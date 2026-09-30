@@ -46,7 +46,7 @@ test("scale is validated: 0.25 to 4, blocks/spikes/ramps only; the exporter keep
   }
   assert.throws(() => validateLevel(level([{ ...object("ring", 10, 1), scale: 2 }])), /Invalid scale/);
   assert.throws(() => validateLevel(level([{ ...object("plane", 10, 1), scale: 2 }])), /Invalid scale/);
-  assert.deepEqual([...SCALABLE].sort(), ["black", "block", "grid", "half", "outline", "plain-black", "quarter", "ramp", "ramp-black", "ramp-grid", "small", "spike"].sort());
+  assert.deepEqual([...SCALABLE].sort(), ["black", "block", "grid", "half", "outline", "plain-black", "w-block", "r-block", "quarter", "ramp", "ramp-black", "ramp-grid", "small", "spike"].sort());
   // share code round trip
   const code = await encodeLevel(ok);
   assert.deepEqual((await decodeLevel(code)).objects[0].scale, 2.5);
