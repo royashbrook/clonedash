@@ -5,11 +5,11 @@ const empty = { name: 'Contact', length: 40, objects: [] };
 // Pass blocks have one face that lets the player through by design; pass.test.mjs pins those.
 const SOLID = BLOCKS.filter(type => !PASS.includes(type));
 
-test('jumper keeps safe top and underside contact under either gravity', () => {
+test('pogo keeps safe top and underside contact under either gravity', () => {
   for (const type of [...SOLID, 'w-block']) for (const gravity of [-1, 1]) {
     const block = object(type, 5, 2), level = { ...empty, objects: [block] };
     for (const [y, vy] of [[3.01, -2], [2 - SIZE - .01, 2]]) {
-      const s = { ...createState(level), mode: 'jumper', gravity, x: 5, y, vy, grounded: false };
+      const s = { ...createState(level), mode: 'pogo', gravity, x: 5, y, vy, grounded: false };
       step(s, false); assert.equal(s.status, 'playing');
       const body = [[s.x,s.y],[s.x+SIZE,s.y],[s.x+SIZE,s.y+SIZE],[s.x,s.y+SIZE]];
       assert.equal(intersects(body, polygon(block)), false);
@@ -18,7 +18,7 @@ test('jumper keeps safe top and underside contact under either gravity', () => {
 });
 
 test('every mode dies on all block walls and vertical ramp faces, with either gravity', () => {
-  for (const mode of ['square', 'plane', 'wheel', 'jumper']) for (const gravity of [-1, 1]) {
+  for (const mode of ['square', 'plane', 'wheel', 'pogo']) for (const gravity of [-1, 1]) {
     for (const type of [...SOLID, 'r-block', ...RAMPS]) for (const rotation of [0, 90, 180, 270]) for (const flipX of [false, true]) {
       const wall = { ...object(type, 5, 2), rotation, flipX };
       const points = polygon(wall);
@@ -35,14 +35,14 @@ test('every mode dies on all block walls and vertical ramp faces, with either gr
 
 test('smaller death box forgives spike-tip grazes but still kills direct hits in every mode', () => {
   assert.equal(SIZE - 2 * DEATH_INSET, .40);
-  for (const mode of ['square', 'plane', 'wheel', 'jumper']) for (const type of SPIKES) {
+  for (const mode of ['square', 'plane', 'wheel', 'pogo']) for (const type of SPIKES) {
     const spike = object(type, 5, 2), points = polygon(spike), top = Math.max(...points.map(p => p[1]));
     const center = (Math.min(...points.map(p => p[0])) + Math.max(...points.map(p => p[0]))) / 2;
     const base = { ...createState({ ...empty, objects: [spike] }), mode, x: center - SIZE / 2, y: top - .04, grounded: false };
     const graze = structuredClone(base); step(graze, false); assert.equal(graze.status, 'playing', `${mode} ${type} graze`);
     const hit = { ...base, y: top - .18 }; step(hit, false); assert.equal(hit.status, 'dead', `${mode} ${type} direct`);
   }
-  for (const mode of ['square', 'plane', 'wheel', 'jumper']) {
+  for (const mode of ['square', 'plane', 'wheel', 'pogo']) {
     const s = { ...createState({ ...empty, objects: [object('block', 5)] }), mode, x: 5 - SIZE };
     step(s, false); assert.equal(s.status, 'playing', 'outer edge can graze block side');
     step(s, false); step(s, false); assert.equal(s.status, 'dead', 'inner box still dies on block side');
@@ -55,7 +55,7 @@ test('copy + paste preserves transforms, skips occupied space, and refuses inval
   const copy = duplicateObject(level, 0);
   assert.deepEqual(copy, { ...source, x: 7 }); assert.deepEqual(level, snapshot);
   copy.flipX = false; assert.equal(source.flipX, true);
-  const portal = { ...object('jumper', 5), rotation: 90 };
+  const portal = { ...object('pogo', 5), rotation: 90 };
   assert.equal(duplicateObject({ ...empty, objects: [portal] }, 0).x, 7.5);
   assert.throws(() => duplicateObject(level, -1), /Select/);
   assert.throws(() => duplicateObject({ ...empty, objects: [object('block', 38)] }, 0), /No room/);

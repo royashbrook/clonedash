@@ -10,9 +10,10 @@ async function trackPaint(page) {
   });
 }
 
-test('jumper accepts brief midair touches but held and repeated Space do not fly', async ({ browser }) => {
+test('pogo accepts brief midair touches but held and repeated Space do not fly', async ({ browser }) => {
   const context = await browser.newContext({ viewport: { width: 932, height: 430 }, hasTouch: true });
   const page = await context.newPage(); await page.clock.install(); await trackPaint(page);
+  // the save keeps the pre-rename id on purpose: a real old save must still load and run as pogo (#33).
   await page.addInitScript(() => localStorage.setItem('clonedash.v1', JSON.stringify({ version: 1, sound: false, best: { 0: 100 }, draft: { name: 'Air taps', length: 40, objects: [{ type: 'jumper', x: 3, y: 0, rotation: 0, flipX: false, flipY: false }] } })));
   await page.goto(process.env.GAME_URL || 'http://127.0.0.1:4191');
   await page.locator('#editor-open').click(); await page.locator('#test-level').click();
@@ -50,8 +51,8 @@ test('outline is transparent with white edges; new editor objects transform and 
     return [...canvas.getContext('2d').getImageData(Math.floor(p.x * ratio), Math.floor(p.y * ratio), 1, 1).data];
   }, { x, y });
   const background = await pixel(5.5 * point.unit, point.floor - .5 * point.unit);
-  // readout is what the editor SHOWS; type is what gets STORED. they differ for jumper (shown as POGO).
-  for (const [tab, name, type, x, readout] of [['BLOCKS', '□ OUTLINE', 'outline', 5, 'OUTLINE'], ['SPIKES', '▴ ¼ SIZE', 'quarter', 7, 'QUARTER'], ['PORTALS', '⇈ POGO', 'jumper', 9, 'POGO']]) {
+  // readout is what the editor SHOWS; type is what gets STORED. since #33 they agree for pogo.
+  for (const [tab, name, type, x, readout] of [['BLOCKS', '□ OUTLINE', 'outline', 5, 'OUTLINE'], ['SPIKES', '▴ ¼ SIZE', 'quarter', 7, 'QUARTER'], ['PORTALS', '⇈ POGO', 'pogo', 9, 'POGO']]) {
     await page.locator('#step-size').selectOption('1');
     await page.getByRole('tab', { name: tab, exact: true }).click();
     await page.getByRole('button', { name, exact: true }).click();
@@ -68,7 +69,7 @@ test('outline is transparent with white edges; new editor objects transform and 
     await page.getByRole('button', { name: 'Move right', exact: true }).click();
   }
   const draft = await page.evaluate(() => JSON.parse(localStorage.getItem('clonedash.v1')).draft);
-  expect(draft.objects.map(o => o.type)).toEqual(['outline', 'quarter', 'jumper']);
+  expect(draft.objects.map(o => o.type)).toEqual(['outline', 'quarter', 'pogo']);
   expect(draft.objects.map(o => o.x)).toEqual([5.05, 7.05, 9.05]);
   expect(draft.objects.every(o => o.rotation === 270 && o.flipX)).toBe(true);
   await page.screenshot({ path: 'test-results/jumper-editor.png' });

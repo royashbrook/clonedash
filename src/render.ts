@@ -14,7 +14,7 @@ const portalLook: Record<string, [string, string, string]> = {
   plane: ["#ffd166", "FLY", "▷"],
   square: ["#72f7dc", "JUMP", "□"],
   wheel: ["#ff8ac4", "WHEEL", "⊙"],
-  jumper: ["#53e3ff", "POGO", "⇈"],
+  pogo: ["#53e3ff", "POGO", "⇈"],
   angle: ["#c77dff", "ANGLE", "◢"],
   "gravity-up": ["#53e3ff", "UP", "↑"],
   "gravity-down": ["#ffb477", "DOWN", "↓"],
@@ -370,7 +370,7 @@ export function render(
             unit * 0.3,
           );
       }
-      if (state.mode === "square" || state.mode === "jumper") {
+      if (state.mode === "square" || state.mode === "pogo") {
         if (state.gravity > 0) ctx.scale(1, -1);
         if (!state.grounded && !reduced) ctx.rotate(-state.time * Math.PI * 2);
         const a = SIZE * unit;
@@ -380,7 +380,7 @@ export function render(
         ctx.fillRect(-a / 2, -a / 2, a, a);
         ctx.strokeRect(-a / 2, -a / 2, a, a);
         ctx.fillStyle = "#101825";
-        if (state.mode === "jumper") {
+        if (state.mode === "pogo") {
           ctx.strokeStyle = "#101825";
           ctx.lineWidth = Math.max(2, a * 0.08);
           for (const offset of [-0.12, 0.15]) {

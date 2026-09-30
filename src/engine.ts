@@ -33,15 +33,20 @@ export const PORTALS = [
   "plane",
   "square",
   "wheel",
-  "jumper",
+  "pogo",
   "angle",
   "gravity-up",
   "gravity-down",
 ];
 // Modes that ride surfaces instead of dying on them: floor, ceiling and block faces are safe,
 // walls still kill.
-export const SOFT = ["plane", "jumper", "angle"];
+export const SOFT = ["plane", "pogo", "angle"];
 export const TYPES = [...BLOCKS, ...SPIKES, ...PORTALS, ...RAMPS, "ring"];
+// Ids that were renamed after they had been stored. validateLevel accepts the old id and returns
+// the new one, so an old save, share code or link still loads; nothing writes the old id again.
+export const LEGACY_TYPES: Partial<Record<string, ObjectType>> = {
+  jumper: "pogo", // 2026-09-29, the stored id followed the POGO label (#33)
+};
 export const SCALABLE = [...BLOCKS, ...SPIKES, ...RAMPS]; // pieces that take a scale; rings and portals stay 1x
 // A ring with no bounce field is the original: JUMP, a 2.25 block peak. A set bounce is the peak
 // height in blocks, so the launch speed is the one that reaches it under level gravity.
@@ -209,8 +214,8 @@ export function step(
     s.grounded = false;
   }
   if (
-    ((s.mode === "square" || s.mode === "jumper") && s.grounded && held) ||
-    (s.mode === "jumper" && tapped)
+    ((s.mode === "square" || s.mode === "pogo") && s.grounded && held) ||
+    (s.mode === "pogo" && tapped)
   ) {
     s.vy = -s.gravity * JUMP;
     s.grounded = false;
@@ -395,7 +400,12 @@ export function validateLevel(input: unknown): Level {
         (raw.song > 108 && !recordingFor(raw.song))))
   )
     throw Error("Invalid level settings");
-  for (const o of raw.objects) {
+  // Renamed ids are mapped on the copy before any check, so a legacy piece is measured and
+  // bounded as what it is now; the input itself is never written to.
+  const level = structuredClone(raw);
+  for (const o of level.objects) {
+    if (o && typeof o === "object" && LEGACY_TYPES[o.type])
+      o.type = LEGACY_TYPES[o.type]!;
     if (
       !o ||
       !TYPES.includes(o.type) ||
@@ -442,7 +452,7 @@ export function validateLevel(input: unknown): Level {
     if (raw.height !== undefined && bounds(o).top > height + 0.00001)
       throw Error("Object above ceiling");
   }
-  return structuredClone(raw);
+  return level;
 }
 export function transform(o: Piece, action: Transform, amount = 1) {
   if (action === "left") o.x -= amount;

@@ -29,7 +29,7 @@ test('all ramp transforms preserve a 45-degree slope and match triangular suppor
 });
 
 test('square and wheel climb and descend connected slopes without hopping or dying, also inverted', () => {
-  for (const type of RAMPS) for (const mode of ['square', 'wheel', 'jumper', 'plane']) for (const inverted of [false, true]) {
+  for (const type of RAMPS) for (const mode of ['square', 'wheel', 'pogo', 'plane']) for (const inverted of [false, true]) {
     let objects = [object(type, 5), object('plain-black', 6), { ...object(type, 7), flipX: true }];
     if (inverted) objects = objects.map(o => ({ ...o, y: 6 - o.y, flipY: !o.flipY }));
     const s = { ...createState({ ...empty, objects }), mode, gravity: inverted ? 1 : -1, y: inverted ? 7 - SIZE : 0 };
@@ -55,8 +55,8 @@ test('jumping off a ramp releases its surface and its high vertical side is not 
   assert.equal(side.status, 'dead');
 });
 
-test('planes and jumpers die at ramp walls but retain safe underside contact', () => {
-  for (const mode of ['plane', 'jumper']) for (const type of RAMPS) {
+test('planes and pogos die at ramp walls but retain safe underside contact', () => {
+  for (const mode of ['plane', 'pogo']) for (const type of RAMPS) {
     const wall = { ...object(type, 5, 2), flipX: true };
     const s = { ...createState({ ...empty, objects: [wall] }), mode, x: 5 - SIZE, y: 2.1, grounded: false };
     for (let i = 0; i < 6; i++) step(s, false);

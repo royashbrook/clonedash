@@ -97,7 +97,7 @@ export const COURSES: Level[] = [
     length: 300,
     song: 114,
     objects: [
-      o("jumper", 3),
+      o("pogo", 3),
       ...phrase(sequence(16, 272, 32), (x) => [
         ...row("outline", x, 7, 3),
         ...row("spike", x + 2, 6),

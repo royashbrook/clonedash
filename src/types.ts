@@ -1,8 +1,7 @@
-export type GameMode = "square" | "plane" | "wheel" | "jumper" | "angle";
-// What the player SEES for an id. The ids themselves are stored in levels and saves, so a real
-// rename is a breaking (major-version) change; this map is the label-only rename until then.
+export type GameMode = "square" | "plane" | "wheel" | "pogo" | "angle";
+// What the player SEES for an id whose upper-cased form is not the label. Stored ids that were
+// renamed for real (jumper became pogo) are mapped on read instead: engine.ts LEGACY_TYPES.
 const LABELS: Partial<Record<string, string>> = {
-  jumper: "POGO",
   "w-block": "W BLOCK",
   "r-block": "R BLOCK",
 };

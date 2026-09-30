@@ -78,7 +78,7 @@ test('invalid drafts are refused, authored levels validate', () => {
 // This controller supplies only the same held/not-held input as a player. It cannot teleport,
 // change physics or remove objects. Every authored trail must reach its actual finish alive.
 export function inputFor(s) {
-  if (s.mode === 'jumper') return [5.5, 7.5, 16.5, 26].some(x => s.x >= x && s.x < x + SPEED * STEP);
+  if (s.mode === 'pogo') return [5.5, 7.5, 16.5, 26].some(x => s.x >= x && s.x < x + SPEED * STEP);
   if (s.mode === 'wheel') return s.grounded && s.gravity < 0 && s.level.objects.some(o => SPIKES.includes(o.type) && o.x - s.x > 1 && o.x - s.x < 2);
   if (s.mode === 'plane') return s.y + s.vy * .3 < 2.55;
   if (!s.grounded) return false;

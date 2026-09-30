@@ -60,7 +60,7 @@
       ["plane", "▷ PLANE"],
       ["square", "□ SQUARE"],
       ["wheel", "⊙ WHEEL"],
-      ["jumper", "⇈ POGO"],
+      ["pogo", "⇈ POGO"],
       ["angle", "◢ ANGLE"],
     ],
     gravity: [
@@ -545,7 +545,7 @@
             ? "RELEASE TO DIVE"
             : s.mode === "wheel"
               ? "LAND FIRST · THEN TAP"
-              : s.mode === "jumper"
+              : s.mode === "pogo"
                 ? "TAP AGAIN IN MIDAIR"
                 : "HOLD TO KEEP JUMPING",
       showCue:

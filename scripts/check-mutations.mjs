@@ -15,6 +15,7 @@ try {
     "courses.test.mjs",
     "course-input.mjs",
     "version.test.mjs",
+    "pogo.test.mjs",
   ]) {
     const testSource = (await readFile(join("tests", testFile), "utf8"))
       .replaceAll("../src/", "./src/")
@@ -60,8 +61,8 @@ try {
     ],
     [
       "engine.ts",
-      "return structuredClone(raw);",
-      "return raw;",
+      "const level = structuredClone(raw);",
+      "const level = raw;",
       "isolated from the object it was built from",
     ],
     [
@@ -93,6 +94,8 @@ try {
       "transfer.test.mjs",
     ],
     ["transfer.ts", "if (openInEditor) selectLevel", "if (false) selectLevel", "copy re-reads", "courses.test.mjs"],
+    // The legacy id migration has to reach the save, not only the validator's return value.
+    ["library.ts", "s.draft = validateLevel(s.draft);", "validateLevel(s.draft);", "readSave loads a jumper save", "pogo.test.mjs"],
     ["levels.ts", "LEVELS.push(...COURSES)", "LEVELS.unshift(...COURSES)", "groups preserve", "courses.test.mjs"],
     ["courses.ts", "song: 109", "song: 110", "groups preserve", "courses.test.mjs"],
     // Release identity guards: each rejection must fail against its broken control.
