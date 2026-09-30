@@ -40,7 +40,7 @@ test('100 level originals have distinct musical recipes; capacity never overwrit
 });
 
 test('background blocks are not lethal, supporting or blocking in any mode; copies ignore other layers', () => {
-  for (const mode of ['square', 'wheel', 'jumper', 'plane']) {
+  for (const mode of ['square', 'wheel', 'pogo', 'plane']) {
     const level = { name: 'Layers', length: 20, objects: [{ ...object('block', 5), layer: 'background' }] };
     const s = createState(level); s.mode = mode;
     for (let n = 0; n < 140; n++) step(s, false);
@@ -58,7 +58,7 @@ test('background blocks are not lethal, supporting or blocking in any mode; copi
 test('tall worlds use their real ceiling for flight, inverted gravity and portals', () => {
   for (const height of [7, 20, 40]) {
     const l = { name: 'Sky', length: 200, height, objects: [] };
-    for (const mode of ['plane', 'jumper', 'wheel']) {
+    for (const mode of ['plane', 'pogo', 'wheel']) {
       const s = createState(l); s.mode = mode; s.gravity = 1; s.y = height - SIZE - .01; s.vy = 2;
       for (let i = 0; i < 60; i++) step(s, false, STEP);
       assert.equal(s.status, 'playing'); assert.equal(s.y, height - SIZE); assert.equal(s.grounded, true);

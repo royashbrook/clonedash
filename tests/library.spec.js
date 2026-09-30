@@ -79,10 +79,10 @@ test('background paints behind foreground regardless of placement order and sele
   await page.screenshot({ path: `test-results/background-layer-${test.info().project.name}.png` });
 });
 
-test('camera follows a high jumper without shrinking the character or pinning it offscreen', async ({ page }) => {
+test('camera follows a high pogo without shrinking the character or pinning it offscreen', async ({ page }) => {
   await page.clock.install();
   await page.addInitScript(() => {
-    localStorage.setItem('clonedash.v1', JSON.stringify({ version: 1, best: {}, sound: false, draft: { name: 'Tall flight', length: 100, height: 20, objects: [{ type: 'jumper', x: 3, y: 0, rotation: 0, flipX: false, flipY: false }] } }));
+    localStorage.setItem('clonedash.v1', JSON.stringify({ version: 1, best: {}, sound: false, draft: { name: 'Tall flight', length: 100, height: 20, objects: [{ type: 'pogo', x: 3, y: 0, rotation: 0, flipX: false, flipY: false }] } }));
     const fill = CanvasRenderingContext2D.prototype.fillRect;
     CanvasRenderingContext2D.prototype.fillRect = function(x, y, w, h) {
       if (this.fillStyle === '#9aff6b' && w === h && w > 20 && w < 60) window.playerPaint = { y: this.getTransform().f, width: w };

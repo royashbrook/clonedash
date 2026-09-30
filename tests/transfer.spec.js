@@ -12,7 +12,7 @@ const source = {
   length: 80,
   height: 20,
   objects: [
-    object("jumper", 5, 0),
+    object("pogo", 5, 0),
     {
       ...object("grid", 8.05, 12.05),
       rotation: 90,

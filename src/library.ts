@@ -20,7 +20,9 @@ export function readSave(raw: string | null, trailCount: number): SaveData {
     Array.isArray(s.best)
   )
     throw Error("Invalid save");
-  validateLevel(s.draft);
+  // The validated copy is kept: it carries renamed piece ids (engine.ts LEGACY_TYPES) forward, so
+  // a save from before a rename loads and is written back with the current ids.
+  s.draft = validateLevel(s.draft);
   if (
     Object.entries(s.best).some(
       ([k, v]) =>
@@ -53,7 +55,7 @@ export function readSave(raw: string | null, trailCount: number): SaveData {
       ids.has(entry.id)
     )
       throw Error("Invalid level ID");
-    validateLevel(entry.level);
+    entry.level = validateLevel(entry.level);
     ids.add(entry.id);
   }
   if (!ids.has(s.activeLevel)) throw Error("Missing active level");

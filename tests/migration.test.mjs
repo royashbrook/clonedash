@@ -13,6 +13,25 @@ import { Run } from "../src/run.ts";
 import { render } from "../src/render.ts";
 
 const BASELINE = "c00928c1c005aad711b752690881b9b5f332a089";
+// 2026-09-29: the stored id "jumper" became "pogo" (#33). The frozen tree still speaks the old
+// id, so the legacy side is relabelled at its boundary only: levels going INTO the old modules
+// get the old id back, and states, levels and painted words coming OUT get the new one. Every
+// comparison below is still whole-value deepEqual; nothing is skipped or loosened.
+const LEGACY_IDS = { jumper: "pogo" };
+const modernId = (id) => LEGACY_IDS[id] ?? id;
+const legacyId = (id) =>
+  Object.keys(LEGACY_IDS).find((old) => LEGACY_IDS[old] === id) ?? id;
+const relabelLevel = (level, map) => ({
+  ...level,
+  objects: level.objects.map((o) => ({ ...o, type: map(o.type) })),
+});
+const legacyLevel = (level) => relabelLevel(level, legacyId);
+const modernLevel = (level) => relabelLevel(level, modernId);
+const modernState = (state) => ({
+  ...state,
+  mode: modernId(state.mode),
+  level: modernLevel(state.level),
+});
 export async function withLegacy(check) {
   const dir = await mkdtemp(join(tmpdir(), "clonedash-baseline-"));
   try {
@@ -40,14 +59,18 @@ export async function withLegacy(check) {
 
 test("typed engine matches the pinned pre-migration tree frame by frame", async () => {
   await withLegacy((old, levels) => {
-    assert.deepEqual(LEVELS.slice(0, levels.LEVELS.length), levels.LEVELS);
+    assert.deepEqual(
+      LEVELS.slice(0, levels.LEVELS.length),
+      levels.LEVELS.map(modernLevel),
+    );
     let frames = 0;
     for (const level of LEVELS)
-      for (const mode of ["square", "plane", "wheel", "jumper"])
+      for (const mode of ["square", "plane", "wheel", "pogo"])
         for (const gravity of [-1, 1]) {
-          const a = old.createState(structuredClone(level)),
+          const a = old.createState(legacyLevel(structuredClone(level))),
             b = engine.createState(structuredClone(level));
-          a.mode = b.mode = mode;
+          a.mode = legacyId(mode);
+          b.mode = mode;
           a.gravity = b.gravity = gravity;
           let seed = 713;
           for (let i = 0; i < 2400; i++) {
@@ -58,7 +81,7 @@ test("typed engine matches the pinned pre-migration tree frame by frame", async 
             engine.step(b, held, engine.STEP, tap);
             assert.deepEqual(
               b,
-              a,
+              modernState(a),
               `${level.name}/${mode}/${gravity}/frame${i}`,
             );
             frames++;
@@ -102,17 +125,34 @@ test("drawing commands match the original for editor, all modes, gravity and dea
       // Gradient functions are instruments, not painted values.
       return JSON.parse(JSON.stringify(log));
     }
-    // Deliberate post-migration label changes. The internal ids are unchanged; only the painted
-    // word differs from the frozen baseline. Keep this list tiny and dated.
-    const RELABEL = { JUMPER: "POGO" }; // 2026-09-21, jumper is shown as POGO
+    // The frozen tree paints a portal's word from its id, so the renamed id (LEGACY_IDS above)
+    // is the one painted word that differs. Everything else must match verbatim.
+    const PAINTED = Object.fromEntries(
+      Object.entries(LEGACY_IDS).map(([old, now]) => [
+        old.toUpperCase(),
+        now.toUpperCase(),
+      ]),
+    );
     const relabel = (log) =>
       log.map((cmd) =>
-        cmd[0] === "fillText" && cmd[1] in RELABEL
-          ? [cmd[0], RELABEL[cmd[1]], ...cmd.slice(2)]
+        cmd[0] === "fillText" && cmd[1] in PAINTED
+          ? [cmd[0], PAINTED[cmd[1]], ...cmd.slice(2)]
           : cmd,
       );
+    // The legacy renderer gets the legacy level and mode; the typed one gets today's.
+    const legacyOptions = (options) => ({
+      ...options,
+      level: legacyLevel(options.level),
+      ...(options.state && {
+        state: {
+          ...options.state,
+          mode: legacyId(options.state.mode),
+          level: legacyLevel(options.state.level),
+        },
+      }),
+    });
     for (const level of LEVELS)
-      for (const mode of ["square", "plane", "wheel", "jumper"])
+      for (const mode of ["square", "plane", "wheel", "pogo"])
         for (const gravity of [-1, 1]) {
           const state = {
             ...engine.createState(level),
@@ -134,7 +174,7 @@ test("drawing commands match the original for editor, all modes, gravity and dea
             };
             assert.deepEqual(
               commands(render, options),
-              relabel(commands(legacy.render, options)),
+              relabel(commands(legacy.render, legacyOptions(options))),
               `${level.name}/${mode}/${gravity}/${status}`,
             );
           }
@@ -151,7 +191,7 @@ test("drawing commands match the original for editor, all modes, gravity and dea
     };
     assert.deepEqual(
       commands(render, options),
-      relabel(commands(legacy.render, options)),
+      relabel(commands(legacy.render, legacyOptions(options))),
     );
   });
 });
@@ -164,7 +204,7 @@ test("transforms, geometry, saves and every original song retain baseline result
         for (const flipX of [false, true])
           for (const flipY of [false, true]) {
             const a = { ...old.object(type, 5, 2), rotation, flipX, flipY },
-              b = structuredClone(a);
+              b = { ...structuredClone(a), type: modernId(type) };
             assert.deepEqual(engine.polygon(b), old.polygon(a));
             for (const action of [
               "left",
@@ -176,10 +216,10 @@ test("transforms, geometry, saves and every original song retain baseline result
               "flipX",
               "flipY",
             ]) {
-              assert.deepEqual(
-                engine.transform(b, action, 0.05),
-                old.transform(a, action, 0.05),
-              );
+              assert.deepEqual(engine.transform(b, action, 0.05), {
+                ...old.transform(a, action, 0.05),
+                type: modernId(type),
+              });
             }
           }
     for (let i = 0; i < 109; i++)

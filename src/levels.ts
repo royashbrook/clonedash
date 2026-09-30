@@ -155,7 +155,7 @@ export const LEVELS: Level[] = [
     color: "#53e3ff",
     length: 48,
     objects: [
-      o("jumper", 3),
+      o("pogo", 3),
       o("outline", 10, 3),
       o("outline", 11, 3),
       o("outline", 12, 3),

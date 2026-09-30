@@ -29,7 +29,7 @@ export function courseInput(s) {
           o.x - s.x > 3,
       )
     );
-  if (s.mode === "jumper") {
+  if (s.mode === "pogo") {
     const shelf = ahead.find(
       (o) => o.type === "outline" && o.x - s.x > 0 && o.x - s.x < 5,
     );
