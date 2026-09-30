@@ -30,7 +30,8 @@
   import { updateControl } from "./pwa.ts";
   import LevelTransfer from "./LevelTransfer.svelte";
   import { importLevel } from "./transfer.ts";
-  import type { Level, ObjectType, Piece, Transform } from "./types.ts";
+  import { pinchStart, pinchTransform, type Pinch } from "./gesture.ts";
+  import type { Level, ObjectType, Piece, Point, Transform } from "./types.ts";
 
   type Screen = "home" | "library" | "editor" | "play";
   type Action = [label: string, handler: () => void, primary?: boolean];
@@ -124,8 +125,12 @@
     tab = $state<Tab>("blocks");
   let layer = $state("play"),
     stepSize = $state(1),
+    snap = $state(true), // pinch snaps to 15 degrees and quarter sizes
     pan = $state(0),
     panY = $state(0);
+  // Two fingers on the editor canvas size and turn the selected piece (photo-crop style).
+  const fingers = new Map<number, Point>();
+  let pinch: Pinch | null = null;
   let portrait = $state(false),
     paused = false,
     testing = $state(false), // a run over the editor grid, palette still up (TRY)
@@ -464,9 +469,23 @@
     tone(440, 0.045, 0.018);
     snapshot();
   }
+  function capture(id: number) {
+    try {
+      canvas.setPointerCapture(id);
+    } catch {
+      /* a synthetic pointer has no capture; real fingers do */
+    }
+  }
   function pointerdown(e: PointerEvent) {
     if (mode === "editor" && !testing) {
-      editAt(e);
+      fingers.set(e.pointerId, [e.clientX, e.clientY]);
+      capture(e.pointerId);
+      if (fingers.size === 1) editAt(e);
+      else if (fingers.size === 2 && selected >= 0 && !rotate && !panel) {
+        const [a, b] = [...fingers.values()],
+          piece = draft.objects[selected];
+        pinch = pinchStart(a, b, piece.scale ?? 1, piece.rotation);
+      }
       return;
     }
     e.preventDefault();
@@ -837,6 +856,35 @@
     draft = next;
     saveDraft();
   }
+  function pointermove(e: PointerEvent) {
+    if (!pinch || !fingers.has(e.pointerId) || selected < 0) return;
+    fingers.set(e.pointerId, [e.clientX, e.clientY]);
+    if (fingers.size < 2) return;
+    const [a, b] = [...fingers.values()],
+      piece = structuredClone(draft.objects[selected]),
+      next = pinchTransform(pinch, a, b, snap, SCALABLE.includes(piece.type));
+    if (next.scale === 1) delete piece.scale;
+    else piece.scale = next.scale;
+    piece.rotation = next.rotation;
+    const level = {
+      ...draft,
+      objects: draft.objects.map((o, i) => (i === selected ? piece : o)),
+    };
+    try {
+      validateLevel(level);
+    } catch {
+      return; // past the ceiling or the size bound: hold the last good shape
+    }
+    draft = level;
+  }
+  function pointerup(e: PointerEvent) {
+    run.release();
+    if (!fingers.delete(e.pointerId)) return;
+    if (pinch && fingers.size < 2) {
+      pinch = null;
+      saveDraft();
+    }
+  }
   function deleteSelected() {
     if (selected < 0) return;
     draft.objects.splice(selected, 1);
@@ -875,7 +923,7 @@
   function how() {
     void sheet(
       "One button. Find your flow.",
-      "Square: tap or press Space to jump onto two-block ledges. Hold for another jump when you land. Pogo: same as square, but every fresh tap lets you jump again in midair. Jump before a wall to clear it. Try Air Steps! Plane: hold to fly against gravity; release to fall. Landings and ceiling contact are safe while flying, but wall impacts kill. Angle: hold to climb at 45 degrees, release to dive at 45 degrees. Floors, ceilings and block faces are safe; walls are not. Wheel: land on a block, floor or ceiling, then tap or press Space to flip gravity. Midair taps are ignored; holding does not flip again when you land. UP and DOWN portals set gravity without changing your shape. Under upside-down gravity, land and jump on ceilings. All spikes kill, including the tiny quarter-size ones. Outline blocks are transparent but solid. Hitting a wall kills in ALL modes, including the vertical face of a ramp. Your smaller hazard hitbox still forgives edge grazes. Background blocks never collide. Rings: tap or press Space while reaching a glowing ring for a midair jump, once per ring per run. Purple and red rings bounce one and five blocks; a white ring takes any colour and height. W and R blocks are invisible in play and can be stood on: walk into a W from the side, jump up through an R. Their other faces still kill. Ramps: walk up or down the white diagonal slope. Find RINGS and RAMP tabs in the editor.",
+      "Square: tap or press Space to jump onto two-block ledges. Hold for another jump when you land. Pogo: same as square, but every fresh tap lets you jump again in midair. Jump before a wall to clear it. Try Air Steps! Plane: hold to fly against gravity; release to fall. Landings and ceiling contact are safe while flying, but wall impacts kill. Angle: hold to climb at 45 degrees, release to dive at 45 degrees. Floors, ceilings and block faces are safe; walls are not. Wheel: land on a block, floor or ceiling, then tap or press Space to flip gravity. Midair taps are ignored; holding does not flip again when you land. UP and DOWN portals set gravity without changing your shape. Under upside-down gravity, land and jump on ceilings. All spikes kill, including the tiny quarter-size ones. Outline blocks are transparent but solid. Hitting a wall kills in ALL modes, including the vertical face of a ramp. Your smaller hazard hitbox still forgives edge grazes. Background blocks never collide. Rings: tap or press Space while reaching a glowing ring for a midair jump, once per ring per run. Purple and red rings bounce one and five blocks; a white ring takes any colour and height. W and R blocks are invisible in play and can be stood on: walk into a W from the side, jump up through an R. Their other faces still kill. Ramps: walk up or down the white diagonal slope. Find RINGS and RAMP tabs in the editor. In the editor, pinch a selected piece with two fingers to size it and turn it, like cropping a photo; Snap holds 15 degrees and quarter sizes.",
     );
   }
   async function applyUpdate() {
@@ -931,9 +979,17 @@
       { signal },
     );
     canvas.addEventListener("pointerdown", pointerdown, { signal });
-    for (const event of ["pointerup", "lostpointercapture"])
-      canvas.addEventListener(event, () => run.release(), { signal });
-    canvas.addEventListener("pointercancel", () => run.interrupt(), { signal });
+    canvas.addEventListener("pointermove", pointermove, { signal });
+    for (const event of ["pointerup", "lostpointercapture"] as const)
+      canvas.addEventListener(event, pointerup, { signal });
+    canvas.addEventListener(
+      "pointercancel",
+      (e) => {
+        run.interrupt();
+        pointerup(e);
+      },
+      { signal },
+    );
     installer = installControl(
       (value) => (installVisible = value),
       () => {
@@ -1256,6 +1312,13 @@
           ><option value={1}>1 block</option><option value={0.5}>½ block</option
           ><option value={0.05}>¹⁄₂₀ block</option></select
         ></label
+      ><label
+        >Snap <input
+          id="snap"
+          type="checkbox"
+          aria-label="Snap pinch to 15 degrees and quarter sizes"
+          bind:checked={snap}
+        /></label
       ><label
         >Size <input
           id="scale"
