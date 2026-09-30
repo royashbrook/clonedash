@@ -128,6 +128,7 @@
     panY = $state(0);
   let portrait = $state(false),
     paused = false,
+    testing = $state(false), // a run over the editor grid, palette still up (TRY)
     run = new Run(LEVELS[0]);
   let hud = $state({
     label: "",
@@ -230,9 +231,28 @@
   }
   function setMode(next: Screen) {
     mode = next;
+    testing = false;
     document.body.dataset.mode = next;
     run.interrupt();
     orientation();
+  }
+  // The trail runs over the editor grid with the palette still up. Stop drops back to editing
+  // at the spot the run was looking at. A saved edit restarts the run from the top.
+  const live = () => mode === "play" || (mode === "editor" && testing);
+  function tryLevel() {
+    if (testing) {
+      testing = false;
+      run.interrupt();
+      pan = Math.max(0, Math.min(draft.length - 8, Math.round(run.camera * 2) / 2));
+      panY = Math.max(0, Math.min(levelHeight(draft) - 7, Math.round(run.cameraY * 2) / 2));
+      return;
+    }
+    music.unlock(save.sound);
+    run = new Run(draft);
+    selected = -1;
+    testing = true;
+    snapshot();
+    tone(523, 0.1);
   }
   function closeSheet() {
     panel = null;
@@ -439,13 +459,13 @@
     );
   }
   function press() {
-    if (mode !== "play" || paused || rotate || panel) return;
+    if (!live() || paused || rotate || panel) return;
     run.press();
     tone(440, 0.045, 0.018);
     snapshot();
   }
   function pointerdown(e: PointerEvent) {
-    if (mode === "editor") {
+    if (mode === "editor" && !testing) {
       editAt(e);
       return;
     }
@@ -460,12 +480,13 @@
     )
       return;
     if (e.code === "Space" || e.code === "ArrowUp") {
-      if (mode === "play") {
+      if (live()) {
         e.preventDefault();
         if (!e.repeat) press();
       }
     }
     if (e.code === "Escape" && mode === "play" && !panel) pause();
+    if (e.code === "Escape" && mode === "editor" && testing && !panel) tryLevel();
     if (mode === "editor" && selected >= 0 && !panel) {
       const keys: Record<string, Transform> = {
         ArrowLeft: "left",
@@ -525,12 +546,16 @@
   }
   function draw() {
     const level =
-      mode === "editor" ? draft : mode === "play" ? run.state.level : LEVELS[0];
+      mode === "editor" && !testing
+        ? draft
+        : live()
+          ? run.state.level
+          : LEVELS[0];
     return render(canvas, {
       level,
-      state: mode === "play" ? run.state : mode === "home" ? attract : null,
-      camera: mode === "editor" ? pan : mode === "play" ? run.camera : 0,
-      cameraY: mode === "editor" ? panY : mode === "play" ? run.cameraY : 0,
+      state: live() ? run.state : mode === "home" ? attract : null,
+      camera: live() ? run.camera : mode === "editor" ? pan : 0,
+      cameraY: live() ? run.cameraY : mode === "editor" ? panY : 0,
       editing: mode === "editor",
       layer,
       selected,
@@ -552,14 +577,20 @@
     }
     const dt = Math.min(0.05, (now - (last || now)) / 1000);
     last = now;
-    if (mode === "play" && !paused && !rotate && !document.hidden) {
+    if (live() && !paused && !rotate && !document.hidden) {
       const event = run.advance(dt);
       if (event.died) {
-        record();
+        if (mode === "play") record();
         tone(90, 0.16);
       }
-      if (event.restarted) music.stop();
-      if (event.complete) complete();
+      if (event.restarted && mode === "play") music.stop();
+      if (event.complete) {
+        if (mode === "play") complete();
+        else {
+          tryLevel();
+          toast("Your trail works. Keep building!");
+        }
+      }
     }
     music.sync(
       mode === "editor" || (mode === "play" && custom)
@@ -579,7 +610,7 @@
       mode === "play" ? run.state.time : now / 1000,
     );
     draw();
-    if (mode === "play") snapshot();
+    if (live()) snapshot();
     raf = requestAnimationFrame(frame);
   }
   function saveDraft() {
@@ -592,6 +623,7 @@
       );
     }
     draft = { ...draft, objects: [...draft.objects] };
+    if (testing) run = new Run(draft); // an edit mid-run starts the run over on the new trail
   }
   function openEditor() {
     closeSheet();
@@ -1160,6 +1192,11 @@
           "settings",
         )}>HEIGHT / SONG</button
     ><button
+      id="try-level"
+      class:primary={testing}
+      aria-pressed={testing}
+      onclick={tryLevel}>{testing ? "■ STOP" : "▶ TRY"}</button
+    ><button
       id="test-level"
       class="primary"
       onclick={() => {
@@ -1293,7 +1330,9 @@
           step="0.5"
         /></label
       ><output id="selection"
-        >{selection
+        >{testing
+          ? `TRY ${hud.attempt} · ${hud.cue} · ${hud.detail} · ESC OR STOP TO EDIT`
+          : selection
           ? `${labelOf(selection.type)} · x ${selection.x.toFixed(2)} / y ${selection.y.toFixed(2)} · ${selection.rotation}° · ×${(selection.scale ?? 1).toFixed(2)}${selection.type === "ring" ? ` · ↑${selection.bounce ?? RING_BOUNCE}` : ""}`
           : tool === "select"
             ? "Tap an object to select it."
