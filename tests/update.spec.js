@@ -19,9 +19,12 @@ async function origin(root, redirectCredits = true) {
   let folder = root,
     unavailable = false,
     variant = false,
-    deny = "";
+    deny = "",
+    probes = 0;
   const server = http.createServer(async (req, res) => {
-    const path = new URL(req.url, "http://local").pathname;
+    const url = new URL(req.url, "http://local");
+    const path = url.pathname;
+    if (url.searchParams.has("update-probe")) probes++;
     if (unavailable) return req.socket.destroy();
     if (deny && path === deny) return res.writeHead(503).end();
     // The production asset host canonicalizes index.html. Cache.addAll follows it,
@@ -65,6 +68,7 @@ async function origin(root, redirectCredits = true) {
     switchTo: (next) => (folder = next),
     nextBuild: () => (variant = true),
     deny: (path) => (deny = path),
+    probes: () => probes,
     offline: () => (unavailable = true),
     close: () =>
       new Promise((r) => {
@@ -469,6 +473,51 @@ test("candidate download failure keeps the current build; consent installs a ful
     await expect(page.locator("meta[name=build]")).toHaveAttribute(
       "content",
       "fedcba987654",
+    );
+  } finally {
+    await context.close();
+    await server.close();
+  }
+});
+
+test("the update probe still fetches and notices a newer build without the newer AbortSignal static helpers", async ({
+  browser,
+}) => {
+  const server = await origin(resolve("dist"));
+  const context = await browser.newContext();
+  try {
+    // Older Safari has neither static helper; the probe must not depend on them.
+    await context.addInitScript(() => {
+      Object.defineProperty(AbortSignal, "any", {
+        configurable: true,
+        value: undefined,
+      });
+      Object.defineProperty(AbortSignal, "timeout", {
+        configurable: true,
+        value: undefined,
+      });
+    });
+    const page = await context.newPage();
+    await page.goto(server.url);
+    await page.evaluate(() => navigator.serviceWorker.ready);
+    await page.waitForFunction(() => !!navigator.serviceWorker.controller);
+    expect(
+      await page.evaluate(() => [
+        typeof AbortSignal.any,
+        typeof AbortSignal.timeout,
+      ]),
+    ).toEqual(["undefined", "undefined"]);
+    const { build } = JSON.parse(await readFile("dist/version.json", "utf8"));
+    const probed = server.probes();
+    server.nextBuild();
+    await page.evaluate(() =>
+      document.dispatchEvent(new Event("visibilitychange")),
+    );
+    await expect(page.locator("#update")).toBeVisible();
+    expect(server.probes()).toBeGreaterThan(probed);
+    // Noticing is not consenting: the running build stays until the user accepts.
+    expect(await page.locator("meta[name=build]").getAttribute("content")).toBe(
+      build,
     );
   } finally {
     await context.close();
