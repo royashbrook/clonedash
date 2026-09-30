@@ -16,7 +16,17 @@ export const SPEED = 5,
   STEP = 1 / 120;
 export const DEATH_INSET = 0.12; // 0.40-block hazard box; full size still supports landings.
 export const MAX_LENGTH = 600;
-export const BLOCKS = ["block", "grid", "black", "outline", "plain-black"];
+// Pass blocks: invisible in play, solid to stand on, and one face lets the player through. W lets
+// the player walk in from the side; R lets the player rise up through it head first.
+export const PASS = ["w-block", "r-block"];
+export const BLOCKS = [
+  "block",
+  "grid",
+  "black",
+  "outline",
+  "plain-black",
+  ...PASS,
+];
 export const RAMPS = ["ramp", "ramp-grid", "ramp-black"];
 export const SPIKES = ["spike", "half", "small", "quarter"];
 export const PORTALS = [
@@ -291,6 +301,9 @@ export function step(
         }
       }
     }
+    // An R block's head face (the one opposite the feet) is never a surface: the player rises
+    // through it instead of sliding along it.
+    const headSlide = safeSolid && o.type !== "r-block";
     if (
       BLOCKS.includes(o.type) &&
       o.rotation % 90 === 0 &&
@@ -298,7 +311,7 @@ export function step(
       s.x < b.right - 0.001
     ) {
       if (
-        (s.gravity < 0 || safeSolid) &&
+        (s.gravity < 0 || headSlide) &&
         s.vy <= 0 &&
         oldY >= b.top - 0.015 &&
         s.y <= b.top
@@ -307,7 +320,7 @@ export function step(
         s.vy = 0;
         s.grounded = s.gravity < 0;
       } else if (
-        (s.gravity > 0 || safeSolid) &&
+        (s.gravity > 0 || headSlide) &&
         s.vy >= 0 &&
         oldY + SIZE <= b.bottom + 0.015 &&
         s.y + SIZE >= b.bottom
@@ -319,8 +332,35 @@ export function step(
     }
     const player = playerPolygon(s, DEATH_INSET);
     if (intersects(player, p)) {
+      // Which face did the hazard box arrive through? The trail only moves forward, so a body
+      // that was clear of the piece's left edge came in from the side; one clear above or below
+      // came in head first (or feet first, already resolved above). Neither means it is already
+      // inside, which only a pass face allows.
+      const fromSide = oldX + SIZE - DEATH_INSET <= b.left + 0.001,
+        fromEnd =
+          oldY + SIZE - DEATH_INSET <= b.bottom + 0.001 ||
+          oldY + DEATH_INSET >= b.top - 0.001,
+        // Pass blocks laid side by side or stacked are one passage: a body already inside a
+        // neighbour of the same kind crosses the seam between them through any face.
+        insideKin = () =>
+          s.level.objects.some(
+            (k, j) =>
+              j !== i &&
+              k.type === o.type &&
+              k.layer !== "background" &&
+              intersects(playerPolygon({ ...s, x: oldX, y: oldY }, DEATH_INSET), polygon(k)),
+          ),
+        // Only a clean hit on the blocking face kills; a corner clip goes the friendly way.
+        pass =
+          o.type === "w-block"
+            ? !(fromEnd && !fromSide) || insideKin()
+            : o.type === "r-block"
+              ? !(fromSide && !fromEnd) || insideKin()
+              : false;
       // Vertical support is resolved above. Wall impacts kill in every mode.
-      if (safeSolid && oldY + SIZE <= b.bottom + 0.015 && s.vy > 0) {
+      if (pass) {
+        /* the pass face: keep going */
+      } else if (headSlide && oldY + SIZE <= b.bottom + 0.015 && s.vy > 0) {
         s.y = b.bottom - SIZE;
         s.vy = 0;
       } else s.status = "dead";

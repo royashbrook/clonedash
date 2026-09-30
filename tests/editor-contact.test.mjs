@@ -1,10 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createState, step, SIZE, DEATH_INSET, BLOCKS, RAMPS, SPIKES, object, polygon, intersects, duplicateObject } from '../src/engine.ts';
+import { createState, step, SIZE, DEATH_INSET, BLOCKS, PASS, RAMPS, SPIKES, object, polygon, intersects, duplicateObject } from '../src/engine.ts';
 const empty = { name: 'Contact', length: 40, objects: [] };
+// Pass blocks have one face that lets the player through by design; pass.test.mjs pins those.
+const SOLID = BLOCKS.filter(type => !PASS.includes(type));
 
 test('jumper keeps safe top and underside contact under either gravity', () => {
-  for (const type of BLOCKS) for (const gravity of [-1, 1]) {
+  for (const type of [...SOLID, 'w-block']) for (const gravity of [-1, 1]) {
     const block = object(type, 5, 2), level = { ...empty, objects: [block] };
     for (const [y, vy] of [[3.01, -2], [2 - SIZE - .01, 2]]) {
       const s = { ...createState(level), mode: 'jumper', gravity, x: 5, y, vy, grounded: false };
@@ -17,7 +19,7 @@ test('jumper keeps safe top and underside contact under either gravity', () => {
 
 test('every mode dies on all block walls and vertical ramp faces, with either gravity', () => {
   for (const mode of ['square', 'plane', 'wheel', 'jumper']) for (const gravity of [-1, 1]) {
-    for (const type of [...BLOCKS, ...RAMPS]) for (const rotation of [0, 90, 180, 270]) for (const flipX of [false, true]) {
+    for (const type of [...SOLID, 'r-block', ...RAMPS]) for (const rotation of [0, 90, 180, 270]) for (const flipX of [false, true]) {
       const wall = { ...object(type, 5, 2), rotation, flipX };
       const points = polygon(wall);
       // Only approach a full vertical left face; the sloped approach is covered by ramp-walk tests.
