@@ -16,7 +16,15 @@ export default defineConfig({
   },
   projects: [
     { name: "chromium", use: { browserName: "chromium" } },
-    { name: "webkit", use: { browserName: "webkit" } },
+    {
+      name: "webkit",
+      use: { browserName: "webkit" },
+      // Linux WebKit on CI intermittently fails page.goto/page.reload with
+      // "WebKit encountered an internal error" before any assertion runs (#20).
+      // One retry on CI covers that class only; chromium keeps zero. Traces are
+      // retained on failure and uploaded by the workflows. Root cause is open.
+      retries: process.env.CI ? 1 : 0,
+    },
   ],
   webServer: process.env.GAME_URL
     ? undefined
