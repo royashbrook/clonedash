@@ -2,8 +2,8 @@ export type GameMode = "square" | "plane" | "wheel" | "pogo" | "angle";
 // What the player SEES for an id whose upper-cased form is not the label. Stored ids that were
 // renamed for real (jumper became pogo) are mapped on read instead: engine.ts LEGACY_TYPES.
 const LABELS: Partial<Record<string, string>> = {
-  "w-block": "W BLOCK",
-  "r-block": "R BLOCK",
+  "w-block": "WALL PASS",
+  "r-block": "ROOF PASS",
   "speed-slow": "SLOW",
   "speed-normal": "NORMAL SPEED",
   "speed-fast": "FAST",

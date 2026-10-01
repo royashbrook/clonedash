@@ -16,17 +16,12 @@ export const SPEED = 5,
   STEP = 1 / 120;
 export const DEATH_INSET = 0.12; // 0.40-block hazard box; full size still supports landings.
 export const MAX_LENGTH = 600;
-// Pass blocks: invisible in play, solid to stand on, and one face lets the player through. W lets
-// the player walk in from the side; R lets the player rise up through it head first.
-export const PASS = ["w-block", "r-block"];
-export const BLOCKS = [
-  "block",
-  "grid",
-  "black",
-  "outline",
-  "plain-black",
-  ...PASS,
-];
+// Zones: invisible in play, never touched themselves. While the player touches a W, hitting the
+// SIDE of a block or ramp does not kill and the player goes through it; while touching an R,
+// hitting it head first does not kill and the player rises through. Laid over visible blocks they
+// make hidden passages. Spikes still kill inside a zone.
+export const ZONES = ["w-block", "r-block"];
+export const BLOCKS = ["block", "grid", "black", "outline", "plain-black"];
 export const RAMPS = ["ramp", "ramp-grid", "ramp-black"];
 export const SPIKES = ["spike", "half", "small", "quarter"];
 // Speed portals scale forward speed only; mode and gravity carry through. No portal is 1x, so
@@ -50,13 +45,13 @@ export const PORTALS = [
 // Modes that ride surfaces instead of dying on them: floor, ceiling and block faces are safe,
 // walls still kill.
 export const SOFT = ["plane", "pogo", "angle"];
-export const TYPES = [...BLOCKS, ...SPIKES, ...PORTALS, ...RAMPS, "ring"];
+export const TYPES = [...BLOCKS, ...ZONES, ...SPIKES, ...PORTALS, ...RAMPS, "ring"];
 // Ids that were renamed after they had been stored. validateLevel accepts the old id and returns
 // the new one, so an old save, share code or link still loads; nothing writes the old id again.
 export const LEGACY_TYPES: Partial<Record<string, ObjectType>> = {
   jumper: "pogo", // 2026-09-29, the stored id followed the POGO label (#33)
 };
-export const SCALABLE = [...BLOCKS, ...SPIKES, ...RAMPS]; // pieces that take a scale; rings and portals stay 1x
+export const SCALABLE = [...BLOCKS, ...ZONES, ...SPIKES, ...RAMPS]; // pieces that take a scale; rings and portals stay 1x
 // A ring with no bounce field is the original: JUMP, a 2.25 block peak. A set bounce is the peak
 // height in blocks, so the launch speed is the one that reaches it under level gravity.
 export const RING_BOUNCE = 2.25;
@@ -259,11 +254,16 @@ export function step(
       s.grounded = s.gravity > 0;
     } else s.status = "dead";
   }
-  const touching = [];
+  const touching = [],
+    body = playerPolygon(s),
+    inZone = (type: string) =>
+      s.level.objects.some((o) => o.type === type && intersects(body, polygon(o))),
+    inW = inZone("w-block"),
+    inR = inZone("r-block");
   for (let i = 0; i < s.level.objects.length; i++) {
     const o = s.level.objects[i];
     if (o.layer === "background") continue;
-    if (o.type === "ring") continue;
+    if (o.type === "ring" || ZONES.includes(o.type)) continue;
     const reach = 2 * (o.scale ?? 1); // a scaled piece is wider than its anchor cell
     if (o.x > s.x + reach || o.x < s.x - reach) continue;
     if (PORTALS.includes(o.type)) {
@@ -318,9 +318,9 @@ export function step(
         }
       }
     }
-    // An R block's head face (the one opposite the feet) is never a surface: the player rises
-    // through it instead of sliding along it.
-    const headSlide = safeSolid && o.type !== "r-block";
+    // Inside an R the head face of a block is never a surface: the player rises through it
+    // instead of sliding along it.
+    const headSlide = safeSolid && !inR;
     if (
       BLOCKS.includes(o.type) &&
       o.rotation % 90 === 0 &&
@@ -352,28 +352,29 @@ export function step(
       // Which face did the hazard box arrive through? The trail only moves forward, so a body
       // that was clear of the piece's left edge came in from the side; one clear above or below
       // came in head first (or feet first, already resolved above). Neither means it is already
-      // inside, which only a pass face allows.
+      // inside, which only a zone allows. Only a clean hit on the face a zone does not open
+      // kills; a corner clip goes the friendly way.
       const fromSide = oldX + SIZE - DEATH_INSET <= b.left + 0.001,
         fromEnd =
           oldY + SIZE - DEATH_INSET <= b.bottom + 0.001 ||
           oldY + DEATH_INSET >= b.top - 0.001,
-        // Pass blocks laid side by side or stacked are one passage: a body already inside a
-        // neighbour of the same kind crosses the seam between them through any face.
-        insideKin = () =>
+        solid = !SPIKES.includes(o.type),
+        // A body already inside one solid of a passage crosses the seam into the next through any
+        // face, so a zone over a row or column of blocks is one passage, not a run of walls.
+        insideSolid = () =>
           s.level.objects.some(
             (k, j) =>
               j !== i &&
-              k.type === o.type &&
               k.layer !== "background" &&
+              (BLOCKS.includes(k.type) || RAMPS.includes(k.type)) &&
               intersects(playerPolygon({ ...s, x: oldX, y: oldY }, DEATH_INSET), polygon(k)),
           ),
-        // Only a clean hit on the blocking face kills; a corner clip goes the friendly way.
         pass =
-          o.type === "w-block"
-            ? !(fromEnd && !fromSide) || insideKin()
-            : o.type === "r-block"
-              ? !(fromSide && !fromEnd) || insideKin()
-              : false;
+          solid &&
+          (inW || inR) &&
+          ((inW && !(fromEnd && !fromSide)) ||
+            (inR && !(fromSide && !fromEnd)) ||
+            insideSolid());
       // Vertical support is resolved above. Wall impacts kill in every mode.
       if (pass) {
         /* the pass face: keep going */
@@ -459,7 +460,7 @@ export function validateLevel(input: unknown): Level {
       throw Error("Invalid ring bounce");
     if (o.layer !== undefined && o.layer !== "background")
       throw Error("Invalid layer");
-    if (o.layer === "background" && !BLOCKS.includes(o.type))
+    if (o.layer === "background" && !BLOCKS.includes(o.type) && !ZONES.includes(o.type))
       throw Error("Only blocks go in the background");
     if (raw.height !== undefined && bounds(o).top > height + 0.00001)
       throw Error("Object above ceiling");
