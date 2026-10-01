@@ -145,6 +145,7 @@ export function createState(level: Level): GameState {
     status: "playing",
     time: 0,
     touchingPortals: [],
+    passing: [],
     usedRings: [],
     level,
   };
@@ -255,6 +256,7 @@ export function step(
     } else s.status = "dead";
   }
   const touching = [],
+    passing: number[] = [],
     body = playerPolygon(s),
     inZone = (type: string) =>
       s.level.objects.some((o) => o.type === type && intersects(body, polygon(o))),
@@ -359,32 +361,35 @@ export function step(
           oldY + SIZE - DEATH_INSET <= b.bottom + 0.001 ||
           oldY + DEATH_INSET >= b.top - 0.001,
         solid = !SPIKES.includes(o.type),
-        // A body already inside one solid of a passage crosses the seam into the next through any
-        // face, so a zone over a row or column of blocks is one passage, not a run of walls.
-        insideSolid = () =>
-          s.level.objects.some(
-            (k, j) =>
-              j !== i &&
-              k.layer !== "background" &&
-              (BLOCKS.includes(k.type) || RAMPS.includes(k.type)) &&
-              intersects(playerPolygon({ ...s, x: oldX, y: oldY }, DEATH_INSET), polygon(k)),
+        // Once a zone lets the body into a solid it stays safe there until it is out, even after
+        // it stops touching the zone: a W just in front of a wall or an R in the gap under a roof
+        // carries the player all the way through. A body already inside a solid it was let into
+        // also crosses the seam into the next one, so a row or column of blocks is one passage.
+        insidePassing = () =>
+          s.passing.some(
+            (k) =>
+              k !== i &&
+              intersects(
+                playerPolygon({ ...s, x: oldX, y: oldY }, DEATH_INSET),
+                polygon(s.level.objects[k]),
+              ),
           ),
         pass =
           solid &&
-          (inW || inR) &&
           ((inW && !(fromEnd && !fromSide)) ||
             (inR && !(fromSide && !fromEnd)) ||
-            insideSolid());
+            s.passing.includes(i) ||
+            insidePassing());
       // Vertical support is resolved above. Wall impacts kill in every mode.
-      if (pass) {
-        /* the pass face: keep going */
-      } else if (headSlide && oldY + SIZE <= b.bottom + 0.015 && s.vy > 0) {
+      if (pass) passing.push(i);
+      else if (headSlide && oldY + SIZE <= b.bottom + 0.015 && s.vy > 0) {
         s.y = b.bottom - SIZE;
         s.vy = 0;
       } else s.status = "dead";
     }
   }
   s.touchingPortals = touching;
+  s.passing = passing;
   if (s.status === "playing" && s.x >= s.level.length) s.status = "complete";
   return s;
 }
