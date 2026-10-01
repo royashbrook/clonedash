@@ -65,7 +65,7 @@ test("an update probe without the newer AbortSignal static helpers still fetches
     assert.equal(state.signal.aborted, false);
     deadline();
     assert.equal(state.signal.aborted, true);
-    await probe;
+    assert.equal(await probe, "unreachable");
     assert.equal(cleared, 123);
     assert.equal(state.ready, 0);
   } finally {
@@ -91,11 +91,48 @@ test("disposing the update control aborts an in-flight probe and clears its dead
     assert.equal(state.signal.aborted, false);
     control.dispose();
     assert.equal(state.signal.aborted, true);
-    await probe;
+    assert.equal(await probe, "unreachable");
     assert.equal(cleared, 123);
     assert.equal(state.ready, 0);
   } finally {
     control?.dispose();
+    restore();
+  }
+});
+
+test("a check says what it found: newer once per answer, current, or unreachable", async () => {
+  const restore = browserless();
+  const parser = Object.getOwnPropertyDescriptor(globalThis, "DOMParser");
+  const state = { ready: 0 };
+  let control;
+  try {
+    globalThis.setTimeout = () => 1;
+    globalThis.clearTimeout = () => {};
+    // just enough of DOMParser for the one meta the probe reads
+    globalThis.DOMParser = class {
+      parseFromString(text) {
+        const build = /<meta name=build content="([^"]*)">/.exec(text)?.[1];
+        return { querySelector: () => (build === undefined ? null : { content: build }) };
+      }
+    };
+    const answer = (status, body) => async () => ({ ok: status === 200, text: async () => body });
+    control = updateControl(() => state.ready++);
+    globalThis.fetch = answer(200, `<meta name=build content="current">`);
+    assert.equal(await control.check(), "current");
+    globalThis.fetch = answer(200, `<meta name=build content="next">`);
+    assert.equal(await control.check(), "newer");
+    assert.equal(state.ready, 1);
+    globalThis.fetch = answer(503, "");
+    assert.equal(await control.check(), "unreachable");
+    globalThis.fetch = answer(200, "<p>a captive portal page</p>");
+    assert.equal(await control.check(), "unreachable");
+    globalThis.fetch = async () => { throw new TypeError("offline"); };
+    assert.equal(await control.check(), "unreachable");
+    assert.equal(state.ready, 1);
+  } finally {
+    control?.dispose();
+    if (parser) Object.defineProperty(globalThis, "DOMParser", parser);
+    else delete globalThis.DOMParser;
     restore();
   }
 });

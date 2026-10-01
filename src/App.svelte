@@ -28,7 +28,7 @@
     deleteLevel,
   } from "./library.ts";
   import { installControl } from "./install.ts";
-  import { updateControl } from "./pwa.ts";
+  import { updateControl, type UpdateCheck } from "./pwa.ts";
   import LevelTransfer from "./LevelTransfer.svelte";
   import { importLevel } from "./transfer.ts";
   import { pinchStart, pinchTransform, type Pinch } from "./gesture.ts";
@@ -154,7 +154,10 @@
     panel = $state.raw<Sheet | null>(null),
     installVisible = $state(false),
     updateReady = $state(false),
-    updating = $state(false);
+    updating = $state(false),
+    checking = $state(false),
+    pull = $state(0),
+    pulled = $state(false);
   let transfer = $state.raw<{ level?: Level; initial?: string }>({});
   let canvas: HTMLCanvasElement,
     dialog: HTMLDialogElement,
@@ -939,6 +942,65 @@
       "Square: tap or press Space to jump onto two-block ledges. Hold for another jump when you land. Pogo: same as square, but every fresh tap lets you jump again in midair. Jump before a wall to clear it. Try Air Steps! Plane: hold to fly against gravity; release to fall. Landings and ceiling contact are safe while flying, but wall impacts kill. Angle: hold to climb at 45 degrees, release to dive at 45 degrees. Floors, ceilings and block faces are safe; walls are not. Wheel: land on a block, floor or ceiling, then tap or press Space to flip gravity. Midair taps are ignored; holding does not flip again when you land. UP and DOWN portals set gravity without changing your shape. Speed portals change how fast you move forward: SLOW, 1X, FAST and FASTER. Shape and gravity stay the same. Under upside-down gravity, land and jump on ceilings. All spikes kill, including the tiny quarter-size ones. Outline blocks are transparent but solid. Hitting a wall kills in ALL modes, including the vertical face of a ramp. Your smaller hazard hitbox still forgives edge grazes. Background blocks never collide. Rings: tap or press Space while reaching a glowing ring for a midair jump, once per ring per run. Purple and red rings bounce one and five blocks; a white ring takes any colour and height. Wall pass (W) and roof pass (R) are invisible in play: lay them over blocks, or right where you hit them. While you touch a W, you go through walls instead of crashing; while you touch an R, you jump up through blocks instead of hitting your head. Spikes still kill. Ramps: walk up or down the white diagonal slope. Find RINGS and RAMP tabs in the editor. In the editor, pinch a selected piece with two fingers to size it and turn it, like cropping a photo; Snap holds 15 degrees and quarter sizes.",
     );
   }
+  // Every check says what it found, so a tap never looks like nothing happened. A pull is
+  // already a yes, so a pull that finds a new version installs it.
+  async function checkForUpdate(fromPull = false): Promise<UpdateCheck> {
+    checking = true;
+    try {
+      const found = updater ? await updater.check() : "unreachable";
+      if (found === "newer" && fromPull) {
+        await applyUpdate();
+        return found;
+      }
+      toast(
+        found === "newer"
+          ? "A new version is ready. Tap NEW VERSION READY to get it."
+          : found === "current"
+            ? `You have the newest version, v${__APP_VERSION__}.`
+            : "Could not check for updates. Check the internet and try again.",
+      );
+      return found;
+    } finally {
+      checking = false;
+    }
+  }
+  // Pull down from the top of the home or My Levels screen to check for updates, the way a
+  // feed refreshes. Half the finger travel shows, and RELEASE_AT of it checks.
+  const RELEASE_AT = 70;
+  let pullFrom: number | null = null;
+  function pullStart(e: TouchEvent) {
+    const screen = e.currentTarget as HTMLElement,
+      list = (e.target as Element).closest("#levels");
+    pullFrom =
+      e.touches.length === 1 &&
+      screen.scrollTop <= 0 &&
+      !(list && list.scrollTop > 0) &&
+      !checking &&
+      !updating
+        ? e.touches[0].clientY
+        : null;
+  }
+  function pullMove(e: TouchEvent) {
+    if (pullFrom === null) return;
+    if ((e.currentTarget as HTMLElement).scrollTop > 0) {
+      pullFrom = null;
+      pull = 0;
+      return;
+    }
+    pull = Math.max(0, Math.min(110, (e.touches[0].clientY - pullFrom) / 2));
+  }
+  async function pullEnd() {
+    const release = pull >= RELEASE_AT;
+    pullFrom = null;
+    pull = 0;
+    if (!release) return;
+    pulled = true;
+    try {
+      await checkForUpdate(true);
+    } finally {
+      pulled = false;
+    }
+  }
   async function applyUpdate() {
     if (mode === "play") pause();
     updating = true;
@@ -1057,7 +1119,29 @@
   aria-label="Clone Dash playfield. Space or touch to jump, hold to fly, tap to flip wheel gravity."
 ></canvas>
 <span class="version" aria-label="App version">v{__APP_VERSION__}</span>
-<main id="home" class="screen" hidden={mode !== "home"}>
+<div
+  id="pull"
+  aria-hidden="true"
+  hidden={!pull && !pulled}
+  style:transform={`translate(-50%, ${pulled ? 40 : pull}px)`}
+>
+  {pulled
+    ? updating
+      ? "UPDATING…"
+      : "CHECKING…"
+    : pull >= RELEASE_AT
+      ? "LET GO TO CHECK FOR UPDATES"
+      : "PULL TO CHECK FOR UPDATES"}
+</div>
+<main
+  id="home"
+  class="screen"
+  hidden={mode !== "home"}
+  ontouchstart={pullStart}
+  ontouchmove={pullMove}
+  ontouchend={pullEnd}
+  ontouchcancel={pullEnd}
+>
   <header class="home-head">
     <a
       class="brand"
@@ -1152,7 +1236,16 @@
     >
   </footer>
 </main>
-<section id="library" class="screen" hidden={mode !== "library"}>
+<section
+  id="library"
+  class="screen"
+  aria-label="My levels"
+  hidden={mode !== "library"}
+  ontouchstart={pullStart}
+  ontouchmove={pullMove}
+  ontouchend={pullEnd}
+  ontouchcancel={pullEnd}
+>
   <header class="home-head">
     <button id="library-back" onclick={home}>← MENU</button>
     <h1>My levels</h1>
@@ -1497,7 +1590,9 @@
         <p class="build-detail">
           v{__APP_VERSION__} · build {__BUILD_ID__} · source {__SOURCE_SHA__}
         </p>
-        <button onclick={() => updater?.check()}>CHECK FOR UPDATE</button><a
+        <button id="check-update" disabled={checking} onclick={() => checkForUpdate()}
+          >{checking ? "CHECKING…" : "CHECK FOR UPDATE"}</button
+        ><a
           href="/licenses.md"
           target="_blank"
           rel="noopener">Licences</a

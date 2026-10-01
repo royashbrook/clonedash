@@ -1,3 +1,5 @@
+/** What a check found: a newer build is out, this is the newest, or the server could not say. */
+export type UpdateCheck = "newer" | "current" | "unreachable";
 /** Download a complete worker before consent replaces the current controller. */
 export function updateControl(ready: () => void) {
   const lifetime = new AbortController();
@@ -38,7 +40,7 @@ export function updateControl(ready: () => void) {
     });
     identify();
   }
-  async function check() {
+  async function check(): Promise<UpdateCheck> {
     identify();
     // A plain controller cancels on older Safari too, which lacks AbortSignal.any
     // and AbortSignal.timeout: a timer keeps the eight-second deadline and the
@@ -53,16 +55,20 @@ export function updateControl(ready: () => void) {
         cache: "no-store",
         signal: probe.signal,
       });
-      if (!response.ok) return;
+      if (!response.ok) return "unreachable";
       const doc = new DOMParser().parseFromString(
         await response.text(),
         "text/html",
       );
       const next =
         doc.querySelector<HTMLMetaElement>("meta[name=build]")?.content;
-      if (!disposed && next && next !== __BUILD_ID__) ready();
+      if (!next) return "unreachable";
+      if (next === __BUILD_ID__) return "current";
+      if (!disposed) ready();
+      return "newer";
     } catch {
-      /* Offline or cancellation leaves the current app intact. */
+      // Offline or cancellation leaves the current app intact.
+      return "unreachable";
     } finally {
       clearTimeout(deadline);
       lifetime.signal.removeEventListener("abort", cancel);
