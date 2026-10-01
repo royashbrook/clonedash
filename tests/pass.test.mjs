@@ -82,3 +82,27 @@ test('zones validate, scale, export, sit in either layer, and are drawn only in 
   assert.deepEqual(letters({ state: null, level: pieces, editing: true }), ['W', 'R']);
   assert.deepEqual(letters({ state: createState(pieces), level: pieces }), [], 'invisible in play');
 });
+
+test('a zone touched on the way in carries the run all the way through, then lets go', () => {
+  const at = (type, x, y) => object(type, x, y);
+  // a W just in front of the wall, not on it: touched as the wall is hit, left behind inside it
+  const front = run(createState(level([...wall(), ...[0, 1, 2].map(y => at('w-block', 5, y))])), 240);
+  assert.equal(front.status, 'playing'); assert.ok(front.x > 8, `went through, x=${front.x}`);
+  // and a wall two blocks thick behind that W is one passage
+  const thick = [...wall(), ...wall().map(o => ({ ...o, x: 7 }))];
+  assert.equal(run(createState(level([...thick, ...[0, 1, 2].map(y => at('w-block', 5, y))])), 240).status, 'playing');
+  // a W behind the wall is never touched before the hit
+  assert.equal(run(createState(level([...wall(), ...[0, 1, 2].map(y => at('w-block', 7, y))])), 240).status, 'dead');
+  // an R in the gap under a roof: touched as the head hits, left below while rising through
+  const roof = Array.from({ length: 12 }, (_, i) => object('grid', 6 + i, 2));
+  const jump = (objects) => { const s = { ...createState(level(objects)), x: 7 }; for (let i = 0; i < 200 && s.status === 'playing'; i++) step(s, i < 3); return s; };
+  assert.equal(jump([...roof, ...roof.map(o => at('r-block', o.x, 1))]).status, 'playing');
+  assert.equal(jump([...roof, ...roof.map(o => at('r-block', o.x, 3))]).status, 'dead', 'an R above the roof is never touched');
+  assert.equal(jump(roof).status, 'dead', 'no R, the head hit kills');
+  // letting go: once out of the passage, the next bare wall kills as usual
+  const later = wall().map(o => ({ ...o, x: 14 }));
+  const s = createState(level([...wall(), ...[0, 1, 2].map(y => at('w-block', 5, y)), ...later]));
+  run(s, 400);
+  assert.equal(s.status, 'dead'); assert.ok(s.x > 13 && s.x < 14, `died at the second wall, x=${s.x}`);
+  assert.deepEqual(createState(s.level).passing, [], 'a retry starts with nothing let in');
+});

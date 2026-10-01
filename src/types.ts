@@ -69,6 +69,7 @@ export interface GameState {
   status: "playing" | "dead" | "complete";
   time: number;
   touchingPortals: number[];
+  passing: number[]; // solids a zone let the player into, safe until it is out of them
   usedRings: number[];
   level: Level;
 }
