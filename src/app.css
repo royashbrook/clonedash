@@ -119,8 +119,13 @@ a {
   height: 100dvh;
   touch-action: none;
 }
+/* head, trails, footer as one column: the middle takes what the head and footer leave, so the
+   footer stays on screen at every height (an ipad on its side cut ABOUT off when the trail panel
+   sized itself from the viewport and the head and footer were not counted) */
 #home {
   position: relative;
+  display: flex;
+  flex-direction: column;
   height: 100dvh;
   overflow: auto;
   padding: max(20px, env(safe-area-inset-top))
@@ -148,11 +153,18 @@ a {
   font-weight: 1000;
   letter-spacing: 0.045em;
 }
+#home > .home-head,
+#home > footer {
+  flex: none;
+}
 .home-content {
+  flex: 1 1 auto;
+  width: 100%;
   max-width: 1120px;
-  min-height: calc(100% - 118px);
-  margin: auto;
+  min-height: 0;
+  margin: 0 auto;
   display: grid;
+  grid-template-rows: minmax(0, 1fr);
   grid-template-columns: 1fr 1fr;
   align-items: center;
   gap: 60px;
@@ -197,7 +209,7 @@ h1 span {
   border-radius: 24px;
   display: flex;
   flex-direction: column;
-  max-height: min(640px, calc(100dvh - 150px));
+  max-height: min(640px, 100%);
 }
 .level-panel h2 {
   display: flex;
@@ -555,6 +567,8 @@ body[data-mode="editor"] #world {
     padding: 20px;
   }
   .home-content {
+    /* a phone held upright scrolls the whole page instead */
+    flex: none;
     display: flex;
     flex-direction: column;
     gap: 24px;
@@ -808,4 +822,18 @@ footer button {
   * {
     scroll-behavior: auto !important;
   }
+}
+#pull {
+  position: fixed;
+  z-index: 5;
+  top: max(8px, env(safe-area-inset-top));
+  left: 50%;
+  padding: 8px 14px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-raised, var(--surface));
+  color: var(--ink);
+  font: 700 12px var(--font-mono);
+  letter-spacing: 0.06em;
+  pointer-events: none;
 }
