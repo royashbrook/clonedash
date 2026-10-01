@@ -41,7 +41,7 @@ test("the stored id is pogo everywhere, and jumper is only a legacy alias", () =
   assert.ok(!JSON.stringify(COURSES).includes("jumper"));
   assert.ok(JSON.stringify(LEVELS).includes('"pogo"'));
   assert.equal(labelOf("pogo"), "POGO");
-  assert.equal(labelOf("w-block"), "W BLOCK");
+  assert.equal(labelOf("w-block"), "WALL PASS");
 });
 
 test("validateLevel maps a legacy jumper to pogo before geometry, without touching its input", () => {

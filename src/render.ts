@@ -3,7 +3,7 @@ import {
   bounds,
   PORTALS,
   RAMPS,
-  PASS,
+  ZONES,
   SIZE,
   SPEED,
   ringReady,
@@ -174,7 +174,7 @@ export function render(
   for (const background of [true, false])
     level.objects.forEach((o, index) => {
       if ((o.layer === "background") !== background) return;
-      if (PASS.includes(o.type) && state && !editing) return; // invisible in play
+      if (ZONES.includes(o.type) && state && !editing) return; // invisible in play
       const k = o.scale ?? 1; // a scaled piece reaches further than its anchor cell
       if (X(o.x) < -unit * 2 * k || X(o.x) > w + unit * k) return;
       ctx.save();
@@ -263,13 +263,17 @@ export function render(
         ctx.fillStyle = ["black", "plain-black", "ramp-black"].includes(o.type)
           ? "#000000"
           : grad;
-        if (o.type !== "outline" && !PASS.includes(o.type)) ctx.fill();
-        ctx.strokeStyle = "#ffffff";
+        if (o.type !== "outline" && !ZONES.includes(o.type)) ctx.fill();
+        // a zone is coloured and dashed, so the block it lies over still reads as that block
+        const zoneColor = o.type === "w-block" ? "#53e3ff" : "#ffb477";
+        ctx.strokeStyle = ZONES.includes(o.type) ? zoneColor : "#ffffff";
         ctx.lineWidth = 2;
+        if (ZONES.includes(o.type)) ctx.setLineDash([unit * 0.12, unit * 0.08]);
         if (!RAMPS.includes(o.type) && o.type !== "plain-black") ctx.stroke();
-        if (PASS.includes(o.type)) {
+        if (ZONES.includes(o.type)) {
+          ctx.setLineDash([]);
           const c = bounds(o);
-          ctx.fillStyle = "#ffffff";
+          ctx.fillStyle = zoneColor;
           ctx.font = `bold ${unit * 0.5 * k}px system-ui`;
           ctx.textAlign = "center";
           ctx.textBaseline = "middle";

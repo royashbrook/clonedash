@@ -11,6 +11,7 @@
     MAX_LENGTH,
     SCALABLE,
     RING_BOUNCE,
+    ZONES,
   } from "./engine.ts";
   import { LEVELS, COLLECTIONS, COURSE_ORDER, courseSong } from "./levels.ts";
   import { render } from "./render.ts";
@@ -78,8 +79,8 @@
       ["purple-ring", "◉ PURPLE · 1"],
       ["red-ring", "◉ RED · 5"],
       ["white-ring", "◉ WHITE · CUSTOM"],
-      ["w-block", "W · SIDE PASS"],
-      ["r-block", "R · HEAD PASS"],
+      ["w-block", "W · WALL PASS"],
+      ["r-block", "R · ROOF PASS"],
     ],
     ramp: [
       ["ramp", "◩ SOLID"],
@@ -761,9 +762,15 @@
       toast("This trail has reached 600 objects.");
       return;
     }
-    const existing = draft.objects.findIndex(
-      (o) => o.layer === activeLayer && o.x === ox && o.y === oy,
-    );
+    // A zone lies over whatever is in its cell, so it only collides with another zone there.
+    const zone = ZONES.includes(typeOf(tool)),
+      existing = draft.objects.findIndex(
+        (o) =>
+          o.layer === activeLayer &&
+          o.x === ox &&
+          o.y === oy &&
+          ZONES.includes(o.type) === zone,
+      );
     if (existing >= 0) {
       selected = existing;
       return;
@@ -929,7 +936,7 @@
   function how() {
     void sheet(
       "One button. Find your flow.",
-      "Square: tap or press Space to jump onto two-block ledges. Hold for another jump when you land. Pogo: same as square, but every fresh tap lets you jump again in midair. Jump before a wall to clear it. Try Air Steps! Plane: hold to fly against gravity; release to fall. Landings and ceiling contact are safe while flying, but wall impacts kill. Angle: hold to climb at 45 degrees, release to dive at 45 degrees. Floors, ceilings and block faces are safe; walls are not. Wheel: land on a block, floor or ceiling, then tap or press Space to flip gravity. Midair taps are ignored; holding does not flip again when you land. UP and DOWN portals set gravity without changing your shape. Speed portals change how fast you move forward: SLOW, 1X, FAST and FASTER. Shape and gravity stay the same. Under upside-down gravity, land and jump on ceilings. All spikes kill, including the tiny quarter-size ones. Outline blocks are transparent but solid. Hitting a wall kills in ALL modes, including the vertical face of a ramp. Your smaller hazard hitbox still forgives edge grazes. Background blocks never collide. Rings: tap or press Space while reaching a glowing ring for a midair jump, once per ring per run. Purple and red rings bounce one and five blocks; a white ring takes any colour and height. W and R blocks are invisible in play and can be stood on: walk into a W from the side, jump up through an R. Their other faces still kill. Ramps: walk up or down the white diagonal slope. Find RINGS and RAMP tabs in the editor. In the editor, pinch a selected piece with two fingers to size it and turn it, like cropping a photo; Snap holds 15 degrees and quarter sizes.",
+      "Square: tap or press Space to jump onto two-block ledges. Hold for another jump when you land. Pogo: same as square, but every fresh tap lets you jump again in midair. Jump before a wall to clear it. Try Air Steps! Plane: hold to fly against gravity; release to fall. Landings and ceiling contact are safe while flying, but wall impacts kill. Angle: hold to climb at 45 degrees, release to dive at 45 degrees. Floors, ceilings and block faces are safe; walls are not. Wheel: land on a block, floor or ceiling, then tap or press Space to flip gravity. Midair taps are ignored; holding does not flip again when you land. UP and DOWN portals set gravity without changing your shape. Speed portals change how fast you move forward: SLOW, 1X, FAST and FASTER. Shape and gravity stay the same. Under upside-down gravity, land and jump on ceilings. All spikes kill, including the tiny quarter-size ones. Outline blocks are transparent but solid. Hitting a wall kills in ALL modes, including the vertical face of a ramp. Your smaller hazard hitbox still forgives edge grazes. Background blocks never collide. Rings: tap or press Space while reaching a glowing ring for a midair jump, once per ring per run. Purple and red rings bounce one and five blocks; a white ring takes any colour and height. Wall pass (W) and roof pass (R) are invisible in play: lay them over blocks. While you touch a W, you go through walls instead of crashing; while you touch an R, you jump up through blocks instead of hitting your head. Spikes still kill. Ramps: walk up or down the white diagonal slope. Find RINGS and RAMP tabs in the editor. In the editor, pinch a selected piece with two fingers to size it and turn it, like cropping a photo; Snap holds 15 degrees and quarter sizes.",
     );
   }
   async function applyUpdate() {
