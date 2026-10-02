@@ -634,8 +634,9 @@
           (mode === "play" &&
             !paused &&
             !rotate &&
-            run.state.status === "playing" &&
-            run.readyTime <= 0)),
+            // a completed trail keeps its song going through the complete screen
+            ((run.state.status === "playing" && run.readyTime <= 0) ||
+              run.state.status === "complete"))),
       mode === "play" ? run.state.time : now / 1000,
     );
     draw();
