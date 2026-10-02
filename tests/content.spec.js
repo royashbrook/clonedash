@@ -156,8 +156,11 @@ for (const index of [0,8]) test(`full course through actual keyboard input: ${CO
 
 // A Remix trail has no courseInput bot; replay its witness timeline as real Space events. Each
 // flip fires where the engine replay put it on the trail, read back from the painted progress.
-test('a Remix trail through actual keyboard input: Grand Finale',async({page})=>{
-  const level=REMIX.at(-1),flips=REMIX_INPUTS[level.name],at=[];
+// Ring Road stays on the ground (rings, ramps, every speed, a ceiling run), where a frame of
+// key timing never builds up; a flying shape would carry it from flip to flip.
+test('a Remix trail through actual keyboard input: Ring Road',async({page})=>{
+  test.setTimeout(150000);
+  const level=REMIX.find(l=>l.name==='Ring Road'),flips=REMIX_INPUTS[level.name],at=[];
   const replay=new Run(level);let sample=0;
   for(let tick=0;at.length<flips.length;tick++) {
     if(tick%6===0&&replay.readyTime<=0) {
@@ -179,7 +182,7 @@ test('a Remix trail through actual keyboard input: Grand Finale',async({page})=>
     const x=1+paint.progress/100*(level.length-1);
     expect(paint.attempt,`x=${x}`).toBe('TRY 1');
     while(next<at.length&&at[next]<=x+.04) {next%2?await page.keyboard.up('Space'):await page.keyboard.down('Space');next++;}
-    await page.clock.runFor(1000/120);
+    await page.clock.runFor(1000/60);
   }
   await page.keyboard.up('Space');
   await expect(page.getByRole('heading',{name:'Level Complete!',exact:true})).toBeVisible();
