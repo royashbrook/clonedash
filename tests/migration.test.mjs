@@ -28,12 +28,12 @@ const relabelLevel = (level, map) => ({
 const legacyLevel = (level) => relabelLevel(level, legacyId);
 const modernLevel = (level) => relabelLevel(level, modernId);
 // 2026-09-30: speed portals (#58) added a speed field to the state. The frozen tree has no speed
-// portals, so every state it produces runs at 1x; it gets that field at the same boundary. Zones
-// (#62) added passing, always empty in the frozen tree, which has no zones.
+// portals, so every state it produces runs at 1x; it gets that field at the same boundary. A W
+// holding the run at a wall (#69) is never true there either, so wall is null.
 const modernState = (state) => ({
   ...state,
   speed: 1,
-  passing: [],
+  wall: null,
   mode: modernId(state.mode),
   level: modernLevel(state.level),
 });

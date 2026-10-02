@@ -64,12 +64,12 @@ export interface GameState {
   mode: GameMode;
   gravity: number;
   speed: number; // forward speed multiplier, 1 until a speed portal changes it
+  wall: number | null; // the wall face a W is holding the run against this step, else null
   inputHeld: boolean;
   grounded: boolean;
   status: "playing" | "dead" | "complete";
   time: number;
   touchingPortals: number[];
-  passing: number[]; // solids a zone let the player into, safe until it is out of them
   usedRings: number[];
   level: Level;
 }

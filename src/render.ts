@@ -345,7 +345,12 @@ export function render(
     // Feet sit on the body's bottom edge (head on its top edge when inverted), so an avatar
     // drawn larger than the physics body never sinks into what it stands on. At
     // avatar === SIZE this is exactly the body's center, i.e. the legacy drawing.
-    const x = X(state.x + SIZE / 2),
+    // held at a wall by a W, the drawn avatar (wider than the body) stops at the wall face
+    const x = X(
+        state.wall === null
+          ? state.x + SIZE / 2
+          : Math.min(state.x + SIZE / 2, state.wall - avatar / 2),
+      ),
       y = Y(state.y + (state.gravity > 0 ? SIZE - avatar / 2 : avatar / 2));
     ctx.save();
     ctx.translate(x, y);

@@ -140,12 +140,12 @@ export function createState(level: Level): GameState {
     mode: "square",
     gravity: -1,
     speed: 1,
+    wall: null,
     inputHeld: false,
     grounded: true,
     status: "playing",
     time: 0,
     touchingPortals: [],
-    passing: [],
     usedRings: [],
     level,
   };
@@ -255,8 +255,8 @@ export function step(
       s.grounded = s.gravity > 0;
     } else s.status = "dead";
   }
+  s.wall = null;
   const touching = [],
-    passing: number[] = [],
     body = playerPolygon(s),
     inZone = (type: string) =>
       s.level.objects.some((o) => o.type === type && intersects(body, polygon(o))),
@@ -320,9 +320,9 @@ export function step(
         }
       }
     }
-    // Inside an R the head face of a block is never a surface: the player rises through it
-    // instead of sliding along it.
-    const headSlide = safeSolid && !inR;
+    // Modes that ride surfaces slide along a block's head face, and anyone touching an R bumps
+    // it: the rise stops at the face and gravity takes over, nobody dies.
+    const headSlide = safeSolid || (inR && BLOCKS.includes(o.type));
     if (
       BLOCKS.includes(o.type) &&
       o.rotation % 90 === 0 &&
@@ -351,45 +351,22 @@ export function step(
     }
     const player = playerPolygon(s, DEATH_INSET);
     if (intersects(player, p)) {
-      // Which face did the hazard box arrive through? The trail only moves forward, so a body
-      // that was clear of the piece's left edge came in from the side; one clear above or below
-      // came in head first (or feet first, already resolved above). Neither means it is already
-      // inside, which only a zone allows. Only a clean hit on the face a zone does not open
-      // kills; a corner clip goes the friendly way.
-      const fromSide = oldX + SIZE - DEATH_INSET <= b.left + 0.001,
-        fromEnd =
-          oldY + SIZE - DEATH_INSET <= b.bottom + 0.001 ||
-          oldY + DEATH_INSET >= b.top - 0.001,
-        solid = !SPIKES.includes(o.type),
-        // Once a zone lets the body into a solid it stays safe there until it is out, even after
-        // it stops touching the zone: a W just in front of a wall or an R in the gap under a roof
-        // carries the player all the way through. A body already inside a solid it was let into
-        // also crosses the seam into the next one, so a row or column of blocks is one passage.
-        insidePassing = () =>
-          s.passing.some(
-            (k) =>
-              k !== i &&
-              intersects(
-                playerPolygon({ ...s, x: oldX, y: oldY }, DEATH_INSET),
-                polygon(s.level.objects[k]),
-              ),
-          ),
-        pass =
-          solid &&
-          ((inW && !(fromEnd && !fromSide)) ||
-            (inR && !(fromSide && !fromEnd)) ||
-            s.passing.includes(i) ||
-            insidePassing());
+      // The trail only moves forward, so a hazard box that was clear of the piece's left edge
+      // came in from the side: a wall. Touching a W, a wall stops the run instead of crashing it.
+      // The hazard box is held against the wall's face, the run waits there, and a jump that
+      // clears the wall carries on. Spikes still kill.
+      const fromSide = oldX + SIZE - DEATH_INSET <= b.left + 0.001;
       // Vertical support is resolved above. Wall impacts kill in every mode.
-      if (pass) passing.push(i);
-      else if (headSlide && oldY + SIZE <= b.bottom + 0.015 && s.vy > 0) {
+      if (inW && fromSide && !SPIKES.includes(o.type)) {
+        s.x = b.left - SIZE + DEATH_INSET;
+        s.wall = b.left;
+      } else if (headSlide && oldY + SIZE <= b.bottom + 0.015 && s.vy > 0) {
         s.y = b.bottom - SIZE;
         s.vy = 0;
       } else s.status = "dead";
     }
   }
   s.touchingPortals = touching;
-  s.passing = passing;
   if (s.status === "playing" && s.x >= s.level.length) s.status = "complete";
   return s;
 }
