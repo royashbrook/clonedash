@@ -37,6 +37,24 @@ const modernState = (state) => ({
   mode: modernId(state.mode),
   level: modernLevel(state.level),
 });
+// Trails built only from pieces the frozen tree has. The Remix set (#71) uses pieces added since
+// (the angle and speed portals, zones, ring bounce, sizes and turns), which the frozen tree cannot
+// play or paint, so it is left out. Every trail made before it is still compared: the assert
+// below fails if the filter ever drops one of the first eighteen.
+const frozenTrails = (old) => {
+  const known = LEVELS.filter((level) =>
+    level.objects.every(
+      (o) =>
+        old.TYPES.includes(legacyId(o.type)) &&
+        o.rotation % 90 === 0 &&
+        o.scale === undefined &&
+        o.bounce === undefined &&
+        o.color === undefined,
+    ),
+  );
+  assert.deepEqual(known.slice(0, 18), LEVELS.slice(0, 18));
+  return known;
+};
 export async function withLegacy(check) {
   const dir = await mkdtemp(join(tmpdir(), "clonedash-baseline-"));
   try {
@@ -69,7 +87,7 @@ test("typed engine matches the pinned pre-migration tree frame by frame", async 
       levels.LEVELS.map(modernLevel),
     );
     let frames = 0;
-    for (const level of LEVELS)
+    for (const level of frozenTrails(old))
       for (const mode of ["square", "plane", "wheel", "pogo"])
         for (const gravity of [-1, 1]) {
           const a = old.createState(legacyLevel(structuredClone(level))),
@@ -98,7 +116,7 @@ test("typed engine matches the pinned pre-migration tree frame by frame", async 
 });
 
 test("drawing commands match the original for editor, all modes, gravity and death", async () => {
-  await withLegacy((_, __, ___, ____, legacy) => {
+  await withLegacy((old, __, ___, ____, legacy) => {
     Object.assign(globalThis, {
       innerWidth: 932,
       innerHeight: 430,
@@ -156,7 +174,7 @@ test("drawing commands match the original for editor, all modes, gravity and dea
         },
       }),
     });
-    for (const level of LEVELS)
+    for (const level of frozenTrails(old))
       for (const mode of ["square", "plane", "wheel", "pogo"])
         for (const gravity of [-1, 1]) {
           const state = {

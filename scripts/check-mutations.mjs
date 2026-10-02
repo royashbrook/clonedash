@@ -14,6 +14,7 @@ try {
     "transfer.test.mjs",
     "courses.test.mjs",
     "course-input.mjs",
+    "remix-inputs.mjs",
     "version.test.mjs",
     "pogo.test.mjs",
   ]) {
@@ -97,6 +98,7 @@ try {
     // The legacy id migration has to reach the save, not only the validator's return value.
     ["library.ts", "s.draft = validateLevel(s.draft);", "validateLevel(s.draft);", "readSave loads a jumper save", "pogo.test.mjs"],
     ["levels.ts", "LEVELS.push(...COURSES)", "LEVELS.unshift(...COURSES)", "groups preserve", "courses.test.mjs"],
+    ["levels.ts", "LEVELS.push(...REMIX)", "LEVELS.unshift(...REMIX)", "groups preserve", "courses.test.mjs"],
     ["courses.ts", "song: 109", "song: 110", "groups preserve", "courses.test.mjs"],
     // Release identity guards: each rejection must fail against its broken control.
     [

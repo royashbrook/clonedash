@@ -469,7 +469,7 @@ test("candidate download failure keeps the current build; consent installs a ful
       .toEqual(["clonedash-fedcba987654"]);
     server.offline();
     await page.reload();
-    await expect(page.locator(".level-card")).toHaveCount(18);
+    await expect(page.locator(".level-card")).toHaveCount(23);
     await expect(page.locator("meta[name=build]")).toHaveAttribute(
       "content",
       "fedcba987654",
