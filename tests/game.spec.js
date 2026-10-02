@@ -14,9 +14,9 @@ async function startServer(change = (_file, data) => data) {
   await new Promise(r => server.listen(0, '127.0.0.1', r));
   return { url: `http://127.0.0.1:${server.address().port}/`, close: () => server.listening ? new Promise(r => { server.close(r); server.closeAllConnections(); }) : Promise.resolve() };
 }
-test('home is an eighteen-trail picker; play fills the screen; pause and rotate preserve progress', async ({ page }) => {
+test('home is a twenty-three-trail picker; play fills the screen; pause and rotate preserve progress', async ({ page }) => {
   const errors = []; page.on('pageerror', e => errors.push(e.message));
-  await page.goto('/'); await expect(page.locator('.level-card')).toHaveCount(18);
+  await page.goto('/'); await expect(page.locator('.level-card')).toHaveCount(23);
   await page.screenshot({ path: 'test-results/home-landscape.png' });
   await page.getByRole('button', { name: 'Play First Spark', exact: true }).click();
   await page.waitForTimeout(700);
@@ -128,7 +128,7 @@ test('offline shell reopens after the actual server goes away', async ({ browser
     expect(await page.evaluate(async () => !!(await caches.match('/index.html')))).toBe(true);
     expect(await page.evaluate(async () => !!(await caches.match('/music/zero-to-100.mp3')))).toBe(true);
     await server.close();
-    await page.reload(); await expect(page.locator('.level-card')).toHaveCount(18);
+    await page.reload(); await expect(page.locator('.level-card')).toHaveCount(23);
     const duration = await page.evaluate(async () => {
       const c = new AudioContext();
       try { return (await c.decodeAudioData(await (await fetch('/music/zero-to-100.mp3')).arrayBuffer())).duration; }

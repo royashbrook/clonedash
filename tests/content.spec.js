@@ -1,5 +1,9 @@
 import { test, expect } from '@playwright/test';
 import { COURSES } from '../src/courses.ts';
+import { REMIX } from '../src/remix.ts';
+import { Run } from '../src/run.ts';
+import { STEP } from '../src/engine.ts';
+import { REMIX_INPUTS } from './remix-inputs.mjs';
 import { RECORDINGS } from '../src/recordings.ts';
 import { courseInput } from './course-input.mjs';
 import { AVATAR } from '../src/render.ts';
@@ -14,9 +18,10 @@ test('ranked courses show durations, keep warmups and remove the misleading frie
   await page.goto('/');
   await expect(page.locator('.course-heading')).toHaveText([
     'EasyRoom to learn the rhythm', 'MediumLonger combinations and gravity changes',
-    'HardTighter timing and faster transitions','WarmupsShort introductions to each shape',
+    'HardTighter timing and faster transitions','RemixEvery shape and trick, mixed up',
+    'WarmupsShort introductions to each shape',
   ]);
-  await expect(page.locator('.level-card')).toHaveCount(18);
+  await expect(page.locator('.level-card')).toHaveCount(23);
   await expect(page.locator('#play')).toContainText('PULSEWAY');
   await expect(page.locator('#share')).toHaveCount(0);
   const play=await page.locator('#play').boundingBox();
@@ -143,6 +148,38 @@ for (const index of [0,8]) test(`full course through actual keyboard input: ${CO
       vy:mode==='plane'?-paint.tilt/.06:0,mode,gravity:-1,grounded:y<.001,inputHeld:held});
     if(next!==held) {next?await page.keyboard.down('Space'):await page.keyboard.up('Space');held=next;}
     await page.clock.runFor(50);
+  }
+  await page.keyboard.up('Space');
+  await expect(page.getByRole('heading',{name:'Level Complete!',exact:true})).toBeVisible();
+  await expect(page.locator('#attempt')).toHaveText('TRY 1');
+});
+
+// A Remix trail has no courseInput bot; replay its witness timeline as real Space events. Each
+// flip fires where the engine replay put it on the trail, read back from the painted progress.
+test('a Remix trail through actual keyboard input: Grand Finale',async({page})=>{
+  const level=REMIX.at(-1),flips=REMIX_INPUTS[level.name],at=[];
+  const replay=new Run(level);let sample=0;
+  for(let tick=0;at.length<flips.length;tick++) {
+    if(tick%6===0&&replay.readyTime<=0) {
+      if(flips[at.length]===sample) {at.push(replay.state.x);at.length%2?replay.press():replay.release();}
+      sample++;
+    }
+    replay.advance(STEP);
+  }
+  await page.clock.install();await page.goto('/');await page.clock.runFor(32);
+  await page.getByRole('button',{name:`Play ${level.name}`,exact:true}).click();
+  let next=0;
+  for(let frame=0;frame<12000;frame++) {
+    const paint=await page.evaluate(()=>({
+      progress:document.querySelector('#run-progress').value,
+      attempt:document.querySelector('#attempt').textContent,
+      complete:document.querySelector('#sheet-title')?.textContent==='Level Complete!',
+    }));
+    if(paint.complete) break;
+    const x=1+paint.progress/100*(level.length-1);
+    expect(paint.attempt,`x=${x}`).toBe('TRY 1');
+    while(next<at.length&&at[next]<=x+.04) {next%2?await page.keyboard.up('Space'):await page.keyboard.down('Space');next++;}
+    await page.clock.runFor(1000/120);
   }
   await page.keyboard.up('Space');
   await expect(page.getByRole('heading',{name:'Level Complete!',exact:true})).toBeVisible();
