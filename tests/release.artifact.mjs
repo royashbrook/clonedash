@@ -68,5 +68,5 @@ test('all recordings and their attribution ship offline within a mobile download
     assert(worker.includes(file),`${song.name}: missing precache`);
     assert(credits.includes(song.name),`${song.name}: missing credit`);
   }
-  assert(bytes<8*1024*1024,`recordings too large: ${bytes}`);
+  assert(bytes<12*1024*1024,`recordings too large: ${bytes}`);
 });

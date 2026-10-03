@@ -129,7 +129,7 @@ test("external schema rejects every unsafe field without relaxing the engine val
     (l) => (l.length = 601),
     (l) => (l.height = null),
     (l) => (l.height = 6),
-    (l) => (l.song = 118),
+    (l) => (l.song = 123),
     (l) => (l.song = "2"),
     (l) => (l.note = {}),
     (l) => (l.color = "url(evil)"),

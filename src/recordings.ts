@@ -9,6 +9,11 @@ export const RECORDINGS = [
   { id: 115, name: "Time Flies", file: "time-flies" },
   { id: 116, name: "Walrus", file: "walrus" },
   { id: 117, name: "Wraghstep [v2]", file: "wraghstep" },
+  { id: 118, name: "Intervals [v2]", file: "intervals" },
+  { id: 119, name: "EZDNB2", file: "ezdnb2" },
+  { id: 120, name: "Summer House [v2]", file: "summer-house" },
+  { id: 121, name: "Bouncer [v2]", file: "bouncer" },
+  { id: 122, name: "Vengeance Electro [v2]", file: "vengeance-electro" },
 ] as const;
 export const recordingFor = (id: number) =>
   RECORDINGS.find((song) => song.id === id);
