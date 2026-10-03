@@ -78,7 +78,7 @@ export const REMIX: Level[] = [
     note: "Five shapes, one run",
     color: "#b9a0ff",
     length: 370,
-    song: 113,
+    song: 118,
     objects: [
       // square
       o("spike", 10),
@@ -135,7 +135,7 @@ export const REMIX: Level[] = [
     note: "New shape every few seconds",
     color: "#ff8ac4",
     length: 350,
-    song: 115,
+    song: 119,
     objects: [
       // square
       o("spike", 10),
@@ -195,7 +195,7 @@ export const REMIX: Level[] = [
     note: "Bounce, climb, then speed up",
     color: "#ffd166",
     length: 340,
-    song: 110,
+    song: 120,
     objects: [
       // a ledge with a ramp each end
       o("ramp", 10),
@@ -267,7 +267,7 @@ export const REMIX: Level[] = [
     note: "Walls wait, roofs bump, blocks grow",
     color: "#53e3ff",
     length: 340,
-    song: 112,
+    song: 121,
     objects: [
       // big, tall and turned
       big("spike", 10, 0, 1.5),
@@ -332,7 +332,7 @@ export const REMIX: Level[] = [
     note: "Every shape and every trick",
     color: "#72f7dc",
     length: 380,
-    song: 109,
+    song: 122,
     objects: [
       // ramps, small spikes and a ring
       o("ramp-grid", 10),

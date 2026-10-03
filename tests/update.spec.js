@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join, resolve, extname } from "node:path";
 import http from "node:http";
 import { releaseIdentity } from "../scripts/version.mjs";
+import { RECORDINGS } from "../src/recordings.ts";
 
 const baseline = "c00928c1c005aad711b752690881b9b5f332a089";
 const types = {
@@ -148,7 +149,7 @@ for (const redirected of [false, true]) {
           name: "Creative Commons Attribution 4.0 International",
         }),
       ).toHaveAttribute("href", "https://creativecommons.org/licenses/by/4.0/");
-      await expect(document.locator("li")).toHaveCount(9);
+      await expect(document.locator("li")).toHaveCount(RECORDINGS.length);
       await document.getByRole("link", { name: "Back to Clone Dash" }).click();
       await expect(document.locator("#play")).toBeVisible();
     } finally {

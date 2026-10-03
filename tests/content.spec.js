@@ -92,7 +92,7 @@ test('every licensed recording decodes to distinct non-silent audio and has offl
     return results;
   },RECORDINGS);
   for(const r of result) { expect(r.duration).toBeGreaterThan(29); expect(r.rms).toBeGreaterThan(.02); expect(r.peak).toBeLessThan(1); }
-  expect(new Set(result.map(r=>r.signature)).size).toBe(9);
+  expect(new Set(result.map(r=>r.signature)).size).toBe(RECORDINGS.length);
   await page.locator('#about').click();
   await expect(page.getByRole('link',{name:'Songs and music credits'})).toHaveAttribute('href','/music/credits.html');
 });
