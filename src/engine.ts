@@ -86,11 +86,17 @@ export const levelHeight = (level: Level) => level.height ?? 7;
 export function object(type: ObjectType, x: number, y = 0): Piece {
   return { type, x, y, rotation: 0, flipX: false, flipY: false };
 }
-export function polygon(o: Piece): Point[] {
+// A piece's unturned footprint; it turns and flips about the middle of this box.
+export function pieceSize(o: Piece) {
   const portal = PORTALS.includes(o.type),
     scale = o.type === "small" ? 2 / 3 : o.type === "quarter" ? 0.25 : 1;
-  const h = portal ? 2.5 : o.type === "half" ? 0.5 : scale,
-    w = portal ? 0.6 : scale;
+  return {
+    w: portal ? 0.6 : scale,
+    h: portal ? 2.5 : o.type === "half" ? 0.5 : scale,
+  };
+}
+export function polygon(o: Piece): Point[] {
+  const { w, h } = pieceSize(o);
   const points = CURVES.includes(o.type)
     ? curve(o.type)
     : RAMPS.includes(o.type)
