@@ -269,7 +269,8 @@ export function render(
         ctx.strokeStyle = ZONES.includes(o.type) ? zoneColor : "#ffffff";
         ctx.lineWidth = 2;
         if (ZONES.includes(o.type)) ctx.setLineDash([unit * 0.12, unit * 0.08]);
-        if (!SLOPES.includes(o.type) && o.type !== "plain-black") ctx.stroke();
+        if (!SLOPES.includes(o.type) && o.type !== "plain-black" && !o.edges)
+          ctx.stroke();
         if (ZONES.includes(o.type)) {
           ctx.setLineDash([]);
           const c = bounds(o);
@@ -299,6 +300,29 @@ export function render(
             ctx.stroke();
           }
           ctx.restore();
+        }
+        if (o.edges) {
+          // Only the chosen sides, on the block's own corners (polygon order: bottom left,
+          // bottom right, top right, top left), so rotation and flips turn the outline too.
+          const [bl, br, tr, tl] = p,
+            at = (a: number[], b: number[], t: number) =>
+              [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t],
+            lines =
+              o.edges === "edge"
+                ? [[tl, tr]]
+                : o.edges === "parallel"
+                  ? [[tl, tr], [bl, br]]
+                  : o.edges === "outer"
+                    ? [[bl, tl, tr]]
+                    : [[at(tl, bl, 0.25), tl, at(tl, tr, 0.25)]];
+          ctx.beginPath();
+          for (const line of lines)
+            line.forEach(([x, y], i) =>
+              i ? ctx.lineTo(X(x), Y(y)) : ctx.moveTo(X(x), Y(y)),
+            );
+          ctx.strokeStyle = "#ffffff";
+          ctx.lineWidth = 2;
+          ctx.stroke();
         }
         if (SLOPES.includes(o.type)) {
           // the walking surface is the outline: a ramp's diagonal, a curve's arc (foot to top)

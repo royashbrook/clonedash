@@ -74,6 +74,9 @@ export const LEGACY_TYPES: Partial<Record<string, ObjectType>> = {
   jumper: "pogo", // 2026-09-29, the stored id followed the POGO label (#33)
 };
 export const SCALABLE = [...BLOCKS, ...ZONES, ...SPIKES, ...SLOPES]; // pieces that take a scale; rings and portals stay 1x
+// Blocks drawn with a white outline take an edges field (types.ts Edges); NO BORDER has none.
+export const OUTLINED = ["block", "grid", "black", "outline"];
+export const EDGES = ["edge", "parallel", "outer", "inner"];
 // A ring with no bounce field is the original: JUMP, a 2.25 block peak. A set bounce is the peak
 // height in blocks, so the launch speed is the one that reaches it under level gravity.
 export const RING_BOUNCE = 2.25;
@@ -473,6 +476,11 @@ export function validateLevel(input: unknown): Level {
         o.bounce > 10)
     )
       throw Error("Invalid ring bounce");
+    if (
+      o.edges !== undefined &&
+      (!OUTLINED.includes(o.type) || !EDGES.includes(o.edges))
+    )
+      throw Error("Invalid block edges");
     if (o.layer !== undefined && o.layer !== "background")
       throw Error("Invalid layer");
     if (o.layer === "background" && !BLOCKS.includes(o.type) && !ZONES.includes(o.type))
