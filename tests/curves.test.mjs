@@ -4,7 +4,7 @@ import { createState, step, object, CURVES, SLOPES, TYPES, SCALABLE, polygon, va
 import { encodeLevel, decodeLevel } from '../src/transfer.ts';
 
 // Curves (#79): ramps whose slope is a quarter circle. A scoop bends up like a skate ramp; a hill
-// bulges out, steep at its foot, so it is run downhill.
+// bulges out, steep at its foot, and running into that side rides you up it (#84).
 const level = (objects) => ({ name: 'Curves', length: 40, height: 10, objects });
 const run = (objects, ticks = 240, start = {}) => {
   const s = { ...createState(level(objects)), ...start }; let top = 0;
@@ -21,12 +21,19 @@ test('a scoop on the floor is run up and over without dying', () => {
   }
 });
 
-test('a hill is run downhill off a block, and its steep foot is a wall', () => {
+test('a hill is run downhill off a block, and run into from its side it is climbed', () => {
   // standing on a block one high, then onto the hill's flat top and down its face
   const down = run([object('block', 4, 0), object('block', 5, 0), { ...object('hill', 6, 0), flipX: true }], 240, { x: 4, y: 1 });
   assert.equal(down.s.status, 'playing', 'downhill');
   assert.ok(down.s.x > 9 && down.s.y === 0, `back on the floor, x=${down.s.x} y=${down.s.y}`);
-  assert.equal(run([object('hill', 6, 0)]).s.status, 'dead', 'walked into the steep foot');
+  for (const type of ['hill', 'hill-grid', 'hill-black'])
+    for (const scale of [1, 2]) {
+      const { s, top } = run([{ ...object(type, 6, 0), scale }]);
+      assert.equal(s.status, 'playing', `${type} x${scale}: rode up the steep side`);
+      assert.ok(s.x > 9 && top > scale - 0.05, `${type} x${scale} climbed to its top and carried on, x=${s.x} top=${top}`);
+    }
+  // a flipped hill has a flat wall where the curve is not, and that is still a wall
+  assert.equal(run([{ ...object('hill', 6, 0), flipX: true }]).s.status, 'dead', 'the flat back of a flipped hill');
 });
 
 test('curves are slopes: quarter-circle outline, validate, scale, export', async () => {

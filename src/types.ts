@@ -58,7 +58,7 @@ export interface Piece {
 // Outline variants, in the block's own frame (rotation and flips turn them): edge = the top
 // side, parallel = top and bottom, outer = top and left meeting at a corner, inner = a short
 // corner mark at the top left. Drawing only; collision is the full block either way.
-export type Edges = "edge" | "parallel" | "outer" | "inner";
+export type Edges = "edge" | "parallel" | "outer" | "inner" | "none";
 export interface Level {
   name: string;
   length: number;
