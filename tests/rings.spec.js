@@ -37,3 +37,21 @@ test('ring presets stamp colour and bounce; the ring controls edit them and pers
   await page.reload(); await page.locator('#editor-open').click();
   expect((await stored(page)).draft.objects.map(o => o.bounce)).toEqual([1, 5, undefined, undefined]);
 });
+
+test('the dark blue gravity ring places from RINGS, and its bounce stays off', async ({ page }) => {
+  await page.goto('/'); await page.locator('#editor-open').click();
+  const point = await page.evaluate(() => {
+    const top = document.querySelector('.editor-head').getBoundingClientRect().bottom;
+    const floor = document.querySelector('.editor-controls').getBoundingClientRect().top - 18;
+    const unit = Math.max(12, Math.min((floor - top - 14) / 7, innerWidth / 13.5, 82));
+    return { unit, floor };
+  });
+  await page.getByRole('tab', { name: 'RINGS', exact: true }).click();
+  await page.getByRole('button', { name: '◉ DARK BLUE · GRAVITY', exact: true }).click();
+  await page.mouse.click((6 + .1) * point.unit, point.floor - 2.5 * point.unit);
+  await expect(page.locator('#selection')).toContainText('RING');
+  await expect(page.locator('#selection')).toContainText('⇅ GRAVITY');
+  expect((await stored(page)).draft.objects.at(-1)).toEqual({ type: 'ring', x: 6, y: 2, rotation: 0, flipX: false, flipY: false, color: '#2b4cff', flipsGravity: true });
+  await expect(page.locator('#ring-color')).toBeEnabled(); await expect(page.locator('#ring-color')).toHaveValue('#2b4cff');
+  await expect(page.locator('#bounce')).toBeDisabled();
+});

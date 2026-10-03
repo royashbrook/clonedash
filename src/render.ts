@@ -199,12 +199,19 @@ export function render(
         ctx.beginPath();
         ctx.arc(X(o.x + 0.5), Y(o.y + 0.5), unit * 0.6, 0, Math.PI * 2);
         ctx.stroke();
-        ctx.fillStyle = c;
+        if (o.flipsGravity) {
+          // the gravity ring is an orb: filled, so it reads apart from the jump rings
+          ctx.fillStyle = `${c}88`;
+          ctx.beginPath();
+          ctx.arc(X(o.x + 0.5), Y(o.y + 0.5), unit * 0.45, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.fillStyle = o.flipsGravity ? "#ffffff" : c;
         ctx.font = `bold ${unit * 0.4}px system-ui`;
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
         ctx.fillText(
-          (state?.gravity ?? -1) > 0 ? "↓" : "↑",
+          o.flipsGravity ? "⇅" : (state?.gravity ?? -1) > 0 ? "↓" : "↑",
           X(o.x + 0.5),
           Y(o.y + 0.5),
         );

@@ -247,7 +247,12 @@ export function step(
     : -1;
   if (ring >= 0) {
     s.usedRings.push(ring);
-    s.vy = -s.gravity * ringSpeed(s.level.objects[ring]);
+    const o = s.level.objects[ring];
+    // a gravity ring flips you like a wheel does on the ground, from wherever you are in the air
+    if (o.flipsGravity) {
+      s.gravity *= -1;
+      s.vy = 0;
+    } else s.vy = -s.gravity * ringSpeed(o);
     s.grounded = false;
   }
   if (ring < 0 && s.mode === "wheel" && s.grounded && tapped) {
@@ -486,6 +491,11 @@ export function validateLevel(input: unknown): Level {
         o.bounce > 10)
     )
       throw Error("Invalid ring bounce");
+    if (
+      o.flipsGravity !== undefined &&
+      (o.type !== "ring" || o.flipsGravity !== true || o.bounce !== undefined)
+    )
+      throw Error("Invalid gravity ring");
     if (
       o.edges !== undefined &&
       (!OUTLINED.includes(o.type) || !EDGES.includes(o.edges))
