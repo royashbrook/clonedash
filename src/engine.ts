@@ -15,6 +15,10 @@ export const SPEED = 5,
   SIZE = 0.64,
   STEP = 1 / 120;
 export const DEATH_INSET = 0.12; // 0.40-block hazard box; full size still supports landings.
+// Spikes reach further into the body than walls do: the kid asked for bigger hitboxes, but not
+// pixel-exact, so a spike catches more of the cube while a graze on its very edge still lives.
+// Walls and blocks keep DEATH_INSET; a box past the body would kill a run standing on a block.
+export const SPIKE_INSET = 0.06;
 export const MAX_LENGTH = 600;
 // Zones: invisible in play, never touched themselves. While the player touches a W, hitting the
 // SIDE of a block or ramp does not kill and the player goes through it; while touching an R,
@@ -349,7 +353,7 @@ export function step(
         s.grounded = s.gravity > 0;
       }
     }
-    const player = playerPolygon(s, DEATH_INSET);
+    const player = playerPolygon(s, SPIKES.includes(o.type) ? SPIKE_INSET : DEATH_INSET);
     if (intersects(player, p)) {
       // The trail only moves forward, so a hazard box that was clear of the piece's left edge
       // came in from the side: a wall. Touching a W, a wall stops the run instead of crashing it.
