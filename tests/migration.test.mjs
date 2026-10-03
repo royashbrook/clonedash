@@ -86,7 +86,8 @@ test("typed engine matches the pinned pre-migration tree frame by frame", async 
       LEVELS.slice(0, levels.LEVELS.length),
       levels.LEVELS.map(modernLevel),
     );
-    let frames = 0;
+    let frames = 0,
+      spikeGrazes = 0;
     for (const level of frozenTrails(old))
       for (const mode of ["square", "plane", "wheel", "pogo"])
         for (const gravity of [-1, 1]) {
@@ -102,6 +103,18 @@ test("typed engine matches the pinned pre-migration tree frame by frame", async 
               tap = seed % 11 === 0;
             old.step(a, held, old.STEP, tap);
             engine.step(b, held, engine.STEP, tap);
+            // 2026-10-02 (#73): spikes reach SPIKE_INSET into the body, walls keep DEATH_INSET.
+            // The one allowed divergence: this engine dies where the frozen tree lives, on a frame
+            // whose only difference is that death, against a spike the new box touches and the
+            // old box does not. The run stops being compared there.
+            if (b.status === "dead" && a.status === "playing") {
+              assert.deepEqual({ ...b, status: "playing" }, modernState(a), `${level.name}/${mode}/${gravity}/frame${i}`);
+              const box = (inset) => [[b.x + inset, b.y + inset], [b.x + engine.SIZE - inset, b.y + inset], [b.x + engine.SIZE - inset, b.y + engine.SIZE - inset], [b.x + inset, b.y + engine.SIZE - inset]],
+                spikes = b.level.objects.filter((o) => engine.SPIKES.includes(o.type) && o.layer !== "background").map(engine.polygon);
+              assert.ok(spikes.some((p) => engine.intersects(box(engine.SPIKE_INSET), p) && !engine.intersects(box(engine.DEATH_INSET), p)), "the only new death is a spike graze");
+              spikeGrazes++;
+              break;
+            }
             assert.deepEqual(
               b,
               modernState(a),
@@ -112,6 +125,7 @@ test("typed engine matches the pinned pre-migration tree frame by frame", async 
           }
         }
     assert(frames > 5000, `only ${frames} frames compared`);
+    assert(spikeGrazes > 0, "the bigger spike box was exercised");
   });
 });
 
