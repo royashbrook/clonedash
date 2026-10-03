@@ -26,7 +26,25 @@ export const MAX_LENGTH = 600;
 // make hidden passages. Spikes still kill inside a zone.
 export const ZONES = ["w-block", "r-block"];
 export const BLOCKS = ["block", "grid", "black", "outline", "plain-black"];
+// Curves are ramps whose slope is a quarter circle, walked and outlined like a ramp: the scoop
+// bends up like a quarter pipe (flat at the bottom, vertical at the top), the hill bulges out
+// (vertical at the bottom, flat at the top, so it is run downhill or met from its flat side).
+export const CURVES = ["scoop", "scoop-grid", "scoop-black", "hill", "hill-grid", "hill-black"];
 export const RAMPS = ["ramp", "ramp-grid", "ramp-black"];
+// anything walked as a slope: the three ramps and the six curves
+export const SLOPES = [...RAMPS, ...CURVES];
+// The arc from the ramp's top corner (1, 1) back to its foot (0, 0), in 8 segments; the
+// endpoints are exact so a curve meets the grid where a ramp does.
+const ARC = 8;
+const curve = (type: string): number[][] => {
+  const scoop = type.startsWith("scoop"),
+    inner = Array.from({ length: ARC - 1 }, (_, i) => {
+      const t = ((i + 1) / ARC) * (Math.PI / 2);
+      // scoop: centre (0, 1), from (1, 1) round to (0, 0); hill: centre (1, 0), same ends
+      return scoop ? [Math.cos(t), 1 - Math.sin(t)] : [1 - Math.sin(t), Math.cos(t)];
+    });
+  return [[0, 0], [1, 0], [1, 1], ...inner];
+};
 export const SPIKES = ["spike", "half", "small", "quarter"];
 // Speed portals scale forward speed only; mode and gravity carry through. No portal is 1x, so
 // every level made before them plays exactly as it did.
@@ -49,13 +67,13 @@ export const PORTALS = [
 // Modes that ride surfaces instead of dying on them: floor, ceiling and block faces are safe,
 // walls still kill.
 export const SOFT = ["plane", "pogo", "angle"];
-export const TYPES = [...BLOCKS, ...ZONES, ...SPIKES, ...PORTALS, ...RAMPS, "ring"];
+export const TYPES = [...BLOCKS, ...ZONES, ...SPIKES, ...PORTALS, ...SLOPES, "ring"];
 // Ids that were renamed after they had been stored. validateLevel accepts the old id and returns
 // the new one, so an old save, share code or link still loads; nothing writes the old id again.
 export const LEGACY_TYPES: Partial<Record<string, ObjectType>> = {
   jumper: "pogo", // 2026-09-29, the stored id followed the POGO label (#33)
 };
-export const SCALABLE = [...BLOCKS, ...ZONES, ...SPIKES, ...RAMPS]; // pieces that take a scale; rings and portals stay 1x
+export const SCALABLE = [...BLOCKS, ...ZONES, ...SPIKES, ...SLOPES]; // pieces that take a scale; rings and portals stay 1x
 // A ring with no bounce field is the original: JUMP, a 2.25 block peak. A set bounce is the peak
 // height in blocks, so the launch speed is the one that reaches it under level gravity.
 export const RING_BOUNCE = 2.25;
@@ -70,7 +88,9 @@ export function polygon(o: Piece): Point[] {
     scale = o.type === "small" ? 2 / 3 : o.type === "quarter" ? 0.25 : 1;
   const h = portal ? 2.5 : o.type === "half" ? 0.5 : scale,
     w = portal ? 0.6 : scale;
-  const points = RAMPS.includes(o.type)
+  const points = CURVES.includes(o.type)
+    ? curve(o.type)
+    : RAMPS.includes(o.type)
     ? [
         [0, 0],
         [1, 0],
@@ -108,6 +128,15 @@ export function polygon(o: Piece): Point[] {
     y = (y - h / 2) * k * (o.flipY ? -1 : 1) + ((k - 1) * h) / 2;
     return [o.x + w / 2 + x * c - y * s, o.y + h / 2 + x * s + y * c];
   });
+}
+// The collision test only holds for convex shapes. A scoop curves inward, so it is checked as a
+// fan of thin triangles from its corner, which together are exactly its area; every other piece
+// is convex and is its own single part.
+export function parts(o: Piece): Point[][] {
+  const p = polygon(o);
+  if (!o.type.startsWith("scoop")) return [p];
+  const rim = [p[2], ...p.slice(3), p[0]];
+  return rim.slice(1).map((q, i) => [p[1], rim[i], q]);
 }
 export function bounds(o: Piece) {
   const p = polygon(o),
@@ -297,7 +326,7 @@ export function step(
     const p = polygon(o),
       b = bounds(o),
       // a block at a non-quarter angle is supported like a ramp: along its real edges.
-      ramp = RAMPS.includes(o.type) || (BLOCKS.includes(o.type) && o.rotation % 90 !== 0),
+      ramp = SLOPES.includes(o.type) || (BLOCKS.includes(o.type) && o.rotation % 90 !== 0),
       safeSolid = SOFT.includes(s.mode) && (BLOCKS.includes(o.type) || ramp);
     if (ramp) {
       for (const upper of [true, false]) {
@@ -354,7 +383,7 @@ export function step(
       }
     }
     const player = playerPolygon(s, SPIKES.includes(o.type) ? SPIKE_INSET : DEATH_INSET);
-    if (intersects(player, p)) {
+    if (parts(o).some((part) => intersects(player, part))) {
       // The trail only moves forward, so a hazard box that was clear of the piece's left edge
       // came in from the side: a wall. Touching a W, a wall stops the run instead of crashing it.
       // The hazard box is held against the wall's face, the run waits there, and a jump that
