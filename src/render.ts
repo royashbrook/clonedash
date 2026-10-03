@@ -2,7 +2,7 @@ import {
   polygon,
   bounds,
   PORTALS,
-  RAMPS,
+  SLOPES,
   ZONES,
   SIZE,
   SPEED,
@@ -260,7 +260,7 @@ export function render(
         const grad = ctx.createLinearGradient(0, Y(cellTop), 0, Y(cellBottom));
         grad.addColorStop(0, "#35465d");
         grad.addColorStop(1, "#03070c");
-        ctx.fillStyle = ["black", "plain-black", "ramp-black"].includes(o.type)
+        ctx.fillStyle = ["black", "plain-black", "ramp-black", "scoop-black", "hill-black"].includes(o.type)
           ? "#000000"
           : grad;
         if (o.type !== "outline" && !ZONES.includes(o.type)) ctx.fill();
@@ -269,7 +269,7 @@ export function render(
         ctx.strokeStyle = ZONES.includes(o.type) ? zoneColor : "#ffffff";
         ctx.lineWidth = 2;
         if (ZONES.includes(o.type)) ctx.setLineDash([unit * 0.12, unit * 0.08]);
-        if (!RAMPS.includes(o.type) && o.type !== "plain-black") ctx.stroke();
+        if (!SLOPES.includes(o.type) && o.type !== "plain-black") ctx.stroke();
         if (ZONES.includes(o.type)) {
           ctx.setLineDash([]);
           const c = bounds(o);
@@ -283,7 +283,7 @@ export function render(
             Y((c.top + c.bottom) / 2),
           );
         }
-        if (o.type === "grid" || o.type === "ramp-grid") {
+        if (["grid", "ramp-grid", "scoop-grid", "hill-grid"].includes(o.type)) {
           ctx.save();
           ctx.clip();
           ctx.strokeStyle = "#ffffff35";
@@ -300,10 +300,11 @@ export function render(
           }
           ctx.restore();
         }
-        if (RAMPS.includes(o.type)) {
+        if (SLOPES.includes(o.type)) {
+          // the walking surface is the outline: a ramp's diagonal, a curve's arc (foot to top)
           ctx.beginPath();
           ctx.moveTo(X(p[0][0]), Y(p[0][1]));
-          ctx.lineTo(X(p[2][0]), Y(p[2][1]));
+          for (const [x, y] of [...p.slice(3).reverse(), p[2]]) ctx.lineTo(X(x), Y(y));
           ctx.strokeStyle = "#ffffff";
           ctx.lineWidth = 2;
           ctx.stroke();

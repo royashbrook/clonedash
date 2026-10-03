@@ -32,6 +32,12 @@ export type ObjectType =
   | "ramp"
   | "ramp-grid"
   | "ramp-black"
+  | "scoop"
+  | "scoop-grid"
+  | "scoop-black"
+  | "hill"
+  | "hill-grid"
+  | "hill-black"
   | "ring";
 export type Point = [number, number];
 export type Transform =
