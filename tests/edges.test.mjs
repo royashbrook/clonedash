@@ -5,10 +5,10 @@ const { createState, step, object, validateLevel, duplicateObject, BLOCKS } = en
 import { render } from '../src/render.ts';
 import { encodeLevel, decodeLevel } from '../src/transfer.ts';
 // spelled out here, not imported, so this file runs (and fails) against a tree without them
-const OUTLINED = ['block', 'grid', 'black', 'outline'], EDGES = ['edge', 'parallel', 'outer', 'inner'];
+const OUTLINED = ['block', 'grid', 'black', 'outline'], EDGES = ['edge', 'parallel', 'outer', 'inner', 'none'];
 const level = (objects) => ({ name: 'Edges', length: 40, height: 10, objects });
 
-test('edges validate: outlined blocks only, one of the four values', () => {
+test('edges validate: outlined blocks only, one of the five values', () => {
   for (const type of OUTLINED)
     for (const edges of EDGES) {
       const ok = level([{ ...object(type, 10, 1), edges, rotation: 90 }]);
@@ -34,7 +34,7 @@ test('the share code and a copy keep edges; a plain block stays without the fiel
 test('edges are drawing only: the run is the same with or without them', () => {
   const stairs = [object('block', 8, 0), object('block', 9, 0), object('block', 9, 1), object('block', 12, 0)];
   const plain = createState(level(stairs)),
-    edged = createState(level(stairs.map((o, i) => ({ ...o, edges: EDGES[i % 4] }))));
+    edged = createState(level(stairs.map((o, i) => ({ ...o, edges: EDGES[i % EDGES.length] }))));
   for (let i = 0; i < 600; i++) { step(plain, i % 40 < 6); step(edged, i % 40 < 6); }
   assert.deepEqual({ ...edged, level: null }, { ...plain, level: null });
 });
@@ -82,6 +82,7 @@ test('a variant strokes only its own sides, turned with the block', () => {
   assert.deepEqual(strokes(at({ edges: 'parallel' })), lines([[10, 2], [11, 2]], [[10, 1], [11, 1]]), 'parallel: top and bottom');
   assert.deepEqual(strokes(at({ edges: 'outer' })), lines([[10, 1], [10, 2]], [[10, 2], [11, 2]]), 'outer: left and top');
   assert.deepEqual(strokes(at({ edges: 'inner' })), lines([[10, 1.75], [10, 2]], [[10, 2], [10.25, 2]]), 'inner: a short L at the top left');
+  assert.deepEqual(strokes(at({ edges: 'none' })), [], 'none: no line at all');
   // rotation and flips turn the outline with the block
   assert.deepEqual(strokes(at({ edges: 'edge', rotation: 90 })), lines([[10, 2], [10, 1]]), 'edge turned a quarter: the left side');
   assert.deepEqual(strokes(at({ edges: 'edge', rotation: 180 })), lines([[10, 1], [11, 1]]), 'edge turned over: the bottom');

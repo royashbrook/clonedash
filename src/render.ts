@@ -314,7 +314,9 @@ export function render(
                   ? [[tl, tr], [bl, br]]
                   : o.edges === "outer"
                     ? [[bl, tl, tr]]
-                    : [[at(tl, bl, 0.25), tl, at(tl, tr, 0.25)]];
+                    : o.edges === "inner"
+                      ? [[at(tl, bl, 0.25), tl, at(tl, tr, 0.25)]]
+                      : []; // none: the middle of a big shape, no line at all
           ctx.beginPath();
           for (const line of lines)
             line.forEach(([x, y], i) =>

@@ -76,7 +76,7 @@ export const LEGACY_TYPES: Partial<Record<string, ObjectType>> = {
 export const SCALABLE = [...BLOCKS, ...ZONES, ...SPIKES, ...SLOPES]; // pieces that take a scale; rings and portals stay 1x
 // Blocks drawn with a white outline take an edges field (types.ts Edges); NO BORDER has none.
 export const OUTLINED = ["block", "grid", "black", "outline"];
-export const EDGES = ["edge", "parallel", "outer", "inner"];
+export const EDGES = ["edge", "parallel", "outer", "inner", "none"];
 // A ring with no bounce field is the original: JUMP, a 2.25 block peak. A set bounce is the peak
 // height in blocks, so the launch speed is the one that reaches it under level gravity.
 export const RING_BOUNCE = 2.25;
@@ -349,7 +349,17 @@ export function step(
           s.vy * direction <= 0 &&
           direction * (oldEdge - surface) >= -(forward * dt + 0.015) &&
           direction * (edge - surface) <= 0;
-        if (following || crossing) {
+        // A curve is climbed from its side (#84): where the run first meets it, the curve starts
+        // at the feet, so the run rides up however steep it gets, instead of hitting it as a wall.
+        // A flipped hill's vertical side starts a whole block up and is still a wall.
+        const entry = CURVES.includes(o.type)
+            ? rampSurface(o, Math.max(s.x, b.left), Math.max(s.x, b.left) + 1e-4, upper)
+            : null,
+          climbing =
+            entry !== null &&
+            direction * (oldEdge - entry) >= -(forward * dt + 0.015) &&
+            direction * (edge - surface) <= 0;
+        if (following || crossing || climbing) {
           s.y = surface - (upper ? 0 : SIZE);
           s.vy = 0;
           s.grounded = upper ? s.gravity < 0 : s.gravity > 0;
