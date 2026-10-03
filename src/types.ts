@@ -53,7 +53,12 @@ export interface Piece {
   scale?: number; // blocks, spikes and ramps only; absent means 1 (kept absent so old levels stay byte-identical)
   color?: string; // rings only, #rrggbb; absent means the original yellow
   bounce?: number; // rings only, peak height in blocks; absent means the original 2.25
+  edges?: Edges; // outlined blocks only, which sides get the white line; absent means all four
 }
+// Outline variants, in the block's own frame (rotation and flips turn them): edge = the top
+// side, parallel = top and bottom, outer = top and left meeting at a corner, inner = a short
+// corner mark at the top left. Drawing only; collision is the full block either way.
+export type Edges = "edge" | "parallel" | "outer" | "inner";
 export interface Level {
   name: string;
   length: number;
