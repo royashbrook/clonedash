@@ -53,6 +53,7 @@ export interface Piece {
   scale?: number; // blocks, spikes and ramps only; absent means 1 (kept absent so old levels stay byte-identical)
   color?: string; // rings only, #rrggbb; absent means the original yellow
   bounce?: number; // rings only, peak height in blocks; absent means the original 2.25
+  flipsGravity?: true; // rings only, the dark blue orb: a tap flips gravity instead of bouncing
   edges?: Edges; // outlined blocks only, which sides get the white line; absent means all four
 }
 // Outline variants, in the block's own frame (rotation and flips turn them): edge = the top

@@ -41,3 +41,28 @@ test('ring colour and bounce are validated, rings only, and the share code keeps
   const plain = (await decodeLevel(await encodeLevel(level([object('ring', 10, 1)])))).objects[0];
   assert.equal('color' in plain, false); assert.equal('bounce' in plain, false);
 });
+
+test('a dark blue gravity ring flips gravity on a tap instead of bouncing, once per run', async () => {
+  const orb = { ...object('ring', 5, 3), color: '#2b4cff', flipsGravity: true };
+  for (const gravity of [-1, 1]) {
+    const s = { ...createState(level([orb])), x: 5, y: 3, gravity, grounded: false, vy: 0.2 };
+    step(s, true);
+    assert.equal(s.gravity, -gravity, 'flipped');
+    assert.deepEqual(s.usedRings, [0]);
+    // used: a second tap in reach does nothing
+    step(s, false); step(s, true);
+    assert.equal(s.gravity, -gravity, 'one flip per ring per run');
+  }
+  // the run carries on to the other side: a tap at the floor ring falls up to the ceiling
+  const s = { ...createState(level([{ ...orb, y: 0 }])), x: 5 };
+  step(s, true);
+  for (let i = 0; i < 600 && s.status === 'playing'; i++) step(s, false);
+  assert.equal(s.status, 'playing'); assert.ok(s.y > 18, `fell up to the ceiling, y=${s.y}`);
+  // validated: rings only, true only, no bounce with it; the share code keeps it
+  const ok = level([orb]);
+  assert.deepEqual(validateLevel(ok), ok);
+  for (const bad of [{ ...orb, flipsGravity: false }, { ...orb, flipsGravity: 1 }, { ...orb, bounce: 3 }, { ...object('block', 10, 1), flipsGravity: true }])
+    assert.throws(() => validateLevel(level([bad])), /Invalid gravity ring/);
+  assert.equal((await decodeLevel(await encodeLevel(ok))).objects[0].flipsGravity, true);
+  assert.equal('flipsGravity' in (await decodeLevel(await encodeLevel(level([object('ring', 10, 1)])))).objects[0], false);
+});

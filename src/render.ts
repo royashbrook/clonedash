@@ -33,6 +33,8 @@ export interface RenderOptions {
   cameraY?: number;
   editing?: boolean;
   selected?: number;
+  group?: number[]; // multi-select: every piece in it is outlined like the selected one
+  box?: { left: number; right: number; bottom: number; top: number } | null; // a swipe in progress
   layer?: string;
   time?: number;
   reduced?: boolean;
@@ -49,6 +51,8 @@ export function render(
     cameraY = 0,
     editing = false,
     selected = -1,
+    group = [],
+    box,
     layer,
     time = 0,
     reduced = false,
@@ -199,12 +203,19 @@ export function render(
         ctx.beginPath();
         ctx.arc(X(o.x + 0.5), Y(o.y + 0.5), unit * 0.6, 0, Math.PI * 2);
         ctx.stroke();
-        ctx.fillStyle = c;
+        if (o.flipsGravity) {
+          // the gravity ring is an orb: filled, so it reads apart from the jump rings
+          ctx.fillStyle = `${c}88`;
+          ctx.beginPath();
+          ctx.arc(X(o.x + 0.5), Y(o.y + 0.5), unit * 0.45, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.fillStyle = o.flipsGravity ? "#ffffff" : c;
         ctx.font = `bold ${unit * 0.4}px system-ui`;
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
         ctx.fillText(
-          (state?.gravity ?? -1) > 0 ? "↓" : "↑",
+          o.flipsGravity ? "⇅" : (state?.gravity ?? -1) > 0 ? "↓" : "↑",
           X(o.x + 0.5),
           Y(o.y + 0.5),
         );
@@ -336,7 +347,7 @@ export function render(
           ctx.stroke();
         }
       }
-      if (editing && index === selected) {
+      if (editing && (index === selected || group.includes(index))) {
         ctx.globalAlpha = 1;
         const b = bounds(o);
         ctx.strokeStyle = "#9aff6b";
@@ -352,6 +363,17 @@ export function render(
       }
       ctx.restore();
     });
+  if (editing && box) {
+    ctx.save();
+    ctx.strokeStyle = "#9aff6b";
+    ctx.fillStyle = "#9aff6b22";
+    ctx.lineWidth = 2;
+    ctx.setLineDash([6, 4]);
+    const rect = [X(box.left), Y(box.top), (box.right - box.left) * unit, (box.top - box.bottom) * unit] as const;
+    ctx.fillRect(...rect);
+    ctx.strokeRect(...rect);
+    ctx.restore();
+  }
   if (X(level.length) < w + 100) {
     ctx.fillStyle = `${color}12`;
     ctx.fillRect(X(level.length), Y(height), unit * 2, unit * height);

@@ -33,6 +33,7 @@
   import LevelTransfer from "./LevelTransfer.svelte";
   import { importLevel } from "./transfer.ts";
   import { pinchStart, pinchTransform, type Pinch } from "./gesture.ts";
+  import { duplicateGroup, inBox, transformGroup } from "./group.ts";
   import type {
     Edges,
     Level,
@@ -92,6 +93,7 @@
       ["purple-ring", "◉ PURPLE · 1"],
       ["red-ring", "◉ RED · 5"],
       ["white-ring", "◉ WHITE · CUSTOM"],
+      ["gravity-ring", "◉ DARK BLUE · GRAVITY"],
       ["w-block", "W · WALL PASS"],
       ["r-block", "R · ROOF PASS"],
     ],
@@ -112,11 +114,12 @@
   // are solid blocks with an outline variant; the Edges control gives any outlined block one.
   const presets: Record<
     string,
-    Pick<Piece, "type"> & Partial<Pick<Piece, "color" | "bounce" | "edges">>
+    Pick<Piece, "type"> & Partial<Pick<Piece, "color" | "bounce" | "flipsGravity" | "edges">>
   > = {
     "purple-ring": { type: "ring", color: "#c77dff", bounce: 1 },
     "red-ring": { type: "ring", color: "#ff5c7a", bounce: 5 },
     "white-ring": { type: "ring", color: "#ffffff" },
+    "gravity-ring": { type: "ring", color: "#2b4cff", flipsGravity: true },
     "edge-block": { type: "block", edges: "edge" },
     "parallel-block": { type: "block", edges: "parallel" },
     "outer-corner": { type: "block", edges: "outer" },
@@ -140,6 +143,7 @@
     ["#53e3ff", "BLUE"],
     ["#ff8ac4", "PINK"],
     ["#ffb477", "ORANGE"],
+    ["#2b4cff", "DARK BLUE"],
   ];
   const article = (name: string) => (/^[aeiou]/.test(name) ? "an " : "a ") + name;
   const typeOf = (t: string): ObjectType =>
@@ -164,7 +168,10 @@
   let mode = $state<Screen>("home"),
     current = $state(0),
     custom = $state(false);
-  let selected = $state(-1),
+  // The selection is a group (#87); its last piece is the one the controls show and a pinch
+  // turns. Plain taps keep it to one piece; the MULTI tool adds to it and sweeps a box.
+  let group = $state<number[]>([]),
+    sweep = $state<{ from: Point; to: Point } | null>(null),
     tool = $state<string>("block"),
     tab = $state<Tab>("blocks");
   let layer = $state("play"),
@@ -214,7 +221,9 @@
     LEVELS.filter((_, i) => save.best[i] === 100).length,
   );
   const rotate = $derived(portrait && (mode === "play" || mode === "editor"));
+  const selected = $derived(group.at(-1) ?? -1);
   const selection = $derived(draft.objects[selected]);
+  const select = (index: number) => (group = index >= 0 ? [index] : []);
   const draftSong = () => draft.song ?? 8 + save.activeLevel;
   const songs = $derived([
     ...new Set([
@@ -301,7 +310,7 @@
     }
     music.unlock(save.sound);
     run = new Run(draft);
-    selected = -1;
+    select(-1);
     testing = true;
     snapshot();
     tone(523, 0.1);
@@ -407,7 +416,7 @@
         true,
       );
       draft = structuredClone(save.draft);
-      selected = -1;
+      select(-1);
       pan = panY = 0;
       openEditor();
       toast("Your copy is saved in My Levels. The original is unchanged.");
@@ -529,6 +538,7 @@
       capture(e.pointerId);
       if (fingers.size === 1) editAt(e);
       else if (fingers.size === 2 && selected >= 0 && !rotate && !panel) {
+        sweep = null;
         const [a, b] = [...fingers.values()],
           piece = draft.objects[selected];
         pinch = pinchStart(a, b, piece.scale ?? 1, piece.rotation);
@@ -624,7 +634,13 @@
       cameraY: live() ? run.cameraY : mode === "editor" ? panY : 0,
       editing: mode === "editor",
       layer,
-      selected,
+      group,
+      box: sweep && {
+        left: Math.min(sweep.from[0], sweep.to[0]),
+        right: Math.max(sweep.from[0], sweep.to[0]),
+        bottom: Math.min(sweep.from[1], sweep.to[1]),
+        top: Math.max(sweep.from[1], sweep.to[1]),
+      },
       time: run.deathTime,
       reduced,
       areaTop:
@@ -699,7 +715,7 @@
   }
   function loadCustom(id: number) {
     draft = selectLevel(save, id);
-    selected = -1;
+    select(-1);
     pan = 0;
     panY = 0;
     persist();
@@ -707,7 +723,7 @@
   function createLevel() {
     try {
       draft = newLevel(save);
-      selected = -1;
+      select(-1);
       pan = 0;
       panY = 0;
       persist();
@@ -726,7 +742,7 @@
           "DELETE LEVEL",
           () => {
             draft = deleteLevel(save, id);
-            selected = -1;
+            select(-1);
             pan = 0;
             panY = 0;
             persist();
@@ -773,6 +789,46 @@
     tab = next;
     tool = choices[next][0][0];
   }
+  function pieceAt(x: number, y: number, activeLayer?: string) {
+    return draft.objects.findLastIndex((o) => {
+      const b = bounds(o);
+      return (
+        o.layer === activeLayer &&
+        x >= b.left - 0.2 &&
+        x <= b.right + 0.2 &&
+        y >= b.bottom - 0.2 &&
+        y <= b.top + 0.2
+      );
+    });
+  }
+  // MULTI: a tap adds a piece to the group (or takes it back out), a tap on nothing clears it,
+  // and a swipe adds everything its box touches.
+  function endSweep() {
+    if (!sweep) return;
+    const { from, to } = sweep,
+      activeLayer = layer === "background" ? "background" : undefined;
+    sweep = null;
+    if (Math.hypot(to[0] - from[0], to[1] - from[1]) < 0.3) {
+      const hit = pieceAt(from[0], from[1], activeLayer);
+      group =
+        hit < 0
+          ? []
+          : group.includes(hit)
+            ? group.filter((i) => i !== hit)
+            : [...group, hit];
+      return;
+    }
+    const box = {
+      left: Math.min(from[0], to[0]),
+      right: Math.max(from[0], to[0]),
+      bottom: Math.min(from[1], to[1]),
+      top: Math.max(from[1], to[1]),
+    };
+    group = [
+      ...group,
+      ...inBox(draft, box, activeLayer).filter((i) => !group.includes(i)),
+    ];
+  }
   function editAt(e: PointerEvent) {
     if (rotate || panel) return;
     const view = draw(),
@@ -781,16 +837,11 @@
     if (y < 0 || y >= levelHeight(draft)) return;
     const activeLayer = layer === "background" ? "background" : undefined;
     if (tool === "select") {
-      selected = draft.objects.findLastIndex((o) => {
-        const b = bounds(o);
-        return (
-          o.layer === activeLayer &&
-          x >= b.left - 0.2 &&
-          x <= b.right + 0.2 &&
-          y >= b.bottom - 0.2 &&
-          y <= b.top + 0.2
-        );
-      });
+      select(pieceAt(x, y, activeLayer));
+      return;
+    }
+    if (tool === "multi") {
+      sweep = { from: [x, y], to: [x, y] };
       return;
     }
     const ox = Math.round(x / stepSize) * stepSize,
@@ -813,7 +864,7 @@
           ZONES.includes(o.type) === zone,
       );
     if (existing >= 0) {
-      selected = existing;
+      select(existing);
       return;
     }
     const piece = {
@@ -830,16 +881,32 @@
       return;
     }
     draft.objects.push(piece);
-    selected = draft.objects.length - 1;
+    select(draft.objects.length - 1);
     saveDraft();
+  }
+  function changed(change: (o: Piece) => void, fits = (o: Piece) => true) {
+    return {
+      ...draft,
+      objects: draft.objects.map((o, i) => {
+        if (!group.includes(i) || !fits(o)) return o;
+        const piece = structuredClone(o);
+        change(piece);
+        return piece;
+      }),
+    };
   }
   function adjust(action: Transform) {
     if (selected < 0) return;
-    const piece = structuredClone(draft.objects[selected]);
-    transform(piece, action, stepSize);
+    // one piece turns in its own place; a group turns as one shape
+    const moved =
+      group.length > 1
+        ? transformGroup(group.map((i) => draft.objects[i]), action, stepSize)
+        : [transform(structuredClone(selection), action, stepSize)];
     const next = {
       ...draft,
-      objects: draft.objects.map((o, i) => (i === selected ? piece : o)),
+      objects: draft.objects.map((o, i) =>
+        group.includes(i) ? moved[group.indexOf(i)] : o,
+      ),
     };
     try {
       validateLevel(next);
@@ -854,14 +921,11 @@
   // one saved before scaling existed (and to the pre-migration parity baseline).
   function setScale(value: number) {
     if (selected < 0) return;
-    const piece = structuredClone(draft.objects[selected]);
     const scale = Math.round(value * 20) / 20;
-    if (scale === 1) delete piece.scale;
-    else piece.scale = scale;
-    const next = {
-      ...draft,
-      objects: draft.objects.map((o, i) => (i === selected ? piece : o)),
-    };
+    const next = changed((piece) => {
+      if (scale === 1) delete piece.scale;
+      else piece.scale = scale;
+    }, (o) => SCALABLE.includes(o.type));
     try {
       validateLevel(next);
     } catch {
@@ -875,12 +939,9 @@
   // keep working on top of it (they add 90 to whatever angle is set).
   function setAngle(value: number) {
     if (selected < 0) return;
-    const piece = structuredClone(draft.objects[selected]);
-    piece.rotation = ((Math.round(value) % 360) + 360) % 360;
-    const next = {
-      ...draft,
-      objects: draft.objects.map((o, i) => (i === selected ? piece : o)),
-    };
+    const next = changed((piece) => {
+      piece.rotation = ((Math.round(value) % 360) + 360) % 360;
+    }, (o) => SCALABLE.includes(o.type));
     try {
       validateLevel(next);
     } catch {
@@ -893,19 +954,16 @@
   // The ring controls: colour and bounce height. The defaults are stored as "no field".
   function setRing(change: Pick<Piece, "color" | "bounce">) {
     if (selected < 0) return;
-    const piece = structuredClone(draft.objects[selected]);
-    if (change.color !== undefined) {
-      if (change.color === RING_COLORS[0][0]) delete piece.color;
-      else piece.color = change.color;
-    }
-    if (change.bounce !== undefined) {
-      if (change.bounce === RING_BOUNCE) delete piece.bounce;
-      else piece.bounce = change.bounce;
-    }
-    const next = {
-      ...draft,
-      objects: draft.objects.map((o, i) => (i === selected ? piece : o)),
-    };
+    const next = changed((piece) => {
+      if (change.color !== undefined) {
+        if (change.color === RING_COLORS[0][0]) delete piece.color;
+        else piece.color = change.color;
+      }
+      if (change.bounce !== undefined) {
+        if (change.bounce === RING_BOUNCE) delete piece.bounce;
+        else piece.bounce = change.bounce;
+      }
+    }, (o) => o.type === "ring" && (change.bounce === undefined || !o.flipsGravity));
     validateLevel(next);
     draft = next;
     saveDraft();
@@ -913,18 +971,20 @@
   // The Edges control: which sides of an outlined block are drawn. FULL is stored as "no field".
   function setEdges(value: Edges | "") {
     if (selected < 0) return;
-    const piece = structuredClone(draft.objects[selected]);
-    if (value) piece.edges = value;
-    else delete piece.edges;
-    const next = {
-      ...draft,
-      objects: draft.objects.map((o, i) => (i === selected ? piece : o)),
-    };
+    const next = changed((piece) => {
+      if (value) piece.edges = value;
+      else delete piece.edges;
+    }, (o) => OUTLINED.includes(o.type));
     validateLevel(next);
     draft = next;
     saveDraft();
   }
   function pointermove(e: PointerEvent) {
+    if (sweep && fingers.has(e.pointerId) && fingers.size === 1) {
+      const view = draw();
+      sweep = { ...sweep, to: [view.x(e.clientX), view.y(e.clientY)] };
+      return;
+    }
     if (!pinch || !fingers.has(e.pointerId) || selected < 0) return;
     fingers.set(e.pointerId, [e.clientX, e.clientY]);
     if (fingers.size < 2) return;
@@ -948,6 +1008,7 @@
   function pointerup(e: PointerEvent) {
     run.release();
     if (!fingers.delete(e.pointerId)) return;
+    if (!fingers.size) endSweep();
     if (pinch && fingers.size < 2) {
       pinch = null;
       saveDraft();
@@ -955,14 +1016,16 @@
   }
   function deleteSelected() {
     if (selected < 0) return;
-    draft.objects.splice(selected, 1);
-    selected = -1;
+    draft.objects = draft.objects.filter((_, i) => !group.includes(i));
+    select(-1);
     saveDraft();
   }
   function duplicate() {
     try {
-      draft.objects.push(duplicateObject(draft, selected));
-      selected = draft.objects.length - 1;
+      const copies =
+        group.length > 1 ? duplicateGroup(draft, group) : [duplicateObject(draft, selected)];
+      draft.objects.push(...copies);
+      group = copies.map((_, i) => draft.objects.length - copies.length + i);
       saveDraft();
     } catch (error) {
       toast(error instanceof Error ? error.message : "Cannot copy object.");
@@ -979,7 +1042,7 @@
             "DELETE ALL OBJECTS",
             () => {
               draft.objects = [];
-              selected = -1;
+              select(-1);
               saveDraft();
               closeSheet();
             },
@@ -991,7 +1054,7 @@
   function how() {
     void sheet(
       "One button. Find your flow.",
-      "Square: tap or press Space to jump onto two-block ledges. Hold for another jump when you land. Pogo: same as square, but every fresh tap lets you jump again in midair. Jump before a wall to clear it. Try Air Steps! Plane: hold to fly against gravity; release to fall. Landings and ceiling contact are safe while flying, but wall impacts kill. Angle: hold to climb at 45 degrees, release to dive at 45 degrees. Floors, ceilings and block faces are safe; walls are not. Wheel: land on a block, floor or ceiling, then tap or press Space to flip gravity. Midair taps are ignored; holding does not flip again when you land. UP and DOWN portals set gravity without changing your shape. Speed portals change how fast you move forward: SLOW, 1X, FAST and FASTER. Shape and gravity stay the same. Under upside-down gravity, land and jump on ceilings. All spikes kill, including the tiny quarter-size ones. Outline blocks are transparent but solid. Hitting a wall kills in ALL modes, including the vertical face of a ramp. Your smaller hazard hitbox still forgives edge grazes. Background blocks never collide. Rings: tap or press Space while reaching a glowing ring for a midair jump, once per ring per run. Purple and red rings bounce one and five blocks; a white ring takes any colour and height. Wall pass (W) and roof pass (R) are invisible in play: lay them over blocks, or right where you hit them. While you touch a W, a wall stops you instead of crashing you, and a jump over it carries on; while you touch an R, you bump your head and fall back instead of crashing. Spikes still kill. Ramps: walk up or down the white diagonal slope. Curves are rounded ramps: a scoop bends up like a skate ramp, a hill bulges out: run into its side and you ride up it. Find RINGS and RAMP tabs in the editor. In the editor, pinch a selected piece with two fingers to size it and turn it, like cropping a photo; Snap holds 15 degrees and quarter sizes. Edge, parallel, outer corner, inner corner and no outline blocks are solid blocks with the white line on only some sides (or none, for the middle of a shape), so a big shape reads as one piece: turn them to face the outside, and pick EDGES on any selected block.",
+      "Square: tap or press Space to jump onto two-block ledges. Hold for another jump when you land. Pogo: same as square, but every fresh tap lets you jump again in midair. Jump before a wall to clear it. Try Air Steps! Plane: hold to fly against gravity; release to fall. Landings and ceiling contact are safe while flying, but wall impacts kill. Angle: hold to climb at 45 degrees, release to dive at 45 degrees. Floors, ceilings and block faces are safe; walls are not. Wheel: land on a block, floor or ceiling, then tap or press Space to flip gravity. Midair taps are ignored; holding does not flip again when you land. UP and DOWN portals set gravity without changing your shape. Speed portals change how fast you move forward: SLOW, 1X, FAST and FASTER. Shape and gravity stay the same. Under upside-down gravity, land and jump on ceilings. All spikes kill, including the tiny quarter-size ones. Outline blocks are transparent but solid. Hitting a wall kills in ALL modes, including the vertical face of a ramp. Your smaller hazard hitbox still forgives edge grazes. Background blocks never collide. Rings: tap or press Space while reaching a glowing ring for a midair jump, once per ring per run. Purple and red rings bounce one and five blocks; a white ring takes any colour and height. A dark blue gravity ring flips your gravity instead of bouncing you. Wall pass (W) and roof pass (R) are invisible in play: lay them over blocks, or right where you hit them. While you touch a W, a wall stops you instead of crashing you, and a jump over it carries on; while you touch an R, you bump your head and fall back instead of crashing. Spikes still kill. Ramps: walk up or down the white diagonal slope. Curves are rounded ramps: a scoop bends up like a skate ramp, a hill bulges out: run into its side and you ride up it. Find RINGS and RAMP tabs in the editor. In the editor, pinch a selected piece with two fingers to size it and turn it, like cropping a photo; Snap holds 15 degrees and quarter sizes. MULTI selects a group: tap pieces to add them, or swipe a box over a lot of them, then move, turn, flip, copy or delete them together. Edge, parallel, outer corner, inner corner and no outline blocks are solid blocks with the white line on only some sides (or none, for the middle of a shape), so a big shape reads as one piece: turn them to face the outside, and pick EDGES on any selected block.",
     );
   }
   // Every check says what it found, so a tap never looks like nothing happened. A pull is
@@ -1441,6 +1504,10 @@
         id="select-tool"
         aria-pressed={tool === "select"}
         onclick={() => (tool = "select")}>SELECT</button
+      ><button
+        id="multi-tool"
+        aria-pressed={tool === "multi"}
+        onclick={() => (tool = "multi")}>MULTI</button
       ><button id="duplicate-object" disabled={!selection} onclick={duplicate}
         >COPY + PASTE</button
       ><button id="delete-object" disabled={!selection} onclick={deleteSelected}
@@ -1458,7 +1525,7 @@
           value={layer}
           onchange={(e) => {
             layer = e.currentTarget.value;
-            selected = -1;
+            select(-1);
             if (layer === "background") chooseTab("blocks");
           }}
           ><option value="play">PLAY</option><option value="background"
@@ -1520,7 +1587,7 @@
           step="0.25"
           aria-label="Bounce height"
           value={selection?.bounce ?? RING_BOUNCE}
-          disabled={selection?.type !== "ring"}
+          disabled={selection?.type !== "ring" || selection.flipsGravity}
           oninput={(e) => setRing({ bounce: +e.currentTarget.value })}
         /></label
       ><label
@@ -1563,10 +1630,14 @@
       ><output id="selection"
         >{testing
           ? `TRY ${hud.attempt} · ${hud.cue} · ${hud.detail} · ESC OR STOP TO EDIT`
+          : group.length > 1
+          ? `${group.length} PIECES · MOVE, TURN, FLIP, COPY OR DELETE THEM TOGETHER`
           : selection
-          ? `${labelOf(selection.type)} · x ${selection.x.toFixed(2)} / y ${selection.y.toFixed(2)} · ${selection.rotation}° · ×${(selection.scale ?? 1).toFixed(2)}${selection.type === "ring" ? ` · ↑${selection.bounce ?? RING_BOUNCE}` : ""}${selection.edges ? ` · ${EDGE_NAMES.find(([v]) => v === selection.edges)?.[1]}` : ""}`
+          ? `${labelOf(selection.type)} · x ${selection.x.toFixed(2)} / y ${selection.y.toFixed(2)} · ${selection.rotation}° · ×${(selection.scale ?? 1).toFixed(2)}${selection.type === "ring" ? (selection.flipsGravity ? " · ⇅ GRAVITY" : ` · ↑${selection.bounce ?? RING_BOUNCE}`) : ""}${selection.edges ? ` · ${EDGE_NAMES.find(([v]) => v === selection.edges)?.[1]}` : ""}`
           : tool === "select"
             ? "Tap an object to select it."
+            : tool === "multi"
+              ? "Tap pieces to add them, or swipe a box over a lot of them."
             : `Tap the grid to place ${tool === "half" ? "a half spike" : article(tool in presets ? tool.replace("-", " ") : tool.startsWith("speed-") ? labelOf(tool).toLowerCase() + " portal" : tool)}.`}{layer ===
         "background"
           ? " · BACKGROUND: no collision"
