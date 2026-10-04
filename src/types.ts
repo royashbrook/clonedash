@@ -54,6 +54,11 @@ export interface Piece {
   color?: string; // rings only, #rrggbb; absent means the original yellow
   bounce?: number; // rings only, peak height in blocks; absent means the original 2.25
   flipsGravity?: true; // rings only, the dark blue orb: a tap flips gravity instead of bouncing
+  boost?: true; // gravity rings only, the green one: the flip comes with a bounce up the screen
+  dash?: true; // rings only, the dash orb: held, it carries the run the way it points (yellow, with flipsGravity: it flips you too)
+  noTouch?: true; // drawn, never collides (any piece but a zone)
+  wallPass?: true; // blocks and slopes: its side stops the run instead of crashing it, like a W
+  roofPass?: true; // blocks: a head hit bumps instead of crashing, like an R
   edges?: Edges; // outlined blocks only, which sides get the white line; absent means all four
 }
 // Outline variants, in the block's own frame (rotation and flips turn them): edge = the top
@@ -77,6 +82,7 @@ export interface GameState {
   gravity: number;
   speed: number; // forward speed multiplier, 1 until a speed portal changes it
   wall: number | null; // the wall face a W is holding the run against this step, else null
+  dash: number | null; // the climb (rise per block forward) of the dash orb being held, else null
   inputHeld: boolean;
   grounded: boolean;
   status: "playing" | "dead" | "complete";

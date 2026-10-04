@@ -13,6 +13,8 @@
     RING_BOUNCE,
     ZONES,
     OUTLINED,
+    BLOCKS,
+    SLOPES,
   } from "./engine.ts";
   import { LEVELS, COLLECTIONS, COURSE_ORDER, courseSong } from "./levels.ts";
   import { render } from "./render.ts";
@@ -94,6 +96,9 @@
       ["red-ring", "◉ RED · 5"],
       ["white-ring", "◉ WHITE · CUSTOM"],
       ["gravity-ring", "◉ DARK BLUE · GRAVITY"],
+      ["green-ring", "◉ GREEN · GRAVITY + BOUNCE"],
+      ["dash-ring", "➤ PINK · DASH"],
+      ["gravity-dash-ring", "➤ YELLOW · DASH + GRAVITY"],
       ["w-block", "W · WALL PASS"],
       ["r-block", "R · ROOF PASS"],
     ],
@@ -114,12 +119,15 @@
   // are solid blocks with an outline variant; the Edges control gives any outlined block one.
   const presets: Record<
     string,
-    Pick<Piece, "type"> & Partial<Pick<Piece, "color" | "bounce" | "flipsGravity" | "edges">>
+    Pick<Piece, "type"> & Partial<Pick<Piece, "color" | "bounce" | "flipsGravity" | "boost" | "dash" | "edges">>
   > = {
     "purple-ring": { type: "ring", color: "#c77dff", bounce: 1 },
     "red-ring": { type: "ring", color: "#ff5c7a", bounce: 5 },
     "white-ring": { type: "ring", color: "#ffffff" },
     "gravity-ring": { type: "ring", color: "#2b4cff", flipsGravity: true },
+    "green-ring": { type: "ring", color: "#9aff6b", flipsGravity: true, boost: true },
+    "dash-ring": { type: "ring", color: "#ff8ac4", dash: true },
+    "gravity-dash-ring": { type: "ring", dash: true, flipsGravity: true },
     "edge-block": { type: "block", edges: "edge" },
     "parallel-block": { type: "block", edges: "parallel" },
     "outer-corner": { type: "block", edges: "outer" },
@@ -941,7 +949,7 @@
     if (selected < 0) return;
     const next = changed((piece) => {
       piece.rotation = ((Math.round(value) % 360) + 360) % 360;
-    }, (o) => SCALABLE.includes(o.type));
+    }, (o) => SCALABLE.includes(o.type) || !!o.dash);
     try {
       validateLevel(next);
     } catch {
@@ -963,10 +971,50 @@
         if (change.bounce === RING_BOUNCE) delete piece.bounce;
         else piece.bounce = change.bounce;
       }
-    }, (o) => o.type === "ring" && (change.bounce === undefined || !o.flipsGravity));
+    }, (o) => o.type === "ring" && (change.bounce === undefined || !(o.flipsGravity || o.dash)));
     validateLevel(next);
     draft = next;
     saveDraft();
+  }
+  // EDIT OBJECT (#90): switches on the selected piece, or every piece in the group that can take
+  // one. Off is stored as "no field". The sheet reopens after each switch to show where it stands.
+  const OPTIONS: [
+    "noTouch" | "wallPass" | "roofPass",
+    string,
+    string,
+    (o: Piece) => boolean,
+  ][] = [
+    ["noTouch", "NO TOUCH", "you see it but go right through it", (o) => !ZONES.includes(o.type)],
+    ["wallPass", "WALL PASS", "its sides stop you instead of killing you", (o) => BLOCKS.includes(o.type) || SLOPES.includes(o.type)],
+    ["roofPass", "ROOF PASS", "you bump your head on it instead of dying", (o) => BLOCKS.includes(o.type)],
+  ];
+  function editObject() {
+    if (selected < 0) return;
+    const fits = OPTIONS.filter(([, , , fits]) => group.some((i) => fits(draft.objects[i])));
+    void sheet(
+      "Edit object",
+      fits.length
+        ? (group.length > 1 ? `${group.length} pieces. ` : "") +
+            fits.map(([key, name, text]) => `${name} ${selection[key] ? "ON" : "OFF"}: ${text}.`).join(" ")
+        : "Nothing to switch on this piece.",
+      [
+        ...fits.map(([key, name, , fit]): Action => [
+          `${name}: ${selection[key] ? "TURN OFF" : "TURN ON"}`,
+          () => {
+            const on = !selection[key];
+            const next = changed((piece) => {
+              if (on) piece[key] = true;
+              else delete piece[key];
+            }, fit);
+            validateLevel(next);
+            draft = next;
+            saveDraft();
+            editObject();
+          },
+        ]),
+        ["DONE", closeSheet, true],
+      ],
+    );
   }
   // The Edges control: which sides of an outlined block are drawn. FULL is stored as "no field".
   function setEdges(value: Edges | "") {
@@ -1054,7 +1102,7 @@
   function how() {
     void sheet(
       "One button. Find your flow.",
-      "Square: tap or press Space to jump onto two-block ledges. Hold for another jump when you land. Pogo: same as square, but every fresh tap lets you jump again in midair. Jump before a wall to clear it. Try Air Steps! Plane: hold to fly against gravity; release to fall. Landings and ceiling contact are safe while flying, but wall impacts kill. Angle: hold to climb at 45 degrees, release to dive at 45 degrees. Floors, ceilings and block faces are safe; walls are not. Wheel: land on a block, floor or ceiling, then tap or press Space to flip gravity. Midair taps are ignored; holding does not flip again when you land. UP and DOWN portals set gravity without changing your shape. Speed portals change how fast you move forward: SLOW, 1X, FAST and FASTER. Shape and gravity stay the same. Under upside-down gravity, land and jump on ceilings. All spikes kill, including the tiny quarter-size ones. Outline blocks are transparent but solid. Hitting a wall kills in ALL modes, including the vertical face of a ramp. Your smaller hazard hitbox still forgives edge grazes. Background blocks never collide. Rings: tap or press Space while reaching a glowing ring for a midair jump, once per ring per run. Purple and red rings bounce one and five blocks; a white ring takes any colour and height. A dark blue gravity ring flips your gravity instead of bouncing you. Wall pass (W) and roof pass (R) are invisible in play: lay them over blocks, or right where you hit them. While you touch a W, a wall stops you instead of crashing you, and a jump over it carries on; while you touch an R, you bump your head and fall back instead of crashing. Spikes still kill. Ramps: walk up or down the white diagonal slope. Curves are rounded ramps: a scoop bends up like a skate ramp, a hill bulges out: run into its side and you ride up it. Find RINGS and RAMP tabs in the editor. In the editor, pinch a selected piece with two fingers to size it and turn it, like cropping a photo; Snap holds 15 degrees and quarter sizes. MULTI selects a group: tap pieces to add them, or swipe a box over a lot of them, then move, turn, flip, copy or delete them together. Edge, parallel, outer corner, inner corner and no outline blocks are solid blocks with the white line on only some sides (or none, for the middle of a shape), so a big shape reads as one piece: turn them to face the outside, and pick EDGES on any selected block.",
+      "Square: tap or press Space to jump onto two-block ledges. Hold for another jump when you land. Pogo: same as square, but every fresh tap lets you jump again in midair. Jump before a wall to clear it. Try Air Steps! Plane: hold to fly against gravity; release to fall. Landings and ceiling contact are safe while flying, but wall impacts kill. Angle: hold to climb at 45 degrees, release to dive at 45 degrees. Floors, ceilings and block faces are safe; walls are not. Wheel: land on a block, floor or ceiling, then tap or press Space to flip gravity. Midair taps are ignored; holding does not flip again when you land. UP and DOWN portals set gravity without changing your shape. Speed portals change how fast you move forward: SLOW, 1X, FAST and FASTER. Shape and gravity stay the same. Under upside-down gravity, land and jump on ceilings. All spikes kill, including the tiny quarter-size ones. Outline blocks are transparent but solid. Hitting a wall kills in ALL modes, including the vertical face of a ramp. Your smaller hazard hitbox still forgives edge grazes. Background blocks never collide. Rings: tap or press Space while reaching a glowing ring for a midair jump, once per ring per run. Purple and red rings bounce one and five blocks; a white ring takes any colour and height. A dark blue gravity ring flips your gravity instead of bouncing you; a green one flips it and bounces you up the screen. Hold on a pink dash orb and you dash the way it points, with no gravity, until you let go: turn it with the angle slider to aim it. A yellow dash orb flips your gravity as well. EDIT OBJECT switches a piece to NO TOUCH (seen, never touched), WALL PASS (its sides stop you, like a W) or ROOF PASS (you bump your head, like an R). Wall pass (W) and roof pass (R) are invisible in play: lay them over blocks, or right where you hit them. While you touch a W, a wall stops you instead of crashing you, and a jump over it carries on; while you touch an R, you bump your head and fall back instead of crashing. Spikes still kill. Ramps: walk up or down the white diagonal slope. Curves are rounded ramps: a scoop bends up like a skate ramp, a hill bulges out: run into its side and you ride up it. Find RINGS and RAMP tabs in the editor. In the editor, pinch a selected piece with two fingers to size it and turn it, like cropping a photo; Snap holds 15 degrees and quarter sizes. MULTI selects a group: tap pieces to add them, or swipe a box over a lot of them, then move, turn, flip, copy or delete them together. Edge, parallel, outer corner, inner corner and no outline blocks are solid blocks with the white line on only some sides (or none, for the middle of a shape), so a big shape reads as one piece: turn them to face the outside, and pick EDGES on any selected block.",
     );
   }
   // Every check says what it found, so a tap never looks like nothing happened. A pull is
@@ -1510,6 +1558,8 @@
         onclick={() => (tool = "multi")}>MULTI</button
       ><button id="duplicate-object" disabled={!selection} onclick={duplicate}
         >COPY + PASTE</button
+      ><button id="edit-object" disabled={!selection} onclick={editObject}
+        >EDIT OBJECT</button
       ><button id="delete-object" disabled={!selection} onclick={deleteSelected}
         >DELETE</button
       ><button
@@ -1565,7 +1615,7 @@
           step="1"
           aria-label="Angle"
           value={selection?.rotation ?? 0}
-          disabled={!selection || !SCALABLE.includes(selection.type)}
+          disabled={!selection || !(SCALABLE.includes(selection.type) || selection.dash)}
           oninput={(e) => setAngle(+e.currentTarget.value)}
         /></label
       ><label
@@ -1587,7 +1637,7 @@
           step="0.25"
           aria-label="Bounce height"
           value={selection?.bounce ?? RING_BOUNCE}
-          disabled={selection?.type !== "ring" || selection.flipsGravity}
+          disabled={selection?.type !== "ring" || selection.flipsGravity || selection.dash}
           oninput={(e) => setRing({ bounce: +e.currentTarget.value })}
         /></label
       ><label
@@ -1633,7 +1683,7 @@
           : group.length > 1
           ? `${group.length} PIECES · MOVE, TURN, FLIP, COPY OR DELETE THEM TOGETHER`
           : selection
-          ? `${labelOf(selection.type)} · x ${selection.x.toFixed(2)} / y ${selection.y.toFixed(2)} · ${selection.rotation}° · ×${(selection.scale ?? 1).toFixed(2)}${selection.type === "ring" ? (selection.flipsGravity ? " · ⇅ GRAVITY" : ` · ↑${selection.bounce ?? RING_BOUNCE}`) : ""}${selection.edges ? ` · ${EDGE_NAMES.find(([v]) => v === selection.edges)?.[1]}` : ""}`
+          ? `${labelOf(selection.type)} · x ${selection.x.toFixed(2)} / y ${selection.y.toFixed(2)} · ${selection.rotation}° · ×${(selection.scale ?? 1).toFixed(2)}${selection.type === "ring" ? (selection.dash ? (selection.flipsGravity ? " · ➤ DASH + GRAVITY" : " · ➤ DASH") : selection.flipsGravity ? (selection.boost ? " · ⇈ GRAVITY + BOUNCE" : " · ⇅ GRAVITY") : ` · ↑${selection.bounce ?? RING_BOUNCE}`) : ""}${selection.edges ? ` · ${EDGE_NAMES.find(([v]) => v === selection.edges)?.[1]}` : ""}${OPTIONS.filter(([key]) => selection[key]).map(([, name]) => ` · ${name}`).join("")}`
           : tool === "select"
             ? "Tap an object to select it."
             : tool === "multi"

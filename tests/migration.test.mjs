@@ -34,6 +34,7 @@ const modernState = (state) => ({
   ...state,
   speed: 1,
   wall: null,
+  dash: null,
   mode: modernId(state.mode),
   level: modernLevel(state.level),
 });
