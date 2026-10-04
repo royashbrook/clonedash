@@ -203,22 +203,37 @@ export function render(
         ctx.beginPath();
         ctx.arc(X(o.x + 0.5), Y(o.y + 0.5), unit * 0.6, 0, Math.PI * 2);
         ctx.stroke();
-        if (o.flipsGravity) {
-          // the gravity ring is an orb: filled, so it reads apart from the jump rings
+        if (o.flipsGravity || o.dash) {
+          // gravity rings and the dash orb are orbs: filled, so they read apart from the jump rings
           ctx.fillStyle = `${c}88`;
           ctx.beginPath();
           ctx.arc(X(o.x + 0.5), Y(o.y + 0.5), unit * 0.45, 0, Math.PI * 2);
           ctx.fill();
         }
-        ctx.fillStyle = o.flipsGravity ? "#ffffff" : c;
-        ctx.font = `bold ${unit * 0.4}px system-ui`;
-        ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
-        ctx.fillText(
-          o.flipsGravity ? "⇅" : (state?.gravity ?? -1) > 0 ? "↓" : "↑",
-          X(o.x + 0.5),
-          Y(o.y + 0.5),
-        );
+        if (o.dash) {
+          // a > turned the way the orb points (the canvas y runs down, so the turn is negated)
+          const a = (-o.rotation * Math.PI) / 180,
+            r = unit * 0.2,
+            at = (x: number, y: number) =>
+              [X(o.x + 0.5) + x * Math.cos(a) - y * Math.sin(a), Y(o.y + 0.5) + x * Math.sin(a) + y * Math.cos(a)] as const;
+          ctx.strokeStyle = "#ffffff";
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          ctx.moveTo(...at(-r * 0.6, -r));
+          ctx.lineTo(...at(r * 0.6, 0));
+          ctx.lineTo(...at(-r * 0.6, r));
+          ctx.stroke();
+        } else {
+          ctx.fillStyle = o.flipsGravity ? "#ffffff" : c;
+          ctx.font = `bold ${unit * 0.4}px system-ui`;
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.fillText(
+            o.flipsGravity ? (o.boost ? "⇈" : "⇅") : (state?.gravity ?? -1) > 0 ? "↓" : "↑",
+            X(o.x + 0.5),
+            Y(o.y + 0.5),
+          );
+        }
         ctx.restore();
       } else if (PORTALS.includes(o.type)) {
         const x = X(o.x + 0.3),
@@ -360,6 +375,17 @@ export function render(
           (b.top - b.bottom) * unit + 10,
         );
         ctx.setLineDash([]);
+      }
+      // what EDIT OBJECT changed, marked in the editor only: NT no touch, W wall pass, R roof pass
+      const marks = [o.noTouch && "NT", o.wallPass && "W", o.roofPass && "R"].filter(Boolean);
+      if (editing && marks.length) {
+        const b = bounds(o);
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = "#ffffff";
+        ctx.font = `bold ${unit * 0.28}px system-ui`;
+        ctx.textAlign = "left";
+        ctx.textBaseline = "top";
+        ctx.fillText(marks.join(" "), X(b.left) + 3, Y(b.top) + 3);
       }
       ctx.restore();
     });

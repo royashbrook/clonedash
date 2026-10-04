@@ -83,6 +83,14 @@ export const RING_BOUNCE = 2.25;
 export const ringSpeed = (o: Piece) =>
   o.bounce === undefined ? JUMP : Math.sqrt(2 * GRAVITY * o.bounce);
 export const levelHeight = (level: Level) => level.height ?? 7;
+// A dash orb carries the run the way it points. The trail only runs forward, so an orb aimed
+// backward dashes the mirror way forward, and the aim is held to 70 degrees off straight ahead.
+export const DASH_LIMIT = 70;
+export const dashClimb = (o: Piece) => {
+  const turn = ((o.rotation % 360) + 540) % 360 - 180,
+    ahead = Math.abs(turn) > 90 ? Math.sign(turn) * (180 - Math.abs(turn)) : turn;
+  return Math.tan((Math.max(-DASH_LIMIT, Math.min(DASH_LIMIT, ahead)) * Math.PI) / 180);
+};
 export function object(type: ObjectType, x: number, y = 0): Piece {
   return { type, x, y, rotation: 0, flipX: false, flipY: false };
 }
@@ -183,6 +191,7 @@ export function createState(level: Level): GameState {
     gravity: -1,
     speed: 1,
     wall: null,
+    dash: null,
     inputHeld: false,
     grounded: true,
     status: "playing",
@@ -195,7 +204,7 @@ export function createState(level: Level): GameState {
 export function ringReady(s: GameState, o: Piece, index: number) {
   const dx = Math.max(s.x - (o.x + 0.5), 0, o.x + 0.5 - s.x - SIZE);
   const dy = Math.max(s.y - (o.y + 0.5), 0, o.y + 0.5 - s.y - SIZE);
-  return !s.usedRings.includes(index) && dx * dx + dy * dy <= 0.6 * 0.6;
+  return !o.noTouch && !s.usedRings.includes(index) && dx * dx + dy * dy <= 0.6 * 0.6;
 }
 // Height of the actual triangle over the player's full horizontal footprint.
 export function rampSurface(
@@ -246,18 +255,23 @@ export function step(
     oldX = s.x,
     wasGrounded = s.grounded,
     height = levelHeight(s.level);
-  const ring = tapped
-    ? s.level.objects.findIndex(
-        (o, i) => o.type === "ring" && ringReady(s, o, i),
-      )
-    : -1;
+  // A dash orb starts on a hold, not only a fresh tap, and lasts until the hold ends.
+  if (!held) s.dash = null;
+  const ring = s.level.objects.findIndex(
+    (o, i) => o.type === "ring" && (o.dash ? held : tapped) && ringReady(s, o, i),
+  );
   if (ring >= 0) {
     s.usedRings.push(ring);
     const o = s.level.objects[ring];
-    // a gravity ring flips you like a wheel does on the ground, from wherever you are in the air
-    if (o.flipsGravity) {
+    // a gravity ring flips you like a wheel does on the ground, from wherever you are in the air;
+    // the green one bounces you first, up the screen like a yellow ring
+    // the yellow dash orb flips gravity as the dash starts
+    if (o.dash) {
+      s.dash = dashClimb(o);
+      if (o.flipsGravity) s.gravity *= -1;
+    } else if (o.flipsGravity) {
+      s.vy = o.boost ? -s.gravity * ringSpeed(o) : 0;
       s.gravity *= -1;
-      s.vy = 0;
     } else s.vy = -s.gravity * ringSpeed(o);
     s.grounded = false;
   }
@@ -277,8 +291,11 @@ export function step(
   // the trail moves forward. Gravity only picks which way "up" is.
   const forward = SPEED * s.speed;
   if (s.mode === "angle") s.vy = -s.gravity * (held ? forward : -forward);
+  if (s.dash !== null) s.vy = s.dash * forward;
   const acceleration =
-    s.mode === "plane"
+    s.dash !== null
+      ? 0
+      : s.mode === "plane"
       ? -s.gravity * (held ? 14 : -12)
       : s.mode === "angle"
         ? 0
@@ -311,7 +328,7 @@ export function step(
     inR = inZone("r-block");
   for (let i = 0; i < s.level.objects.length; i++) {
     const o = s.level.objects[i];
-    if (o.layer === "background") continue;
+    if (o.layer === "background" || o.noTouch) continue;
     if (o.type === "ring" || ZONES.includes(o.type)) continue;
     const reach = 2 * (o.scale ?? 1); // a scaled piece is wider than its anchor cell
     if (o.x > s.x + reach || o.x < s.x - reach) continue;
@@ -379,7 +396,7 @@ export function step(
     }
     // Modes that ride surfaces slide along a block's head face, and anyone touching an R bumps
     // it: the rise stops at the face and gravity takes over, nobody dies.
-    const headSlide = safeSolid || (inR && BLOCKS.includes(o.type));
+    const headSlide = safeSolid || ((inR || o.roofPass) && BLOCKS.includes(o.type));
     if (
       BLOCKS.includes(o.type) &&
       o.rotation % 90 === 0 &&
@@ -414,7 +431,7 @@ export function step(
       // clears the wall carries on. Spikes still kill.
       const fromSide = oldX + SIZE - DEATH_INSET <= b.left + 0.001;
       // Vertical support is resolved above. Wall impacts kill in every mode.
-      if (inW && fromSide && !SPIKES.includes(o.type)) {
+      if ((inW || o.wallPass) && fromSide && !SPIKES.includes(o.type)) {
         s.x = b.left - SIZE + DEATH_INSET;
         s.wall = b.left;
       } else if (headSlide && oldY + SIZE <= b.bottom + 0.015 && s.vy > 0) {
@@ -467,7 +484,7 @@ export function validateLevel(input: unknown): Level {
       o.x > raw.length - 2 ||
       o.y < -0.5 ||
       o.y > height - 1 ||
-      (SCALABLE.includes(o.type)
+      (SCALABLE.includes(o.type) || o.dash === true // a dash orb aims at any angle
         ? !(Number.isFinite(o.rotation) && o.rotation >= 0 && o.rotation < 360)
         : ![0, 90, 180, 270].includes(o.rotation)) ||
       typeof o.flipX !== "boolean" ||
@@ -502,6 +519,22 @@ export function validateLevel(input: unknown): Level {
       (o.type !== "ring" || o.flipsGravity !== true || o.bounce !== undefined)
     )
       throw Error("Invalid gravity ring");
+    if (o.boost !== undefined && (o.boost !== true || !o.flipsGravity))
+      throw Error("Invalid gravity ring");
+    if (
+      o.dash !== undefined &&
+      (o.type !== "ring" || o.dash !== true || o.boost || o.bounce !== undefined)
+    )
+      throw Error("Invalid dash orb");
+    if (o.noTouch !== undefined && (o.noTouch !== true || ZONES.includes(o.type)))
+      throw Error("Invalid no touch");
+    if (
+      o.wallPass !== undefined &&
+      (o.wallPass !== true || !(BLOCKS.includes(o.type) || SLOPES.includes(o.type)))
+    )
+      throw Error("Invalid wall pass");
+    if (o.roofPass !== undefined && (o.roofPass !== true || !BLOCKS.includes(o.type)))
+      throw Error("Invalid roof pass");
     if (
       o.edges !== undefined &&
       (!OUTLINED.includes(o.type) || !EDGES.includes(o.edges))
