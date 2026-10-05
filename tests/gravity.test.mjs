@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createState, step, SIZE, STEP, TYPES, object, polygon, bounds, intersects, transform, validateLevel } from '../src/engine.ts';
+import { createState, step, FALL, SIZE, STEP, TYPES, object, polygon, bounds, intersects, transform, validateLevel } from '../src/engine.ts';
 const empty = { name: 'Gravity checks', length: 100, objects: [] };
 
 test('wheel requires surface contact, ignores midair taps, and never queues a held flip on landing', () => {
@@ -77,4 +77,17 @@ test('all new objects validate and transform; two-thirds spike is two-thirds in 
   assert.equal(intersects(above, polygon(spike)), false);
   const inside = [[6.28, 2.3], [6.38, 2.3], [6.38, 2.4], [6.28, 2.4]];
   assert.equal(intersects(inside, polygon(spike)), true);
+});
+
+test('a gravity portal that flips you drops you the new way at once; one that does not leaves you be (#94)', () => {
+  for (const type of ['gravity-up', 'gravity-down']) {
+    const g = type === 'gravity-up' ? 1 : -1;
+    const s = { ...createState({ ...empty, objects: [object(type, 3)] }), gravity: -g, x: 2.8, y: 1, vy: 0, grounded: false };
+    step(s, false);
+    assert.equal(s.gravity, g);
+    assert.equal(s.vy, g * FALL, `${type} flipped and falling, vy=${s.vy}`);
+    const same = { ...createState({ ...empty, objects: [object(type, 3)] }), gravity: g, x: 2.8, y: 1, vy: 0, grounded: false };
+    step(same, false);
+    assert.equal(same.vy, 0, `${type} with gravity already that way: no push`);
+  }
 });

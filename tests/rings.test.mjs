@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createState, step, JUMP, GRAVITY, STEP, RING_BOUNCE, ringSpeed, object, validateLevel } from '../src/engine.ts';
+import { createState, step, FALL, JUMP, GRAVITY, STEP, RING_BOUNCE, ringSpeed, object, validateLevel } from '../src/engine.ts';
 import { encodeLevel, decodeLevel } from '../src/transfer.ts';
 const level = (objects) => ({ name: 'Rings', length: 40, height: 20, objects });
 
@@ -48,6 +48,8 @@ test('a dark blue gravity ring flips gravity on a tap instead of bouncing, once 
     const s = { ...createState(level([orb])), x: 5, y: 3, gravity, grounded: false, vy: 0.2 };
     step(s, true);
     assert.equal(s.gravity, -gravity, 'flipped');
+    // and you drop the new way at once, as fast as a one-block fall ends (#94)
+    assert.ok(s.vy * s.gravity >= FALL, `falling the new way, vy=${s.vy}`);
     assert.deepEqual(s.usedRings, [0]);
     // used: a second tap in reach does nothing
     step(s, false); step(s, true);

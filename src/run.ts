@@ -68,7 +68,7 @@ export class Run {
         );
         this.jumpBuffer =
           (freshTap &&
-            (previousMode === "wheel" || previousMode === "pogo")) ||
+            (previousMode === "wheel" || previousMode === "croissant" || previousMode === "pogo")) ||
           ringsUsed !== state.usedRings.length ||
           previousMode !== state.mode ||
           (grounded && !state.grounded)

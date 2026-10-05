@@ -16,6 +16,7 @@ const portalLook: Record<string, [string, string, string]> = {
   wheel: ["#ff8ac4", "WHEEL", "⊙"],
   pogo: ["#53e3ff", "POGO", "⇈"],
   angle: ["#c77dff", "ANGLE", "◢"],
+  croissant: ["#f4a259", "CROISSANT", "☾"],
   "gravity-up": ["#53e3ff", "UP", "↑"],
   "gravity-down": ["#ffb477", "DOWN", "↓"],
   "speed-slow": ["#ffb477", "SLOW", "<"],
@@ -81,7 +82,7 @@ export function render(
     hasGravity =
       height > 7 ||
       level.objects.some((o) =>
-        ["wheel", "gravity-up", "gravity-down"].includes(o.type),
+        ["wheel", "croissant", "gravity-up", "gravity-down"].includes(o.type),
       );
   const top = !editing && hasGravity ? Math.max(84, areaTop) : areaTop;
   const unit = Math.max(12, Math.min((floor - top - 14) / 7, w / 13.5, 82));
@@ -179,6 +180,7 @@ export function render(
     level.objects.forEach((o, index) => {
       if ((o.layer === "background") !== background) return;
       if (ZONES.includes(o.type) && state && !editing) return; // invisible in play
+      if (o.hidden && !editing) return; // HIDDEN: still solid, never drawn outside the editor (#96)
       const k = o.scale ?? 1; // a scaled piece reaches further than its anchor cell
       if (X(o.x) < -unit * 2 * k || X(o.x) > w + unit * k) return;
       ctx.save();
@@ -187,12 +189,13 @@ export function render(
           ? 0.65
           : 0.3
         : 1;
+      if (o.hidden) ctx.globalAlpha *= 0.3; // faint, so it can still be found and edited
       if (o.type === "ring") {
         const active = state && ringReady(state, o, index),
           used = state?.usedRings.includes(index),
           c = o.color ?? "#ffd166";
         ctx.save();
-        ctx.globalAlpha = used ? 0.25 : 1;
+        ctx.globalAlpha *= used ? 0.25 : 1;
         ctx.strokeStyle = active ? "#ffffff" : c;
         ctx.lineWidth = active ? 4 : 3;
         ctx.beginPath();
@@ -376,8 +379,9 @@ export function render(
         );
         ctx.setLineDash([]);
       }
-      // what EDIT OBJECT changed, marked in the editor only: NT no touch, W wall pass, R roof pass
-      const marks = [o.noTouch && "NT", o.wallPass && "W", o.roofPass && "R"].filter(Boolean);
+      // what EDIT OBJECT changed, marked in the editor only: NT no touch, H hidden, W wall pass,
+      // R roof pass
+      const marks = [o.noTouch && "NT", o.hidden && "H", o.wallPass && "W", o.roofPass && "R"].filter(Boolean);
       if (editing && marks.length) {
         const b = bounds(o);
         ctx.globalAlpha = 1;
@@ -508,6 +512,27 @@ export function render(
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
         ctx.fillText(state.gravity > 0 ? "↑" : "↓", 0, 0);
+      } else if (state.mode === "croissant") {
+        // a crescent lying on its horns; upside down it hangs from the ceiling by them
+        if (state.gravity > 0) ctx.scale(1, -1);
+        const r = (SIZE * unit) / 2;
+        ctx.fillStyle = color;
+        ctx.strokeStyle = "#fff";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(0, r * 0.2, r, Math.PI * 0.9, Math.PI * 2.1);
+        ctx.arc(0, r * 0.7, r * 0.62, Math.PI * 2.02, Math.PI * 0.98, true);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+        ctx.strokeStyle = "#101825";
+        for (const a of [-0.3, 0, 0.3]) {
+          const t = -Math.PI / 2 + a;
+          ctx.beginPath();
+          ctx.moveTo(Math.cos(t) * r * 0.45, r * 0.2 + Math.sin(t) * r * 0.45);
+          ctx.lineTo(Math.cos(t) * r * 0.95, r * 0.2 + Math.sin(t) * r * 0.95);
+          ctx.stroke();
+        }
       } else if (state.mode === "angle") {
         // A dart that points along its own 45 degree line: up while held, down when released.
         ctx.rotate(-Math.atan2(state.vy, SPEED * state.speed));

@@ -26,7 +26,7 @@ function portableLevel(input: unknown): Level {
     ...(level.note === undefined ? {} : { note: level.note }),
     ...(level.color === undefined ? {} : { color: level.color }),
     objects: level.objects.map(
-      ({ type, x, y, rotation, flipX, flipY, layer, scale, color, bounce, flipsGravity, boost, dash, noTouch, wallPass, roofPass, edges }) => ({
+      ({ type, x, y, rotation, flipX, flipY, layer, scale, color, bounce, flipsGravity, boost, dash, noTouch, hidden, wallPass, roofPass, edges }) => ({
         type,
         x,
         y,
@@ -41,6 +41,7 @@ function portableLevel(input: unknown): Level {
         ...(boost === undefined ? {} : { boost }),
         ...(dash === undefined ? {} : { dash }),
         ...(noTouch === undefined ? {} : { noTouch }),
+        ...(hidden === undefined ? {} : { hidden }),
         ...(wallPass === undefined ? {} : { wallPass }),
         ...(roofPass === undefined ? {} : { roofPass }),
         ...(edges === undefined ? {} : { edges }),
