@@ -141,7 +141,9 @@ export const LEVELS: Level[] = [
       o("wheel", 3),
       o("gravity-up", 6),
       o("small", 12),
-      o("gravity-down", 16, 4.5),
+      // 2026-10-04 (#94): moved from 16. A flip now drops you at once, and from 16 the drop
+      // lands in front of the black blocks instead of on them.
+      o("gravity-down", 18, 4.5),
       o("black", 20),
       o("black", 21),
       o("small", 28),

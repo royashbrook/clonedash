@@ -13,7 +13,10 @@ export const SPEED = 5,
   GRAVITY = 16,
   JUMP = Math.sqrt(2 * GRAVITY * 2.25),
   SIZE = 0.64,
-  STEP = 1 / 120;
+  STEP = 1 / 120,
+  // a gravity flip from a portal or a dark blue orb starts you already falling, as fast as a
+  // one-block drop ends, so the flip carries you instead of floating (#94)
+  FALL = Math.sqrt(2 * GRAVITY);
 export const DEATH_INSET = 0.12; // 0.40-block hazard box; full size still supports landings.
 // Spikes reach further into the body than walls do: the kid asked for bigger hitboxes, but not
 // pixel-exact, so a spike catches more of the cube while a graze on its very edge still lives.
@@ -60,6 +63,7 @@ export const PORTALS = [
   "wheel",
   "pogo",
   "angle",
+  "croissant",
   "gravity-up",
   "gravity-down",
   ...Object.keys(SPEEDS),
@@ -231,6 +235,26 @@ export function rampSurface(
       : Math.min(...heights)
     : null;
 }
+// The croissant's teleport (#97): straight across to the first surface the new gravity falls
+// toward, over the player's whole width, or to the level's edge when nothing is in the way. Only
+// what it could stand on stops it; spikes, rings, portals and zones are passed through.
+export function across(s: GameState) {
+  const up = s.gravity > 0,
+    left = s.x,
+    right = s.x + SIZE;
+  let y = up ? levelHeight(s.level) - SIZE : 0;
+  for (const o of s.level.objects) {
+    if (o.layer === "background" || o.noTouch) continue;
+    if (!(BLOCKS.includes(o.type) || SLOPES.includes(o.type))) continue;
+    const b = bounds(o);
+    if (b.right <= left + 0.001 || b.left >= right - 0.001) continue;
+    const face = rampSurface(o, left, right, !up);
+    if (face === null) continue;
+    if (up && face >= s.y + SIZE - 0.001) y = Math.min(y, face - SIZE);
+    if (!up && face <= s.y + 0.001) y = Math.max(y, face);
+  }
+  return y;
+}
 function playerPolygon(s: GameState, inset = 0): Point[] {
   const left = s.x + inset,
     right = s.x + SIZE - inset,
@@ -263,15 +287,15 @@ export function step(
   if (ring >= 0) {
     s.usedRings.push(ring);
     const o = s.level.objects[ring];
-    // a gravity ring flips you like a wheel does on the ground, from wherever you are in the air;
-    // the green one bounces you first, up the screen like a yellow ring
+    // a gravity ring flips you from wherever you are in the air and you drop the new way at once
+    // (#94); the green one bounces you off the new gravity, a yellow ring jump turned over (#95)
     // the yellow dash orb flips gravity as the dash starts
     if (o.dash) {
       s.dash = dashClimb(o);
       if (o.flipsGravity) s.gravity *= -1;
     } else if (o.flipsGravity) {
-      s.vy = o.boost ? -s.gravity * ringSpeed(o) : 0;
       s.gravity *= -1;
+      s.vy = o.boost ? -s.gravity * ringSpeed(o) : s.gravity * FALL;
     } else s.vy = -s.gravity * ringSpeed(o);
     s.grounded = false;
   }
@@ -279,6 +303,11 @@ export function step(
     s.gravity *= -1;
     s.vy = 0;
     s.grounded = false;
+  }
+  if (ring < 0 && s.mode === "croissant" && s.grounded && tapped) {
+    s.gravity *= -1;
+    s.y = across(s);
+    s.vy = 0;
   }
   if (
     ((s.mode === "square" || s.mode === "pogo") && s.grounded && held) ||
@@ -339,8 +368,9 @@ export function step(
         if (!s.touchingPortals.includes(i)) {
           if (o.type in SPEEDS) s.speed = SPEEDS[o.type];
           else if (o.type.startsWith("gravity-")) {
+            const flip = s.gravity !== (o.type === "gravity-up" ? 1 : -1);
             s.gravity = o.type === "gravity-up" ? 1 : -1;
-            s.vy = 0;
+            s.vy = flip ? s.gravity * FALL : 0;
             s.grounded = false;
           } else {
             s.mode = o.type as GameMode;
@@ -528,6 +558,8 @@ export function validateLevel(input: unknown): Level {
       throw Error("Invalid dash orb");
     if (o.noTouch !== undefined && (o.noTouch !== true || ZONES.includes(o.type)))
       throw Error("Invalid no touch");
+    if (o.hidden !== undefined && (o.hidden !== true || ZONES.includes(o.type)))
+      throw Error("Invalid hidden");
     if (
       o.wallPass !== undefined &&
       (o.wallPass !== true || !(BLOCKS.includes(o.type) || SLOPES.includes(o.type)))

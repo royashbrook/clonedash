@@ -39,18 +39,35 @@ test('WALL PASS: its side holds the run like a W; ROOF PASS: a head hit bumps li
   assert.equal(s.status, 'playing'); assert.equal(top, 2 - SIZE, 'bumped flush under it'); assert.ok(s.x > 15);
 });
 
-test('the green ring flips gravity and bounces you up the screen like a yellow ring', () => {
+test('the green ring flips gravity and bounces you away from the new gravity (#95)', () => {
   const green = { ...object('ring', 5, 3), color: '#9aff6b', flipsGravity: true, boost: true };
   const s = { ...createState(level([green])), x: 5, y: 3, grounded: false, vy: 0 };
   step(s, true);
-  assert.equal(s.gravity, 1, 'flipped');
-  assert.ok(s.vy > JUMP * 0.9, `launched up, vy=${s.vy}`);
-  run(s, 200);
-  assert.equal(s.status, 'playing'); assert.equal(s.y, 10 - SIZE, 'up on the ceiling');
-  // and upside down it bounces down the screen
+  assert.equal(s.gravity, 1, 'flipped, gravity now pulls up');
+  assert.ok(s.vy < -JUMP * 0.9, `bounced down the screen, away from it, vy=${s.vy}`);
+  let lowest = s.y;
+  run(s, 200, () => { lowest = Math.min(lowest, s.y); return false; });
+  assert.ok(lowest < 3 - 2, `a full yellow ring jump down, lowest y=${lowest}`);
+  assert.equal(s.status, 'playing'); assert.equal(s.y, 10 - SIZE, 'then up on the ceiling');
+  // and upside down it bounces up the screen
   const flipped = { ...createState(level([green])), x: 5, y: 3, gravity: 1, grounded: false, vy: 0 };
   step(flipped, true);
-  assert.equal(flipped.gravity, -1); assert.ok(flipped.vy < -JUMP * 0.9);
+  assert.equal(flipped.gravity, -1); assert.ok(flipped.vy > JUMP * 0.9);
+});
+
+test('HIDDEN: never drawn in play, still collides, faint in the editor (#96)', async () => {
+  assert.equal(run(createState(level(wall({ hidden: true }))), 240).status, 'dead', 'a hidden wall still kills');
+  const floor = { ...createState(level([5, 6, 7].map(x => ({ ...object('block', x, 2), hidden: true })))), x: 5, y: 4, grounded: false };
+  run(floor, 60);
+  assert.equal(floor.y, 3, 'and still holds you up');
+  for (const piece of [object('block', 10, 1), object('spike', 10, 0), object('ring', 10, 2), object('plane', 10, 0), object('ramp', 10, 0)]) {
+    const ok = level([{ ...piece, hidden: true }]);
+    assert.deepEqual(validateLevel(ok), ok);
+    assert.equal((await decodeLevel(await encodeLevel(ok))).objects[0].hidden, true, 'the share code keeps it');
+  }
+  for (const bad of [{ ...object('block', 10, 1), hidden: false }, { ...object('block', 10, 1), hidden: 1 }, { ...object('w-block', 10, 1), hidden: true }])
+    assert.throws(() => validateLevel(level([bad])), /Invalid hidden/);
+  assert.equal('hidden' in (await decodeLevel(await encodeLevel(level([object('block', 10, 1)])))).objects[0], false);
 });
 
 test('the dash orb: held, the run goes the way it points with no gravity, until let go', () => {

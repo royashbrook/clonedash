@@ -57,3 +57,21 @@ test('the green ring and both dash orbs place from RINGS; a dash orb takes any a
   await page.locator('#angle').evaluate(e => { e.value = '37'; e.dispatchEvent(new Event('input', { bubbles: true })); });
   await expect.poll(async () => (await stored(page)).draft.objects.at(-1).rotation).toBe(37);
 });
+
+test('EDIT OBJECT turns HIDDEN on; the croissant portal places from PORTALS and plays (#96, #97)', async ({ page }) => {
+  await page.goto('/'); await page.locator('#editor-open').click();
+  const cell = await grid(page);
+  await cell(5, 0);
+  await page.locator('#edit-object').click();
+  const sheet = page.locator('dialog');
+  await sheet.getByRole('button', { name: 'HIDDEN: TURN ON' }).click();
+  await expect(sheet).toContainText('HIDDEN ON');
+  await sheet.getByRole('button', { name: 'DONE' }).click();
+  expect((await stored(page)).draft.objects[0]).toMatchObject({ type: 'block', hidden: true });
+  await expect(page.locator('#selection')).toContainText('HIDDEN');
+  await page.getByRole('tab', { name: 'PORTALS', exact: true }).click();
+  await page.getByRole('button', { name: '☾ CROISSANT', exact: true }).click();
+  await cell(3, 0);
+  expect((await stored(page)).draft.objects.at(-1)).toMatchObject({ type: 'croissant', x: 3, y: 0 });
+  await page.screenshot({ path: 'test-results/hidden-editor.png' });
+});

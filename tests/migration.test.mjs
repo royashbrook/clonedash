@@ -38,6 +38,13 @@ const modernState = (state) => ({
   mode: modernId(state.mode),
   level: modernLevel(state.level),
 });
+// 2026-10-04 (#94): a gravity flip now drops you at once, so Gravity Flip's first DOWN portal
+// moved from x 16 to 18 to keep its drop landing on the black blocks. That one piece is the only
+// authored change; every other piece of every frozen trail still matches.
+const movedPortal = (level) =>
+  level.name !== "Gravity Flip"
+    ? level
+    : { ...level, objects: level.objects.map((o) => (o.type === "gravity-down" && o.x === 16 ? { ...o, x: 18 } : o)) };
 // Trails built only from pieces the frozen tree has. The Remix set (#71) uses pieces added since
 // (the angle and speed portals, zones, ring bounce, sizes and turns), which the frozen tree cannot
 // play or paint, so it is left out. Every trail made before it is still compared: the assert
@@ -85,10 +92,11 @@ test("typed engine matches the pinned pre-migration tree frame by frame", async 
   await withLegacy((old, levels) => {
     assert.deepEqual(
       LEVELS.slice(0, levels.LEVELS.length),
-      levels.LEVELS.map(modernLevel),
+      levels.LEVELS.map(modernLevel).map(movedPortal),
     );
     let frames = 0,
-      spikeGrazes = 0;
+      spikeGrazes = 0,
+      flipDrops = 0;
     for (const level of frozenTrails(old))
       for (const mode of ["square", "plane", "wheel", "pogo"])
         for (const gravity of [-1, 1]) {
@@ -108,6 +116,14 @@ test("typed engine matches the pinned pre-migration tree frame by frame", async 
             // The one allowed divergence: this engine dies where the frozen tree lives, on a frame
             // whose only difference is that death, against a spike the new box touches and the
             // old box does not. The run stops being compared there.
+            // 2026-10-04 (#94): a gravity portal that flips you starts you falling the new way at
+            // FALL instead of from rest. The other allowed divergence: the frame where that velocity
+            // is the only difference. The run stops being compared there.
+            if (b.vy !== a.vy && b.vy === b.gravity * engine.FALL && b.gravity === a.gravity) {
+              assert.deepEqual({ ...b, vy: a.vy }, modernState(a), `${level.name}/${mode}/${gravity}/frame${i}`);
+              flipDrops++;
+              break;
+            }
             if (b.status === "dead" && a.status === "playing") {
               assert.deepEqual({ ...b, status: "playing" }, modernState(a), `${level.name}/${mode}/${gravity}/frame${i}`);
               const box = (inset) => [[b.x + inset, b.y + inset], [b.x + engine.SIZE - inset, b.y + inset], [b.x + engine.SIZE - inset, b.y + engine.SIZE - inset], [b.x + inset, b.y + engine.SIZE - inset]],
@@ -127,6 +143,7 @@ test("typed engine matches the pinned pre-migration tree frame by frame", async 
         }
     assert(frames > 5000, `only ${frames} frames compared`);
     assert(spikeGrazes > 0, "the bigger spike box was exercised");
+    assert(flipDrops > 0, "the flip drop was exercised");
   });
 });
 
