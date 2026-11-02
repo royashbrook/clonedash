@@ -1795,10 +1795,10 @@
           >Songs and music credits</a
         >
         <div class="maker">
-          <svg viewBox="0 0 24 24" aria-hidden="true"
+          made with <svg viewBox="0 0 24 24" aria-hidden="true"
             ><path d="M12 21 3 12C-4 4 6-3 12 5 18-3 28 4 21 12Z" /></svg
-          >
-          made with love by
+          ><span class="sr">love</span>
+          by
           <a href="https://royashbrook.com" target="_blank" rel="noopener"
             >roy</a
           >
@@ -1808,11 +1808,13 @@
             target="_blank"
             rel="noopener">ai</a
           >
-          ·
-          <a
-            href="https://github.com/sponsors/royashbrook"
-            target="_blank"
-            rel="noopener">sponsor me</a
+          <span class="maker-tail"
+            ><span aria-hidden="true" class="maker-dot">·</span>
+            <a
+              href="https://github.com/sponsors/royashbrook"
+              target="_blank"
+              rel="noopener">sponsor me</a
+            ></span
           >
         </div>{/if}
     {/if}

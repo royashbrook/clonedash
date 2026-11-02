@@ -400,10 +400,12 @@ dialog:has(.transfer) #sheet-close {
   padding-top: 15px;
   display: flex;
   flex-wrap: wrap;
+  justify-content: center;
   align-items: center;
   gap: 5px;
   font: 13px var(--font-mono);
   color: var(--ink-dim);
+  text-align: center;
 }
 .maker a {
   display: inline-flex;
@@ -414,6 +416,24 @@ dialog:has(.transfer) #sheet-close {
 .maker svg {
   width: 16px;
   fill: var(--mark-heart);
+}
+.maker-dot {
+  opacity: 0.45;
+}
+/* the dot travels with sponsor me, so a narrow phone wraps "· sponsor me" as one piece */
+.maker-tail {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+/* screen-reader text: the heart stands in for the word love, which a reader still hears */
+.sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 #rotate {
   position: fixed;
