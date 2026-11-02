@@ -201,3 +201,56 @@ test('a recording download failure uses an original without freezing gameplay',a
   await page.getByRole('button',{name:'Play Pulseway',exact:true}).click();
   await expect.poll(()=>page.locator('#run-progress').evaluate(e=>e.value)).toBeGreaterThan(0);
 });
+
+// the maker's mark reads like the royashbrook.com footer: "made with ♥ by roy + ai · sponsor me",
+// the svg heart standing in for the word love (kept as screen-reader text), centred on every row
+test('the about maker mark reads made with, heart, by, and sits centred when it wraps', async ({page}) => {
+  await page.goto('/');
+  await page.locator('#about').click();
+  const mark = page.locator('.maker');
+  await expect(mark).toBeVisible();
+  const order = await mark.evaluate(el => {
+    const parts = [];
+    const walk = node => {
+      for (const child of node.childNodes) {
+        if (child.nodeType === Node.TEXT_NODE) parts.push(child.textContent);
+        else if (child.localName === 'svg') parts.push(' <svg> ');
+        else walk(child);
+      }
+    };
+    walk(el);
+    return parts.join('').replace(/\s+/g, ' ').trim().toLowerCase();
+  });
+  expect(order).toBe('made with <svg> love by roy + ai · sponsor me');
+  const gaps = () => mark.evaluate(el => {
+    // only what a sighted reader sees: skip the 1px screen-reader word
+    const seen = node => { for (let e = node; e && e !== el; e = e.parentElement) { const r = e.getBoundingClientRect(); if (r.width <= 1 && r.height <= 1) return false; } return true; };
+    const rects = [];
+    for (const e of el.querySelectorAll('*')) if (seen(e)) rects.push(...e.getClientRects());
+    const texts = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+    for (let t = texts.nextNode(); t; t = texts.nextNode()) {
+      if (!seen(t.parentElement)) continue;
+      for (const word of t.textContent.matchAll(/\S+/g)) {
+        const range = document.createRange();
+        range.setStart(t, word.index); range.setEnd(t, word.index + word[0].length);
+        rects.push(...range.getClientRects());
+      }
+    }
+    const rows = [];
+    for (const r of rects.filter(r => r.width > 0 && r.height > 0).sort((a, b) => a.top - b.top)) {
+      const mid = (r.top + r.bottom) / 2;
+      const row = rows.find(w => mid >= w.top && mid <= w.bottom);
+      if (row) { row.left = Math.min(row.left, r.left); row.right = Math.max(row.right, r.right); row.top = Math.min(row.top, r.top); row.bottom = Math.max(row.bottom, r.bottom); }
+      else rows.push({ left: r.left, right: r.right, top: r.top, bottom: r.bottom });
+    }
+    const s = getComputedStyle(el), box = el.getBoundingClientRect();
+    const inner = { left: box.left + parseFloat(s.borderLeftWidth) + parseFloat(s.paddingLeft), right: box.right - parseFloat(s.borderRightWidth) - parseFloat(s.paddingRight) };
+    return rows.map(r => Math.round(Math.abs((r.left - inner.left) - (inner.right - r.right))));
+  });
+  for (const width of [932, 320]) {
+    await page.setViewportSize({ width, height: width > 400 ? 430 : 568 });
+    const rows = await gaps();
+    expect(rows.length, `rows at ${width}px`).toBeGreaterThan(0);
+    for (const gap of rows) expect(gap, `left and right gaps differ at ${width}px: ${rows.join(', ')}`).toBeLessThanOrEqual(2);
+  }
+});
