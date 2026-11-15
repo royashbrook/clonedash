@@ -17,12 +17,16 @@ try {
     "remix-inputs.mjs",
     "version.test.mjs",
     "pogo.test.mjs",
+    "coins.test.mjs",
+    "triggers.test.mjs",
+    "parity.test.mjs",
   ]) {
     const testSource = (await readFile(join("tests", testFile), "utf8"))
       .replaceAll("../src/", "./src/")
       .replaceAll("../scripts/", "./scripts/");
     await writeFile(join(dir, testFile), testSource);
   }
+  await cp("tests/fixtures", join(dir, "fixtures"), { recursive: true });
   const run = (pattern, testFile) =>
     spawnSync(
       process.execPath,
@@ -100,6 +104,19 @@ try {
     ["levels.ts", "LEVELS.push(...COURSES)", "LEVELS.unshift(...COURSES)", "groups preserve", "courses.test.mjs"],
     ["levels.ts", "LEVELS.push(...REMIX)", "LEVELS.unshift(...REMIX)", "groups preserve", "courses.test.mjs"],
     ["courses.ts", "song: 109", "song: 110", "groups preserve", "courses.test.mjs"],
+    // Coins and triggers (#16, docs/coins-and-triggers.md): each rule fails its own test.
+    ["engine.ts", "coinCount(level) > MAX_COINS", "coinCount(level) > MAX_COINS + 1", "coin cap", "coins.test.mjs"],
+    ["library.ts", "entry.coins = got;", "entry.coins = (entry.coins ?? 0) + got;", "best coins", "coins.test.mjs"],
+    ["engine.ts", "if (fx.fired[t]) continue;", "if (false) continue;", "instant move by the offset", "triggers.test.mjs"],
+    ["engine.ts", "fx.groups.get(o.target);", "[...fx.groups.values()].flat();", "its group only", "triggers.test.mjs"],
+    ["engine.ts", "fx.move[m + 2] = o.moveX ?? 0;", "fx.move[m + 2] = o.moveY ?? 0;", "instant move by the offset", "triggers.test.mjs"],
+    ["engine.ts", "if (!fx.tinted[i]) return null;", "if (!fx.tinted.some(Boolean)) return null;", "its group only", "triggers.test.mjs"],
+    ["engine.ts", "level: moves ? { ...level, objects: level.objects.map((o) => ({ ...o })) } : level,", "level,", "instant move by the offset", "triggers.test.mjs"],
+    ["run.ts", "createState(this.level);\n    this.deathTime", "createState(this.state.level);\n    this.deathTime", "restart, death and leaving", "triggers.test.mjs"],
+    // a new move must start from the current pose, not from where the replaced move started
+    ["engine.ts", "fx.move[m] = p.x;", "fx.move[m] = fx.movers.includes(i) ? fx.move[m] : p.x;", "overlap", "triggers.test.mjs"],
+    ["transfer.ts", "...(group === undefined ? {} : { group }),", "group,", "old share codes captured on main", "parity.test.mjs"],
+    ["library.ts", "s.coins !== undefined &&", "true &&", "old saves captured on main", "parity.test.mjs"],
     // Release identity guards: each rejection must fail against its broken control.
     [
       "scripts/version.mjs",
