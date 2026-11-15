@@ -1328,7 +1328,7 @@
       (value) => (installVisible = value),
       () => {
         void sheet(
-          "Install Clone Dash",
+          "Install Cube Dash",
           "In Safari, tap Share, then Add to Home Screen, then Add. Your game will open full-screen and work offline after its first load.",
         );
       },
@@ -1375,7 +1375,7 @@
 <canvas
   id="world"
   bind:this={canvas}
-  aria-label="Clone Dash playfield. Space or touch to jump, hold to fly, tap to flip wheel gravity."
+  aria-label="Cube Dash playfield. Space or touch to jump, hold to fly, tap to flip wheel gravity."
 ></canvas>
 <span class="version" aria-label="App version">v{__APP_VERSION__}</span>
 <div
@@ -1405,11 +1405,11 @@
     <a
       class="brand"
       href="/"
-      aria-label="Clone Dash home"
+      aria-label="Cube Dash home"
       onclick={(e) => {
         e.preventDefault();
         home();
-      }}><img src="/icon.svg" alt="" width="44" height="44" />CLONE DASH</a
+      }}><img src="/icon.svg" alt="" width="44" height="44" />CUBE DASH</a
     ><button
       id="sound"
       aria-label={save.sound ? "Turn sound off" : "Turn sound on"}
@@ -1486,7 +1486,7 @@
       id="about"
       onclick={() =>
         sheet(
-          "Clone Dash",
+          "Cube Dash",
           `${LEVELS.length} one-button trails, from warmups to hard, and a place to build your own. An original geometric platformer inspired by Geometry Dash, made from a kid’s game idea.`,
           [],
           true,

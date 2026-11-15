@@ -1,6 +1,6 @@
-# Clone Dash
+# Cube Dash
 
-A one-button, geometric platformer from a kid's idea. Eighteen trails, square, plane, wheel and pogo modes, and a touch-friendly level editor. Original art, licensed electronic recordings and synthesized originals; no copied Geometry Dash assets.
+A one-button, geometric platformer from a kid's idea. It was called Clone Dash until the kid renamed it; the repository, domain, save key (`clonedash.v1`), worker cache names, `cdl1` share codes and `.clonedash.txt` level files keep the old name so saves, installs and shared levels keep working. Eighteen trails, square, plane, wheel and pogo modes, and a touch-friendly level editor. Original art, licensed electronic recordings and synthesized originals; no copied Geometry Dash assets.
 
 **Play:** https://clonedash.royashbrook.com
 

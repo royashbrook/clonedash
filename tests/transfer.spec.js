@@ -237,7 +237,7 @@ test("large levels offer a complete file, not a truncated or overly dense QR; fi
     const downloadWait = page.waitForEvent("download");
     await page.locator(".download-level").click();
     const download = await downloadWait;
-    expect(download.suggestedFilename()).toBe("clone-dash-level.clonedash.txt");
+    expect(download.suggestedFilename()).toBe("cube-dash-level.clonedash.txt");
     const bytes = await readFile(await download.path());
     expect(bytes.toString()).toBe(code);
     await page.locator("#send-level").click();

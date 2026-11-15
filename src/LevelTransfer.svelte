@@ -39,7 +39,8 @@
       if (!alive) return;
       code = encoded;
       link = levelLink(code, location.href);
-      file = new File([code], "clone-dash-level.clonedash.txt", {
+      // the .clonedash.txt ending stays: the import picker and older copies of the game look for it
+      file = new File([code], "cube-dash-level.clonedash.txt", {
         type: "text/plain",
       });
       download = URL.createObjectURL(file);
@@ -101,7 +102,7 @@
     // Everything was prepared before this fresh tap, preserving native share activation.
     const data: ShareData =
       link.length <= 4096
-        ? { title: level!.name, text: "Play my Clone Dash level", url: link }
+        ? { title: level!.name, text: "Play my Cube Dash level", url: link }
         : { title: level!.name, files: [file!] };
     try {
       if (navigator.canShare && !navigator.canShare(data))

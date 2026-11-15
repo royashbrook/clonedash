@@ -142,7 +142,7 @@ export async function decodeLevel(text: string): Promise<Level> {
     code = params.get("level")!;
   }
   if (!code.startsWith(PREFIX))
-    throw Error("Use a Clone Dash level code or link (cdl1).");
+    throw Error("Use a Cube Dash level code or link (cdl1).");
   const flag = code[PREFIX.length],
     encoded = code.slice(PREFIX.length + 1);
   if (!/[01]/.test(flag ?? "") || !/^[\w-]+$/.test(encoded))
