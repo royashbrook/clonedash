@@ -112,6 +112,26 @@ test('collisions use the moved pose: a block moved out of the path is passed, on
   near(s.x, 12 - 0.64 + 0.12, 0.05);
 });
 
+test('a trigger fires on where the run really is: a wall that holds it short keeps the trigger unfired', () => {
+  // a WALL PASS block at 4 holds the run with its x just under 3.5, so the trigger at 3.5 is never
+  // reached, even though each step's forward move (before the wall pushes back) passes it
+  const held = createState(level([{ ...block(4, 0), wallPass: true }, block(10, 3, 1), move(3.5, { target: 1, moveY: 1 })]));
+  let most = 0;
+  for (let i = 0; i < 500; i++) {
+    step(held, false);
+    most = Math.max(most, held.x);
+  }
+  assert.equal(held.status, 'playing', 'the wall holds the run');
+  assert.ok(most < 3.5, `the run never reaches the trigger (got to ${most})`);
+  assert.equal(held.fx.fired[2], 0);
+  assert.deepEqual(pose(held, 1), [10, 3], 'so its group never moves');
+  // control: with no wall the same trigger fires and moves the block
+  const free = createState(level([block(10, 3, 1), move(3.5, { target: 1, moveY: 1 })]));
+  until(free, 4);
+  assert.equal(free.fx.fired[1], 1);
+  assert.deepEqual(pose(free, 0), [10, 4]);
+});
+
 test('restart, death and leaving put every moved piece, colour and coin back; the authored level is untouched', () => {
   const l = level([block(12, 3, 1), move(5, { target: 1, moveY: 2 }), paint(6, { target: 1 }), object('coin', 8, 0), object('spike', 20, 0)]);
   const authored = structuredClone(l);

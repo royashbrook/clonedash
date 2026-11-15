@@ -27,10 +27,12 @@ editor tab, group ids in EDIT OBJECT, a move trigger and a colour trigger, and t
    RESTART LEVEL, a replay or leaving test play builds a fresh state from it, so every moved
    position, colour and coin comes back. EDIT A COPY copies `Run.level`, never the moved copy.
    a level without coins or triggers gets no `fx` and plays its authored level, exactly as before.
-2. **firing.** each trigger fires once per run, in the fixed step where the player's x first
-   reaches the trigger's x. every trigger crossed in a step fires in that step, however many and
-   wherever they are on screen, in authored order. firing happens after the step moves the player
-   and before any contact, so the step's collisions meet pieces where triggers put them.
+2. **firing.** each trigger fires once per run, in the fixed step where the player's resolved x
+   (after that step's contact, so after a wall has held the run back) first reaches the trigger's
+   x. a run held short of a trigger never fires it. every trigger crossed in a step fires in that
+   step, however many and wherever they are on screen, in authored order. running moves advance at
+   the start of each step, before contact; what a trigger moves meets contact from the next step
+   on, and drawing (after the step) shows the same pose that contact will use.
 3. **overlap.** a new move on a piece starts from where that piece is at that moment and replaces
    the move it had (the rest of the old move is dropped). a new colour starts from the colour
    showing at that moment and replaces the fade it had. in one step, a later trigger in authored

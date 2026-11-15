@@ -307,11 +307,11 @@ export function tintOf(fx: RunEffects, i: number, time: number, out = SCRATCH) {
   out[3] = a;
   return out;
 }
-// Fires every trigger the player's x has reached this step, in authored order, however many that
-// is and wherever they are on screen. A new command on a piece starts from where that piece is
-// (or how it looks) right now and replaces the one it had.
+// Fires every trigger the player's resolved x (after this step's contact) has reached, in authored
+// order, however many that is and wherever they are on screen. A new command on a piece starts from
+// where that piece is (or how it looks) right now and replaces the one it had. Running moves are
+// advanced by moveAll at the start of each step, before contact.
 export function runTriggers(s: GameState, fx: RunEffects) {
-  if (fx.movers.length) moveAll(s, fx);
   for (let k = 0; k < fx.triggers.length; k++) {
     const t = fx.triggers[k];
     if (fx.fired[t]) continue;
@@ -476,7 +476,7 @@ export function step(
   s.vy += acceleration * dt;
   if (s.mode === "plane") s.vy = Math.max(-4, Math.min(4, s.vy));
   // before any contact, so this step's collisions meet pieces where triggers have put them
-  if (s.fx) runTriggers(s, s.fx);
+  if (s.fx?.movers.length) moveAll(s, s.fx);
   s.grounded = false;
   if (s.y <= 0) {
     s.y = 0;
@@ -622,6 +622,9 @@ export function step(
     }
   }
   s.touchingPortals = touching;
+  // after contact, so a trigger fires only once the player has really reached it (a wall that
+  // holds the run short of a trigger keeps it unfired); what it moves meets the next step's contact
+  if (s.fx) runTriggers(s, s.fx);
   if (s.status === "playing" && s.x >= s.level.length) s.status = "complete";
   return s;
 }
