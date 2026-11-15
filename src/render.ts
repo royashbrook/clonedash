@@ -320,7 +320,7 @@ export function render(
         ctx.strokeRect(X(o.x), Y(o.y + 1), unit, unit);
         ctx.setLineDash([]);
         ctx.fillStyle = c;
-        ctx.font = `bold ${unit * 0.22}px system-ui`;
+        ctx.font = `bold ${Math.max(9, unit * 0.27)}px system-ui`;
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
         ctx.fillText(word, X(o.x + 0.5), Y(o.y + 0.7));

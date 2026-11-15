@@ -1096,7 +1096,7 @@
       else delete piece[key];
     }, (o) => (kind ? o.type === kind : TRIGGERS.includes(o.type)));
     try {
-      if (!Number.isFinite(n)) throw Error("not a number");
+      if (key !== "color" && !Number.isFinite(n)) throw Error("not a number");
       validateLevel(next);
     } catch {
       input.value = String(selection?.[key] ?? "");
