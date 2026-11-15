@@ -1939,18 +1939,20 @@
         <button id="check-update" disabled={checking} onclick={() => checkForUpdate()}
           >{checking ? "CHECKING…" : "CHECK FOR UPDATE"}</button
         ><a
+          class="about-link"
           href="/licenses.md"
           target="_blank"
           rel="noopener">Licences</a
         >
         <p>
           Music by <a
+            class="about-link"
             href="https://fardifferent.carrd.co/"
             target="_blank"
             rel="noopener">Of Far Different Nature</a
           >, licensed under CC BY 4.0.
         </p>
-        <a href="/music/credits.html" target="_blank" rel="noopener"
+        <a class="about-link" href="/music/credits.html" target="_blank" rel="noopener"
           >Songs and music credits</a
         >
         <div class="maker">
