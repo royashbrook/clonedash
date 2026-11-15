@@ -143,14 +143,14 @@ for (const redirected of [false, true]) {
         "Of Far Different Nature",
       );
       await expect(document.locator("#app")).toHaveCount(0);
-      await expect(document).toHaveTitle("Clone Dash · Music credits");
+      await expect(document).toHaveTitle("Cube Dash · Music credits");
       await expect(
         document.getByRole("link", {
           name: "Creative Commons Attribution 4.0 International",
         }),
       ).toHaveAttribute("href", "https://creativecommons.org/licenses/by/4.0/");
       await expect(document.locator("li")).toHaveCount(RECORDINGS.length);
-      await document.getByRole("link", { name: "Back to Clone Dash" }).click();
+      await document.getByRole("link", { name: "Back to Cube Dash" }).click();
       await expect(document.locator("#play")).toBeVisible();
     } finally {
       await context.close();

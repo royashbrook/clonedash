@@ -26,7 +26,7 @@ function portableLevel(input: unknown): Level {
     ...(level.note === undefined ? {} : { note: level.note }),
     ...(level.color === undefined ? {} : { color: level.color }),
     objects: level.objects.map(
-      ({ type, x, y, rotation, flipX, flipY, layer, scale, color, bounce, flipsGravity, boost, dash, noTouch, hidden, wallPass, roofPass, edges }) => ({
+      ({ type, x, y, rotation, flipX, flipY, layer, scale, color, bounce, flipsGravity, boost, dash, noTouch, hidden, wallPass, roofPass, edges, group, target, moveX, moveY, duration }) => ({
         type,
         x,
         y,
@@ -45,6 +45,13 @@ function portableLevel(input: unknown): Level {
         ...(wallPass === undefined ? {} : { wallPass }),
         ...(roofPass === undefined ? {} : { roofPass }),
         ...(edges === undefined ? {} : { edges }),
+        // coins and triggers (2026-11): new optional fields, so a cdl1 code made before them
+        // decodes exactly as it did, and the envelope did not change
+        ...(group === undefined ? {} : { group }),
+        ...(target === undefined ? {} : { target }),
+        ...(moveX === undefined ? {} : { moveX }),
+        ...(moveY === undefined ? {} : { moveY }),
+        ...(duration === undefined ? {} : { duration }),
       }),
     ),
   };
@@ -135,7 +142,7 @@ export async function decodeLevel(text: string): Promise<Level> {
     code = params.get("level")!;
   }
   if (!code.startsWith(PREFIX))
-    throw Error("Use a Clone Dash level code or link (cdl1).");
+    throw Error("Use a Cube Dash level code or link (cdl1).");
   const flag = code[PREFIX.length],
     encoded = code.slice(PREFIX.length + 1);
   if (!/[01]/.test(flag ?? "") || !/^[\w-]+$/.test(encoded))

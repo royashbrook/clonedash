@@ -1,12 +1,12 @@
 import { test, expect } from '@playwright/test';
 import { labelOf } from '../src/types.ts';
 
-test('wheel rejects midair taps and held landing flips, accepts fresh surface taps, and resets on retry', async ({ browser }) => {
+test('wheel rejects midair taps and held landing flips, accepts fresh surface taps, and resets on retry', async ({ browser, baseURL }) => {
   const context = await browser.newContext({ viewport: { width: 932, height: 430 }, hasTouch: true });
   const page = await context.newPage();
   await page.clock.install();
   await page.addInitScript(() => localStorage.setItem('clonedash.v1', JSON.stringify({ version: 1, sound: false, best: { 0: 100 }, draft: { name: 'Wheel taps', length: 40, objects: [{ type: 'wheel', x: 3, y: 0, rotation: 0, flipX: false, flipY: false }] } })));
-  await page.goto(process.env.GAME_URL || 'http://127.0.0.1:4191');
+  await page.goto(baseURL);
   await expect(page.locator('#notice')).toBeHidden();
   await page.locator('#editor-open').click(); await page.locator('#test-level').click();
   await page.clock.runFor(900); await expect(page.locator('#level-name')).toContainText('WHEEL ↓');

@@ -1,4 +1,4 @@
-import { SCALABLE, bounds, intersects, pieceSize, polygon, transform } from "./engine.ts";
+import { SCALABLE, bounds, intersects, pieceSize, polygon, transform, validateLevel } from "./engine.ts";
 import type { Level, Piece, Transform } from "./types.ts";
 
 // Multi-select (#87): the editor acts on several pieces at once. These are the pure parts, so
@@ -97,5 +97,8 @@ export function duplicateGroup(level: Level, indices: number[]) {
       ),
     )
   );
+  // the whole level is checked, as a one-piece copy is: copies keep their group ids, and the
+  // coin cap holds for pasted coins too
+  validateLevel({ ...level, objects: [...level.objects, ...copies] });
   return copies;
 }

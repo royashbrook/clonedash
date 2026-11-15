@@ -15,8 +15,12 @@ export class Run {
   learned = false;
   cueUntil = 5;
 
+  // The level as authored. A run with move triggers plays its own copy (state.level), so a restart
+  // starts from this, never from where the last try left things.
+  readonly level: Level;
   constructor(level: Level) {
-    this.state = createState(structuredClone(level));
+    this.level = structuredClone(level);
+    this.state = createState(this.level);
   }
   release() {
     this.held = false;
@@ -32,7 +36,7 @@ export class Run {
     this.learned = true;
   }
   reset() {
-    this.state = createState(this.state.level);
+    this.state = createState(this.level);
     this.deathTime = 0;
     this.readyTime = 0.4;
     this.cameraY = 0;

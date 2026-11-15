@@ -10,12 +10,12 @@ async function trackPaint(page) {
   });
 }
 
-test('pogo accepts brief midair touches but held and repeated Space do not fly', async ({ browser }) => {
+test('pogo accepts brief midair touches but held and repeated Space do not fly', async ({ browser, baseURL }) => {
   const context = await browser.newContext({ viewport: { width: 932, height: 430 }, hasTouch: true });
   const page = await context.newPage(); await page.clock.install(); await trackPaint(page);
   // the save keeps the pre-rename id on purpose: a real old save must still load and run as pogo (#33).
   await page.addInitScript(() => localStorage.setItem('clonedash.v1', JSON.stringify({ version: 1, sound: false, best: { 0: 100 }, draft: { name: 'Air taps', length: 40, objects: [{ type: 'jumper', x: 3, y: 0, rotation: 0, flipX: false, flipY: false }] } })));
-  await page.goto(process.env.GAME_URL || 'http://127.0.0.1:4191');
+  await page.goto(baseURL);
   await page.locator('#editor-open').click(); await page.locator('#test-level').click();
   await page.clock.runFor(900); await expect(page.locator('#level-name')).toContainText('POGO ↓');
   await expect(page.locator('#cue')).toContainText('TAP AGAIN IN MIDAIR');
@@ -81,7 +81,7 @@ test('editor palette groups never shrink underneath neighboring controls', async
   await page.goto('/'); await page.locator('#editor-open').click();
   for (const [width, height] of [[740, 360], [932, 430], [1180, 820]]) {
     await page.setViewportSize({ width, height });
-    for (const tab of ['BLOCKS', 'SPIKES', 'PORTALS', 'GRAVITY', 'RINGS', 'RAMP']) {
+    for (const tab of ['BLOCKS', 'SPIKES', 'PORTALS', 'GRAVITY', 'RINGS', 'RAMP', 'COINS', 'TRIGGERS']) {
       await page.getByRole('tab', { name: tab, exact: true }).click();
       const boxes = await page.evaluate(() => {
         const tabs = document.querySelector('.tabs').getBoundingClientRect();

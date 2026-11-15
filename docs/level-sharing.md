@@ -51,6 +51,10 @@ other levels and arbitrary extra fields. old levels retain an implicit height; t
 song is made explicit so the recipient hears the same track under a different local ID.
 recipients need the current app to open levels longer than 200 blocks or using the new
 recorded soundtracks; older versions reject those values rather than silently changing them.
+coins, group ids and triggers (#101, docs/coins-and-triggers.md) are new optional piece fields
+(`group`, `target`, `moveX`, `moveY`, `duration`, and `color` on a colour trigger) inside the
+same `cdl1.` envelope; a code made before them decodes exactly as it did, and a level without them encodes to a code an
+older copy reads the same.
 
 QR codes use medium error correction and at most version 15 for phone readability. larger
 payloads keep the complete code/file alternatives. native sharing uses a self-contained link

@@ -5,6 +5,7 @@ import type {
   ObjectType,
   Piece,
   Point,
+  RunEffects,
   Transform,
 } from "./types.ts";
 import { recordingFor } from "./recordings.ts";
@@ -71,7 +72,15 @@ export const PORTALS = [
 // Modes that ride surfaces instead of dying on them: floor, ceiling and block faces are safe,
 // walls still kill.
 export const SOFT = ["plane", "pogo", "angle"];
-export const TYPES = [...BLOCKS, ...ZONES, ...SPIKES, ...PORTALS, ...SLOPES, "ring"];
+// Coins are picked up by touching them; a level holds at most MAX_COINS. Triggers are invisible
+// and never touched in play: each fires once per run when the player's x passes its x, and works
+// on every piece whose group is its target. Triggers carry no group themselves, so nothing can
+// move a trigger and the order they fire in is always the authored one.
+export const MAX_COINS = 10;
+export const TRIGGERS = ["move-trigger", "color-trigger"];
+export const MAX_GROUP = 99;
+export const MAX_TRIGGER_TIME = 30; // seconds, so every move and fade finishes inside a run
+export const TYPES = [...BLOCKS, ...ZONES, ...SPIKES, ...PORTALS, ...SLOPES, "ring", "coin", ...TRIGGERS];
 // Ids that were renamed after they had been stored. validateLevel accepts the old id and returns
 // the new one, so an old save, share code or link still loads; nothing writes the old id again.
 export const LEGACY_TYPES: Partial<Record<string, ObjectType>> = {
@@ -87,6 +96,12 @@ export const RING_BOUNCE = 2.25;
 export const ringSpeed = (o: Piece) =>
   o.bounce === undefined ? JUMP : Math.sqrt(2 * GRAVITY * o.bounce);
 export const levelHeight = (level: Level) => level.height ?? 7;
+export const COIN_RADIUS = 0.3; // a coin is a disc in the middle of its cell
+export const coinCount = (level: Level) => {
+  let n = 0;
+  for (const o of level.objects) if (o.type === "coin") n++;
+  return n;
+};
 // A dash orb carries the run the way it points. The trail only runs forward, so an orb aimed
 // backward dashes the mirror way forward, and the aim is held to 70 degrees off straight ahead.
 export const DASH_LIMIT = 70;
@@ -117,10 +132,10 @@ export function polygon(o: Piece): Point[] {
         [1, 0],
         [1, 1],
       ]
-    : o.type === "ring"
+    : o.type === "ring" || o.type === "coin"
       ? Array.from({ length: 16 }, (_, i) => [
-          0.5 + 0.45 * Math.cos((i * Math.PI) / 8),
-          0.5 + 0.45 * Math.sin((i * Math.PI) / 8),
+          0.5 + (o.type === "coin" ? COIN_RADIUS : 0.45) * Math.cos((i * Math.PI) / 8),
+          0.5 + (o.type === "coin" ? COIN_RADIUS : 0.45) * Math.sin((i * Math.PI) / 8),
         ])
       : SPIKES.includes(o.type)
         ? [
@@ -186,7 +201,55 @@ export function intersects(a: Point[], b: Point[]) {
     }
   return true;
 }
+// The per-run side of coins and triggers, or nothing for a level without them. A level with a
+// move trigger is played on the run's own copy of its pieces, so moves never reach the authored
+// level, a saved draft or a built-in course; a restart builds a fresh copy from the authored one.
+export function effects(level: Level): { fx: RunEffects; level: Level } | null {
+  const n = level.objects.length,
+    triggers: number[] = [],
+    groups = new Map<number, number[]>();
+  let coinTotal = 0,
+    moves = false;
+  for (let i = 0; i < n; i++) {
+    const o = level.objects[i];
+    if (o.type === "coin") coinTotal++;
+    if (TRIGGERS.includes(o.type)) {
+      triggers.push(i);
+      if (o.type === "move-trigger") moves = true;
+    }
+    if (o.group !== undefined) {
+      const members = groups.get(o.group);
+      if (members) members.push(i);
+      else groups.set(o.group, [i]);
+    }
+  }
+  if (!coinTotal && !triggers.length) return null;
+  return {
+    fx: {
+      coinTotal,
+      coins: 0,
+      got: new Uint8Array(n),
+      picked: [],
+      triggers,
+      fired: new Uint8Array(n),
+      groups,
+      move: new Float64Array(n * 6),
+      movers: [],
+      tint: new Float64Array(n * 8),
+      fade: new Float64Array(n),
+      tinted: new Uint8Array(n),
+    },
+    level: moves ? { ...level, objects: level.objects.map((o) => ({ ...o })) } : level,
+  };
+}
 export function createState(level: Level): GameState {
+  const run = effects(level);
+  return {
+    ...baseState(run ? run.level : level),
+    ...(run && { fx: run.fx }),
+  };
+}
+function baseState(level: Level): GameState {
   return {
     x: 1,
     y: 0,
@@ -209,6 +272,88 @@ export function ringReady(s: GameState, o: Piece, index: number) {
   const dx = Math.max(s.x - (o.x + 0.5), 0, o.x + 0.5 - s.x - SIZE);
   const dy = Math.max(s.y - (o.y + 0.5), 0, o.y + 0.5 - s.y - SIZE);
   return !o.noTouch && !s.usedRings.includes(index) && dx * dx + dy * dy <= 0.6 * 0.6;
+}
+// Moves and fades follow the run's own clock (state.time), never the wall clock, so pausing
+// freezes them and a replay of the same input sees the same frames.
+function place(s: GameState, fx: RunEffects, i: number) {
+  const m = i * 6,
+    p = s.level.objects[i],
+    t = fx.move[m + 5] > 0 ? Math.min(1, (s.time - fx.move[m + 4]) / fx.move[m + 5]) : 1;
+  p.x = fx.move[m] + fx.move[m + 2] * t;
+  p.y = fx.move[m + 1] + fx.move[m + 3] * t;
+  return t >= 1;
+}
+function moveAll(s: GameState, fx: RunEffects) {
+  for (let k = 0; k < fx.movers.length; ) {
+    if (!place(s, fx, fx.movers[k])) k++;
+    else {
+      fx.movers[k] = fx.movers[fx.movers.length - 1];
+      fx.movers.pop();
+    }
+  }
+}
+const SCRATCH = new Float64Array(4);
+// The colour laid over an object right now, as r, g, b (0 to 255) and how much of the piece it
+// covers (0 none, 1 all), or null when no colour trigger has reached it. A fade runs from what
+// was showing when it started, so a new colour picks up from a half-finished one.
+export function tintOf(fx: RunEffects, i: number, time: number, out = SCRATCH) {
+  if (!fx.tinted[i]) return null;
+  const c = i * 8,
+    d = fx.fade[i],
+    p = d > 0 ? Math.min(1, Math.max(0, (time - fx.tint[c + 7]) / d)) : 1,
+    from = fx.tint[c + 3],
+    a = from + (1 - from) * p;
+  for (let k = 0; k < 3; k++)
+    out[k] = a > 0 ? (fx.tint[c + k] * from * (1 - p) + fx.tint[c + 4 + k] * p) / a : fx.tint[c + 4 + k];
+  out[3] = a;
+  return out;
+}
+// Fires every trigger the player's resolved x (after this step's first contact pass, settle) has
+// reached, in authored order, however many that is and wherever they are on screen. A new command on
+// a piece starts from where that piece is (or how it looks) right now and replaces the one it had.
+// True when a piece now stands somewhere else (an instant move), so contact has to run again.
+export function runTriggers(s: GameState, fx: RunEffects) {
+  let moved = false;
+  for (let k = 0; k < fx.triggers.length; k++) {
+    const t = fx.triggers[k];
+    if (fx.fired[t]) continue;
+    const o = s.level.objects[t];
+    if (s.x < o.x) continue;
+    fx.fired[t] = 1;
+    const members = o.target === undefined ? undefined : fx.groups.get(o.target);
+    if (!members) continue;
+    for (let j = 0; j < members.length; j++) {
+      const i = members[j];
+      if (o.type === "move-trigger") {
+        const p = s.level.objects[i],
+          m = i * 6;
+        fx.move[m] = p.x;
+        fx.move[m + 1] = p.y;
+        fx.move[m + 2] = o.moveX ?? 0;
+        fx.move[m + 3] = o.moveY ?? 0;
+        fx.move[m + 4] = s.time;
+        fx.move[m + 5] = o.duration ?? 0;
+        const done = place(s, fx, i),
+          at = fx.movers.indexOf(i);
+        if (p.x !== fx.move[m] || p.y !== fx.move[m + 1]) moved = true;
+        if (done && at >= 0) fx.movers.splice(at, 1);
+        else if (!done && at < 0) fx.movers.push(i);
+      } else {
+        const c = i * 8,
+          hex = o.color ?? "#ffd166",
+          now = tintOf(fx, i, s.time);
+        for (let n = 0; n < 3; n++) {
+          fx.tint[c + 4 + n] = parseInt(hex.slice(1 + n * 2, 3 + n * 2), 16);
+          fx.tint[c + n] = now ? now[n] : fx.tint[c + 4 + n];
+        }
+        fx.tint[c + 3] = now ? now[3] : 0;
+        fx.tint[c + 7] = s.time;
+        fx.fade[i] = o.duration ?? 0;
+        fx.tinted[i] = 1;
+      }
+    }
+  }
+  return moved;
 }
 // Height of the actual triangle over the player's full horizontal footprint.
 export function rampSurface(
@@ -334,6 +479,48 @@ export function step(
   s.y += s.vy * dt + (acceleration * dt * dt) / 2;
   s.vy += acceleration * dt;
   if (s.mode === "plane") s.vy = Math.max(-4, Math.min(4, s.vy));
+  if (s.fx) settle(s, s.fx, oldX, oldY, wasGrounded, height, forward, dt);
+  else contact(s, oldX, oldY, wasGrounded, height, forward, dt);
+  if (s.status === "playing" && s.x >= s.level.length) s.status = "complete";
+  return s;
+}
+// A run with coins or triggers. Running moves are placed at this step's time before any contact.
+// Triggers then fire on where contact left the run (a wall that holds it short keeps them unfired),
+// in authored order. If that moved a piece at once, contact runs again from the state it started
+// from, on the moved pose, so a step's collision and the pose drawn after it are always the same.
+// The second pass is the step's result and fires nothing itself: a trigger only it reaches fires next
+// step, and a piece it moved into the way can hold the run back behind a trigger that already fired.
+function settle(
+  s: GameState,
+  fx: RunEffects,
+  oldX: number,
+  oldY: number,
+  wasGrounded: boolean,
+  height: number,
+  forward: number,
+  dt: number,
+) {
+  if (fx.movers.length) moveAll(s, fx);
+  const { x, y, vy, grounded, status, wall, speed, gravity, mode, touchingPortals } = s,
+    coins = fx.coins;
+  fx.picked.length = 0;
+  contact(s, oldX, oldY, wasGrounded, height, forward, dt);
+  if (!runTriggers(s, fx)) return;
+  Object.assign(s, { x, y, vy, grounded, status, wall, speed, gravity, mode, touchingPortals });
+  for (const i of fx.picked) fx.got[i] = 0;
+  fx.coins = coins;
+  fx.picked.length = 0;
+  contact(s, oldX, oldY, wasGrounded, height, forward, dt);
+}
+function contact(
+  s: GameState,
+  oldX: number,
+  oldY: number,
+  wasGrounded: boolean,
+  height: number,
+  forward: number,
+  dt: number,
+) {
   s.grounded = false;
   if (s.y <= 0) {
     s.y = 0;
@@ -358,9 +545,18 @@ export function step(
   for (let i = 0; i < s.level.objects.length; i++) {
     const o = s.level.objects[i];
     if (o.layer === "background" || o.noTouch) continue;
-    if (o.type === "ring" || ZONES.includes(o.type)) continue;
+    if (o.type === "ring" || ZONES.includes(o.type) || TRIGGERS.includes(o.type)) continue;
     const reach = 2 * (o.scale ?? 1); // a scaled piece is wider than its anchor cell
     if (o.x > s.x + reach || o.x < s.x - reach) continue;
+    if (o.type === "coin") {
+      // the whole body picks a coin up, like it touches a portal; a coin never blocks or kills
+      if (s.fx && !s.fx.got[i] && intersects(body, polygon(o))) {
+        s.fx.got[i] = 1;
+        s.fx.coins++;
+        s.fx.picked.push(i);
+      }
+      continue;
+    }
     if (PORTALS.includes(o.type)) {
       const player = playerPolygon(s);
       if (intersects(player, polygon(o))) {
@@ -471,8 +667,6 @@ export function step(
     }
   }
   s.touchingPortals = touching;
-  if (s.status === "playing" && s.x >= s.level.length) s.status = "complete";
-  return s;
 }
 export function validateLevel(input: unknown): Level {
   // The assertion only gives names to the shape; every persisted field is checked below.
@@ -531,7 +725,7 @@ export function validateLevel(input: unknown): Level {
       throw Error("Invalid scale");
     if (
       o.color !== undefined &&
-      (o.type !== "ring" ||
+      ((o.type !== "ring" && o.type !== "color-trigger") ||
         typeof o.color !== "string" ||
         !/^#[\da-f]{6}$/i.test(o.color))
     )
@@ -556,10 +750,34 @@ export function validateLevel(input: unknown): Level {
       (o.type !== "ring" || o.dash !== true || o.boost || o.bounce !== undefined)
     )
       throw Error("Invalid dash orb");
-    if (o.noTouch !== undefined && (o.noTouch !== true || ZONES.includes(o.type)))
+    const trigger = TRIGGERS.includes(o.type);
+    // a coin is always there to pick up, so it can be hidden (a secret coin) but never no-touch
+    if (o.noTouch !== undefined && (o.noTouch !== true || ZONES.includes(o.type) || trigger || o.type === "coin"))
       throw Error("Invalid no touch");
-    if (o.hidden !== undefined && (o.hidden !== true || ZONES.includes(o.type)))
+    if (o.hidden !== undefined && (o.hidden !== true || ZONES.includes(o.type) || trigger))
       throw Error("Invalid hidden");
+    const groupId = (v: unknown) => Number.isInteger(v) && (v as number) >= 1 && (v as number) <= MAX_GROUP;
+    if (o.group !== undefined && (trigger || !groupId(o.group)))
+      throw Error("Invalid group");
+    if (o.target !== undefined && (!trigger || !groupId(o.target)))
+      throw Error("Invalid trigger group");
+    // whole blocks, and never further than the level is long or tall
+    for (const [key, limit] of [["moveX", raw.length], ["moveY", height]] as const) {
+      const v = o[key];
+      if (
+        v !== undefined &&
+        (o.type !== "move-trigger" || !Number.isInteger(v) || Math.abs(v) > limit)
+      )
+        throw Error("Invalid move");
+    }
+    if (
+      o.duration !== undefined &&
+      (!trigger ||
+        !Number.isFinite(o.duration) ||
+        o.duration < 0 ||
+        o.duration > MAX_TRIGGER_TIME)
+    )
+      throw Error("Invalid trigger time");
     if (
       o.wallPass !== undefined &&
       (o.wallPass !== true || !(BLOCKS.includes(o.type) || SLOPES.includes(o.type)))
@@ -579,6 +797,9 @@ export function validateLevel(input: unknown): Level {
     if (raw.height !== undefined && bounds(o).top > height + 0.00001)
       throw Error("Object above ceiling");
   }
+  // every reader comes through here (saves, share codes, copies), so the cap holds for all of them
+  if (coinCount(level) > MAX_COINS)
+    throw Error(`A level can hold up to ${MAX_COINS} coins.`);
   return level;
 }
 export function transform(o: Piece, action: Transform, amount = 1) {

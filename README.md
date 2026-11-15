@@ -1,6 +1,6 @@
-# Clone Dash
+# Cube Dash
 
-A one-button, geometric platformer from a kid's idea. Eighteen trails, square, plane, wheel and pogo modes, and a touch-friendly level editor. Original art, licensed electronic recordings and synthesized originals; no copied Geometry Dash assets.
+A one-button, geometric platformer from a kid's idea. It was called Clone Dash until the kid renamed it; the repository, domain, save key (`clonedash.v1`), worker cache names, `cdl1` share codes and `.clonedash.txt` level files keep the old name so saves, installs and shared levels keep working. Eighteen trails, square, plane, wheel and pogo modes, and a touch-friendly level editor. Original art, licensed electronic recordings and synthesized originals; no copied Geometry Dash assets.
 
 **Play:** https://clonedash.royashbrook.com
 
@@ -44,6 +44,10 @@ While testing, **← MY LEVELS** at the top left returns directly to the library
 **HEIGHT / SONG** sets world height from 7 to 40 blocks and selects music, with a LISTEN toggle. Length can be 20–600 blocks. Taller levels get an Up scrollbar in the editor and a following vertical camera in play, not smaller artwork. Lowering the ceiling cannot cut off placed objects. Each custom level starts with its own deterministic original song and riff; the picker can also choose a licensed recording, any built-in original or another level's original. Choosing a shared track is an explicit override of the unique default. One decoded song is retained, with one load/render in flight.
 
 The **Layer** selector switches between PLAY and BACKGROUND. Background blocks paint behind playable pieces and never collide or support a landing. Both layers can occupy the same coordinates; selecting, moving and copying respects the active layer. All five block styles work as decoration. Spikes, portals, rings and ramps stay in the play layer.
+
+## Coins and triggers
+
+**COINS** places a coin; touch it in a run to pick it up. A level holds up to 10, the run shows how many you have, and your best is the most you picked up in one finished run. **EDIT OBJECT** gives any piece a GROUP ID (1 to 99). **TRIGGERS** places a MOVE or COLOR trigger: invisible in play, each fires once when you pass it and works on every piece with its group id, moving them some whole blocks or painting them a colour, instantly or over a time you set. Restarting puts everything back. The rules are in [coins and triggers](docs/coins-and-triggers.md).
 
 ## Wheel and gravity
 

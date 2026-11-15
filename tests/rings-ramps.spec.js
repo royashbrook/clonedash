@@ -38,7 +38,7 @@ test('new tabs place and persist every new object; black blocks and ramps paint 
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem('clonedash.v1')).draft)).toEqual(draft);
 });
 
-test('real ring touch gives square a midair jump; ignoring it does not', async ({ browser }) => {
+test('real ring touch gives square a midair jump; ignoring it does not', async ({ browser, baseURL }) => {
   for (const activate of [false, true]) {
     const context = await browser.newContext({ viewport: { width: 932, height: 430 }, hasTouch: true });
     const page = await context.newPage(); await page.clock.install();
@@ -50,7 +50,7 @@ test('real ring touch gives square a midair jump; ignoring it does not', async (
         return fill.call(this,x,y,w,h);
       };
     });
-    await page.goto(process.env.GAME_URL || 'http://127.0.0.1:4191');
+    await page.goto(baseURL);
     await page.locator('#editor-open').click(); await page.locator('#test-level').click(); await page.clock.runFor(32);
     const ground = await page.evaluate(() => window.playerPaint);
     const x = () => page.locator('#run-progress').evaluate(e => 1 + e.value / 100 * 19);

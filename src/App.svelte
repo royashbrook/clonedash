@@ -15,6 +15,11 @@
     OUTLINED,
     BLOCKS,
     SLOPES,
+    TRIGGERS,
+    MAX_COINS,
+    MAX_GROUP,
+    MAX_TRIGGER_TIME,
+    coinCount,
   } from "./engine.ts";
   import { LEVELS, COLLECTIONS, COURSE_ORDER, courseSong } from "./levels.ts";
   import { render } from "./render.ts";
@@ -29,6 +34,8 @@
     selectLevel,
     newLevel,
     deleteLevel,
+    keepCoins,
+    shownCoins,
   } from "./library.ts";
   import { installControl } from "./install.ts";
   import { updateControl, type UpdateCheck } from "./pwa.ts";
@@ -52,7 +59,7 @@
     text: string;
     actions: Action[];
     closable: boolean;
-    extra?: "about" | "settings" | "transfer";
+    extra?: "about" | "settings" | "transfer" | "object";
   };
   const choices = {
     blocks: [
@@ -114,14 +121,23 @@
       ["hill-grid", "◠ HILL GRID"],
       ["hill-black", "◠ HILL BLACK"],
     ],
+    coins: [["coin", "● COIN"]],
+    // invisible in play; each fires once when you pass it and works on one group id
+    triggers: [
+      ["move-trigger", "⇄ MOVE"],
+      ["color-trigger", "◐ COLOR"],
+    ],
   } satisfies Record<string, [string, string][]>;
   // Palette presets stamp fields onto a ring; the stored type stays "ring". The original yellow
   // and the 2.25 block bounce are "no field", so old rings stay byte-identical. The block presets
   // are solid blocks with an outline variant; the Edges control gives any outlined block one.
   const presets: Record<
     string,
-    Pick<Piece, "type"> & Partial<Pick<Piece, "color" | "bounce" | "flipsGravity" | "boost" | "dash" | "edges">>
+    Pick<Piece, "type"> & Partial<Pick<Piece, "color" | "bounce" | "flipsGravity" | "boost" | "dash" | "edges" | "target" | "moveY" | "duration">>
   > = {
+    // a new trigger works on group 1 straight away; EDIT OBJECT changes any of it
+    "move-trigger": { type: "move-trigger", target: 1, moveY: 2, duration: 1 },
+    "color-trigger": { type: "color-trigger", target: 1, color: "#ff5c7a", duration: 1 },
     "purple-ring": { type: "ring", color: "#c77dff", bounce: 1 },
     "red-ring": { type: "ring", color: "#ff5c7a", bounce: 5 },
     "white-ring": { type: "ring", color: "#ffffff" },
@@ -155,6 +171,15 @@
     ["#2b4cff", "DARK BLUE"],
   ];
   const article = (name: string) => (/^[aeiou]/.test(name) ? "an " : "a ") + name;
+  // what a selected trigger will do, for the editor's status line
+  const triggerText = (o: Piece) =>
+    !TRIGGERS.includes(o.type)
+      ? ""
+      : ` · GROUP ${o.target ?? "NONE"}` +
+        (o.type === "move-trigger"
+          ? ` · MOVE ${o.moveX ?? 0}, ${o.moveY ?? 0}`
+          : ` · ${RING_COLORS.find(([hex]) => hex === (o.color ?? RING_COLORS[0][0]))?.[1] ?? o.color}`) +
+        ` · ${o.duration ? `${o.duration}S` : "INSTANT"}`;
   const typeOf = (t: string): ObjectType =>
     presets[t]?.type ?? (t as ObjectType);
   type Tab = keyof typeof choices;
@@ -202,6 +227,7 @@
     cue: "",
     detail: "",
     showCue: false,
+    coins: "", // "2 / 5" on a level with coins, else empty and hidden
   });
   let notice = $state(""),
     panel = $state.raw<Sheet | null>(null),
@@ -341,8 +367,10 @@
     if (alive && panel === next && !dialog.open) dialog.showModal();
   }
   function record() {
-    if (custom) return;
     const s = run.state;
+    // coins count only for a finished run; the best is the most in one, on built-ins and my levels
+    if (keepCoins(save, s, run.level, custom, current)) persist();
+    if (custom) return;
     const percent =
       s.status === "complete"
         ? 100
@@ -410,7 +438,7 @@
         throw Error(
           "Storage is unavailable. Your current level was not replaced.",
         );
-      const source = run.state.level;
+      const source = run.level; // as authored, not where this run's triggers moved things
       // Import uses a fresh storage read, a new ID, and verified writes. Only then
       // select the copy; the previous draft remains in its original library slot.
       save = importLevel(
@@ -519,11 +547,13 @@
               ]
             : []),
         ];
+    const fx = run.state.fx,
+      coins = fx?.coinTotal ? ` Coins: ${fx.coins} / ${fx.coinTotal}.` : "";
     void sheet(
       "Level Complete!",
-      custom
+      (custom
         ? "Your trail works. Keep building!"
-        : `${run.state.level.name} cleared. Nice flow.`,
+        : `${run.state.level.name} cleared. Nice flow.`) + coins,
       actions,
       false,
     );
@@ -622,6 +652,7 @@
         !run.learned &&
         s.time <= run.cueUntil &&
         s.status === "playing",
+      coins: s.fx?.coinTotal ? `${s.fx.coins} / ${s.fx.coinTotal}` : "",
     };
     if (
       Object.keys(next).some(
@@ -865,14 +896,20 @@
       toast("This trail has reached 600 objects.");
       return;
     }
-    // A zone lies over whatever is in its cell, so it only collides with another zone there.
-    const zone = ZONES.includes(typeOf(tool)),
+    if (typeOf(tool) === "coin" && coinCount(draft) >= MAX_COINS) {
+      toast(`This trail already has ${MAX_COINS} coins. That is the most a level can hold.`);
+      return;
+    }
+    // A zone or a trigger lies over whatever is in its cell, so it only collides with another
+    // zone or trigger there.
+    const over = (type: string) => ZONES.includes(type) || TRIGGERS.includes(type),
+      zone = over(typeOf(tool)),
       existing = draft.objects.findIndex(
         (o) =>
           o.layer === activeLayer &&
           o.x === ox &&
           o.y === oy &&
-          ZONES.includes(o.type) === zone,
+          over(o.type) === zone,
       );
     if (existing >= 0) {
       select(existing);
@@ -987,20 +1024,24 @@
     string,
     (o: Piece) => boolean,
   ][] = [
-    ["noTouch", "NO TOUCH", "you see it but go right through it", (o) => !ZONES.includes(o.type)],
-    ["hidden", "HIDDEN", "it is invisible in play but still there", (o) => !ZONES.includes(o.type)],
+    ["noTouch", "NO TOUCH", "you see it but go right through it", (o) => !ZONES.includes(o.type) && !TRIGGERS.includes(o.type) && o.type !== "coin"],
+    ["hidden", "HIDDEN", "it is invisible in play but still there", (o) => !ZONES.includes(o.type) && !TRIGGERS.includes(o.type)],
     ["wallPass", "WALL PASS", "its sides stop you instead of killing you", (o) => BLOCKS.includes(o.type) || SLOPES.includes(o.type)],
     ["roofPass", "ROOF PASS", "you bump your head on it instead of dying", (o) => BLOCKS.includes(o.type)],
   ];
   function editObject() {
     if (selected < 0) return;
     const fits = OPTIONS.filter(([, , , fits]) => group.some((i) => fits(draft.objects[i])));
+    const trigger = TRIGGERS.includes(selection.type);
     void sheet(
       "Edit object",
-      fits.length
-        ? (group.length > 1 ? `${group.length} pieces. ` : "") +
-            fits.map(([key, name, text]) => `${name} ${selection[key] ? "ON" : "OFF"}: ${text}.`).join(" ")
-        : "Nothing to switch on this piece.",
+      trigger
+        ? "A trigger fires once when you run past it. It works on every piece with its group id."
+        : (fits.length
+            ? (group.length > 1 ? `${group.length} pieces. ` : "") +
+              fits.map(([key, name, text]) => `${name} ${selection[key] ? "ON" : "OFF"}: ${text}.`).join(" ") +
+              " "
+            : "") + "GROUP ID: give it a number so a trigger can move it or colour it.",
       [
         ...fits.map(([key, name, , fit]): Action => [
           `${name}: ${selection[key] ? "TURN OFF" : "TURN ON"}`,
@@ -1018,7 +1059,58 @@
         ]),
         ["DONE", closeSheet, true],
       ],
+      true,
+      "object",
     );
+  }
+  // GROUP ID (EDIT OBJECT): a whole number 1 to 99 on the selected pieces, blank or 0 for none.
+  // Triggers carry no group. Ids belong to this level only; copies keep theirs.
+  function setGroup(input: HTMLInputElement) {
+    const n = input.value.trim() === "" ? 0 : Number(input.value);
+    if (!Number.isInteger(n) || n < 0 || n > MAX_GROUP) {
+      input.value = String(selection?.group ?? "");
+      toast(`A group id is a whole number from 1 to ${MAX_GROUP}. Leave it blank for none.`);
+      return;
+    }
+    const next = changed((piece) => {
+      if (n) piece.group = n;
+      else delete piece.group;
+    }, (o) => !TRIGGERS.includes(o.type));
+    validateLevel(next);
+    draft = next;
+    saveDraft();
+  }
+  // The trigger fields (EDIT OBJECT on a trigger). Zero moves and an instant time are stored as
+  // "no field", like the other defaults.
+  function setTrigger(
+    key: "target" | "moveX" | "moveY" | "duration" | "color",
+    input: HTMLInputElement | HTMLSelectElement,
+  ) {
+    const value = input.value.trim(),
+      n = key === "duration" ? Math.round(Number(value || 0) * 100) / 100 : Number(value || 0);
+    const kind =
+      key === "moveX" || key === "moveY" ? "move-trigger" : key === "color" ? "color-trigger" : "";
+    const next = changed((piece) => {
+      if (key === "color") piece.color = value;
+      else if (n) piece[key] = n;
+      else delete piece[key];
+    }, (o) => (kind ? o.type === kind : TRIGGERS.includes(o.type)));
+    try {
+      if (key !== "color" && !Number.isFinite(n)) throw Error("not a number");
+      validateLevel(next);
+    } catch {
+      input.value = String(selection?.[key] ?? "");
+      toast(
+        key === "target"
+          ? `Pick a group id from 1 to ${MAX_GROUP}.`
+          : key === "duration"
+            ? `Time is 0 (instant) to ${MAX_TRIGGER_TIME} seconds.`
+            : "Moves are whole blocks, and no further than the level is long or tall.",
+      );
+      return;
+    }
+    draft = next;
+    saveDraft();
   }
   // The Edges control: which sides of an outlined block are drawn. FULL is stored as "no field".
   function setEdges(value: Edges | "") {
@@ -1106,7 +1198,7 @@
   function how() {
     void sheet(
       "One button. Find your flow.",
-      "Square: tap or press Space to jump onto two-block ledges. Hold for another jump when you land. Pogo: same as square, but every fresh tap lets you jump again in midair. Jump before a wall to clear it. Try Air Steps! Plane: hold to fly against gravity; release to fall. Landings and ceiling contact are safe while flying, but wall impacts kill. Angle: hold to climb at 45 degrees, release to dive at 45 degrees. Floors, ceilings and block faces are safe; walls are not. Wheel: land on a block, floor or ceiling, then tap or press Space to flip gravity. Midair taps are ignored; holding does not flip again when you land. Croissant: land, then tap to teleport straight across to the floor, ceiling or block on the other side, with gravity flipped. UP and DOWN portals set gravity without changing your shape. Speed portals change how fast you move forward: SLOW, 1X, FAST and FASTER. Shape and gravity stay the same. Under upside-down gravity, land and jump on ceilings. All spikes kill, including the tiny quarter-size ones. Outline blocks are transparent but solid. Hitting a wall kills in ALL modes, including the vertical face of a ramp. Your smaller hazard hitbox still forgives edge grazes. Background blocks never collide. Rings: tap or press Space while reaching a glowing ring for a midair jump, once per ring per run. Purple and red rings bounce one and five blocks; a white ring takes any colour and height. A dark blue gravity ring flips your gravity and you drop the new way at once; a green one flips it and bounces you away from the new gravity. UP and DOWN portals drop you the new way at once too. Hold on a pink dash orb and you dash the way it points, with no gravity, until you let go: turn it with the angle slider to aim it. A yellow dash orb flips your gravity as well. EDIT OBJECT switches a piece to NO TOUCH (seen, never touched), HIDDEN (touched, never seen in play; faint in the editor), WALL PASS (its sides stop you, like a W) or ROOF PASS (you bump your head, like an R). Wall pass (W) and roof pass (R) are invisible in play: lay them over blocks, or right where you hit them. While you touch a W, a wall stops you instead of crashing you, and a jump over it carries on; while you touch an R, you bump your head and fall back instead of crashing. Spikes still kill. Ramps: walk up or down the white diagonal slope. Curves are rounded ramps: a scoop bends up like a skate ramp, a hill bulges out: run into its side and you ride up it. Find RINGS and RAMP tabs in the editor. In the editor, pinch a selected piece with two fingers to size it and turn it, like cropping a photo; Snap holds 15 degrees and quarter sizes. MULTI selects a group: tap pieces to add them, or swipe a box over a lot of them, then move, turn, flip, copy or delete them together. Edge, parallel, outer corner, inner corner and no outline blocks are solid blocks with the white line on only some sides (or none, for the middle of a shape), so a big shape reads as one piece: turn them to face the outside, and pick EDGES on any selected block.",
+      "Square: tap or press Space to jump onto two-block ledges. Hold for another jump when you land. Pogo: same as square, but every fresh tap lets you jump again in midair. Jump before a wall to clear it. Try Air Steps! Plane: hold to fly against gravity; release to fall. Landings and ceiling contact are safe while flying, but wall impacts kill. Angle: hold to climb at 45 degrees, release to dive at 45 degrees. Floors, ceilings and block faces are safe; walls are not. Wheel: land on a block, floor or ceiling, then tap or press Space to flip gravity. Midair taps are ignored; holding does not flip again when you land. Croissant: land, then tap to teleport straight across to the floor, ceiling or block on the other side, with gravity flipped. UP and DOWN portals set gravity without changing your shape. Speed portals change how fast you move forward: SLOW, 1X, FAST and FASTER. Shape and gravity stay the same. Under upside-down gravity, land and jump on ceilings. All spikes kill, including the tiny quarter-size ones. Outline blocks are transparent but solid. Hitting a wall kills in ALL modes, including the vertical face of a ramp. Your smaller hazard hitbox still forgives edge grazes. Background blocks never collide. Rings: tap or press Space while reaching a glowing ring for a midair jump, once per ring per run. Purple and red rings bounce one and five blocks; a white ring takes any colour and height. A dark blue gravity ring flips your gravity and you drop the new way at once; a green one flips it and bounces you away from the new gravity. UP and DOWN portals drop you the new way at once too. Hold on a pink dash orb and you dash the way it points, with no gravity, until you let go: turn it with the angle slider to aim it. A yellow dash orb flips your gravity as well. EDIT OBJECT switches a piece to NO TOUCH (seen, never touched), HIDDEN (touched, never seen in play; faint in the editor), WALL PASS (its sides stop you, like a W) or ROOF PASS (you bump your head, like an R). Wall pass (W) and roof pass (R) are invisible in play: lay them over blocks, or right where you hit them. While you touch a W, a wall stops you instead of crashing you, and a jump over it carries on; while you touch an R, you bump your head and fall back instead of crashing. Spikes still kill. Ramps: walk up or down the white diagonal slope. Curves are rounded ramps: a scoop bends up like a skate ramp, a hill bulges out: run into its side and you ride up it. Find RINGS and RAMP tabs in the editor. In the editor, pinch a selected piece with two fingers to size it and turn it, like cropping a photo; Snap holds 15 degrees and quarter sizes. MULTI selects a group: tap pieces to add them, or swipe a box over a lot of them, then move, turn, flip, copy or delete them together. Edge, parallel, outer corner, inner corner and no outline blocks are solid blocks with the white line on only some sides (or none, for the middle of a shape), so a big shape reads as one piece: turn them to face the outside, and pick EDGES on any selected block. Coins: touch one to pick it up; a level holds up to 10, and your best is the most you picked up in one finished run. Triggers are invisible in play and fire once when you run past them. Give pieces a GROUP ID in EDIT OBJECT, then a MOVE trigger slides every piece in that group some blocks over a time you choose, and a COLOR trigger paints them a colour. Find them on the COINS and TRIGGERS tabs.",
     );
   }
   // Every check says what it found, so a tap never looks like nothing happened. A pull is
@@ -1236,7 +1328,7 @@
       (value) => (installVisible = value),
       () => {
         void sheet(
-          "Install Clone Dash",
+          "Install Cube Dash",
           "In Safari, tap Share, then Add to Home Screen, then Add. Your game will open full-screen and work offline after its first load.",
         );
       },
@@ -1283,7 +1375,7 @@
 <canvas
   id="world"
   bind:this={canvas}
-  aria-label="Clone Dash playfield. Space or touch to jump, hold to fly, tap to flip wheel gravity."
+  aria-label="Cube Dash playfield. Space or touch to jump, hold to fly, tap to flip wheel gravity."
 ></canvas>
 <span class="version" aria-label="App version">v{__APP_VERSION__}</span>
 <div
@@ -1313,11 +1405,11 @@
     <a
       class="brand"
       href="/"
-      aria-label="Clone Dash home"
+      aria-label="Cube Dash home"
       onclick={(e) => {
         e.preventDefault();
         home();
-      }}><img src="/icon.svg" alt="" width="44" height="44" />CLONE DASH</a
+      }}><img src="/icon.svg" alt="" width="44" height="44" />CUBE DASH</a
     ><button
       id="sound"
       aria-label={save.sound ? "Turn sound off" : "Turn sound on"}
@@ -1394,7 +1486,7 @@
       id="about"
       onclick={() =>
         sheet(
-          "Clone Dash",
+          "Cube Dash",
           `${LEVELS.length} one-button trails, from warmups to hard, and a place to build your own. An original geometric platformer inspired by Geometry Dash, made from a kid’s game idea.`,
           [],
           true,
@@ -1427,11 +1519,14 @@
       : "NOT SAVED · storage unavailable. Keep this page open to keep your work."}
   </p>
   <div id="custom-levels">
-    {#each save.customLevels as { id, level } (id)}<article class="custom-card">
+    {#each save.customLevels as { id, level, coins } (id)}<article class="custom-card">
         <h2>{level.name}</h2>
         <p>
           {level.length} × {levelHeight(level)} blocks · {level.objects.length} pieces
-          · ♪ {trackName(level.song ?? 8 + id)}
+          · ♪ {trackName(level.song ?? 8 + id)}{#if coinCount(level)}
+            · <span class="best-coins"
+              >best {shownCoins(coins, level)} / {coinCount(level)} coins</span
+            >{/if}
         </p>
         <div class="buttons">
           <button
@@ -1477,7 +1572,9 @@
       aria-label="Level progress"
     ></progress>
   </div>
-  <span id="attempt">TRY {hud.attempt}</span><button
+  <span id="coins" hidden={!hud.coins} aria-label={`Coins ${hud.coins}`}
+    ><span class="coin-dot" aria-hidden="true"></span>{hud.coins}</span
+  ><span id="attempt">TRY {hud.attempt}</span><button
     id="pause"
     aria-label="Pause"
     onclick={pause}>Ⅱ</button
@@ -1683,11 +1780,11 @@
         /></label
       ><output id="selection"
         >{testing
-          ? `TRY ${hud.attempt} · ${hud.cue} · ${hud.detail} · ESC OR STOP TO EDIT`
+          ? `TRY ${hud.attempt}${hud.coins ? ` · COINS ${hud.coins}` : ""} · ${hud.cue} · ${hud.detail} · ESC OR STOP TO EDIT`
           : group.length > 1
           ? `${group.length} PIECES · MOVE, TURN, FLIP, COPY OR DELETE THEM TOGETHER`
           : selection
-          ? `${labelOf(selection.type)} · x ${selection.x.toFixed(2)} / y ${selection.y.toFixed(2)} · ${selection.rotation}° · ×${(selection.scale ?? 1).toFixed(2)}${selection.type === "ring" ? (selection.dash ? (selection.flipsGravity ? " · ➤ DASH + GRAVITY" : " · ➤ DASH") : selection.flipsGravity ? (selection.boost ? " · ⇈ GRAVITY + BOUNCE" : " · ⇅ GRAVITY") : ` · ↑${selection.bounce ?? RING_BOUNCE}`) : ""}${selection.edges ? ` · ${EDGE_NAMES.find(([v]) => v === selection.edges)?.[1]}` : ""}${OPTIONS.filter(([key]) => selection[key]).map(([, name]) => ` · ${name}`).join("")}`
+          ? `${labelOf(selection.type)} · x ${selection.x.toFixed(2)} / y ${selection.y.toFixed(2)} · ${selection.rotation}° · ×${(selection.scale ?? 1).toFixed(2)}${selection.type === "ring" ? (selection.dash ? (selection.flipsGravity ? " · ➤ DASH + GRAVITY" : " · ➤ DASH") : selection.flipsGravity ? (selection.boost ? " · ⇈ GRAVITY + BOUNCE" : " · ⇅ GRAVITY") : ` · ↑${selection.bounce ?? RING_BOUNCE}`) : ""}${selection.edges ? ` · ${EDGE_NAMES.find(([v]) => v === selection.edges)?.[1]}` : ""}${OPTIONS.filter(([key]) => selection[key]).map(([, name]) => ` · ${name}`).join("")}${selection.group ? ` · GROUP ${selection.group}` : ""}${triggerText(selection)}`
           : tool === "select"
             ? "Tap an object to select it."
             : tool === "multi"
@@ -1731,6 +1828,68 @@
   <div id="sheet-content">
     {#if panel}<h2 id="sheet-title">{panel.title}</h2>
       {#if panel.text}<p>{panel.text}</p>{/if}
+      {#if panel.extra === "object" && selection}<div class="object-settings">
+          {#if TRIGGERS.includes(selection.type)}<label
+              >Group id it works on<input
+                id="trigger-target"
+                type="number"
+                inputmode="numeric"
+                min="1"
+                max={MAX_GROUP}
+                step="1"
+                value={selection.target ?? ""}
+                onchange={(e) => setTrigger("target", e.currentTarget)}
+              /></label
+            >{#if selection.type === "move-trigger"}<label
+                >Move right (blocks, minus is left)<input
+                  id="trigger-move-x"
+                  type="number"
+                  inputmode="numeric"
+                  step="1"
+                  value={selection.moveX ?? 0}
+                  onchange={(e) => setTrigger("moveX", e.currentTarget)}
+                /></label
+              ><label
+                >Move up (blocks, minus is down)<input
+                  id="trigger-move-y"
+                  type="number"
+                  inputmode="numeric"
+                  step="1"
+                  value={selection.moveY ?? 0}
+                  onchange={(e) => setTrigger("moveY", e.currentTarget)}
+                /></label
+              >{:else}<label
+                >Colour<select
+                  id="trigger-color"
+                  value={selection.color ?? RING_COLORS[0][0]}
+                  onchange={(e) => setTrigger("color", e.currentTarget)}
+                  >{#each RING_COLORS as [hex, name]}<option value={hex}>{name}</option
+                    >{/each}</select
+                ></label
+              >{/if}<label
+              >Time (seconds, 0 is instant)<input
+                id="trigger-time"
+                type="number"
+                inputmode="decimal"
+                min="0"
+                max={MAX_TRIGGER_TIME}
+                step="0.1"
+                value={selection.duration ?? 0}
+                onchange={(e) => setTrigger("duration", e.currentTarget)}
+              /></label
+            >{:else}<label
+              >Group id (1–{MAX_GROUP}, blank for none)<input
+                id="group-id"
+                type="number"
+                inputmode="numeric"
+                min="0"
+                max={MAX_GROUP}
+                step="1"
+                value={selection.group ?? ""}
+                onchange={(e) => setGroup(e.currentTarget)}
+              /></label
+            >{/if}
+        </div>{/if}
       <div class="buttons">
         {#each panel.actions as [label, handler, primary]}<button
             class:primary
