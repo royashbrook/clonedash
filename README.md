@@ -45,6 +45,10 @@ While testing, **← MY LEVELS** at the top left returns directly to the library
 
 The **Layer** selector switches between PLAY and BACKGROUND. Background blocks paint behind playable pieces and never collide or support a landing. Both layers can occupy the same coordinates; selecting, moving and copying respects the active layer. All five block styles work as decoration. Spikes, portals, rings and ramps stay in the play layer.
 
+## Coins and triggers
+
+**COINS** places a coin; touch it in a run to pick it up. A level holds up to 10, the run shows how many you have, and your best is the most you picked up in one finished run. **EDIT OBJECT** gives any piece a GROUP ID (1 to 99). **TRIGGERS** places a MOVE or COLOR trigger: invisible in play, each fires once when you pass it and works on every piece with its group id, moving them some whole blocks or painting them a colour, instantly or over a time you set. Restarting puts everything back. The rules are in [coins and triggers](docs/coins-and-triggers.md).
+
 ## Wheel and gravity
 
 Wheel mode flips gravity once per tap or Space press while resting on a solid surface (block top, inverted block underside, floor or ceiling). Midair taps are ignored, not queued for landing. Holding does not repeat; keyboard auto-repeat is ignored. UP and DOWN portals set gravity without changing mode. Square jumps and plane controls mirror with gravity; inverted square/wheel landings use block undersides and the ceiling. Mode portals preserve gravity. Every new run resets to square and normal gravity.

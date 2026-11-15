@@ -1,6 +1,8 @@
-# Clone Dash
+# Cube Dash (formerly Clone Dash)
 
 Release scope: seven original levels plus Gravity Flip and Air Steps bonus trails; 5 blocks/second auto-run; two-block ledge jumps with quarter-block clearance; hold-to-rise plane and midair-tap jumper with safe solid contact; surface-tap-to-flip wheel; mode and gravity portals; five block and four spike styles; jump rings; three 45-degree ramp styles; collision follows editor transforms. Hazard box is 0.40 blocks, separate from full-size support. Touch/keyboard, full-screen landscape gameplay, pause on background, brief death animation and quick retry.
+
+Coins and triggers (#16): up to 10 coins a level with a best per level; group ids; move and colour triggers on their own tab. Contract and tests: docs/coins-and-triggers.md.
 
 Editor: Blocks / Spikes / Portals / Gravity / Rings / Ramp tabs, select/place/delete, copy + paste, confirmed delete all, movement at 1 / 0.5 / 0.05 blocks, both quarter-turns and flips, pan, local draft, test and return. No server or user uploads.
 
