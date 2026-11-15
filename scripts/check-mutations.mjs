@@ -104,7 +104,7 @@ try {
     ["levels.ts", "LEVELS.push(...COURSES)", "LEVELS.unshift(...COURSES)", "groups preserve", "courses.test.mjs"],
     ["levels.ts", "LEVELS.push(...REMIX)", "LEVELS.unshift(...REMIX)", "groups preserve", "courses.test.mjs"],
     ["courses.ts", "song: 109", "song: 110", "groups preserve", "courses.test.mjs"],
-    // Coins and triggers (#16, docs/coins-and-triggers.md): each rule fails its own test.
+    // Coins and triggers (#101, docs/coins-and-triggers.md): each rule fails its own test.
     ["engine.ts", "coinCount(level) > MAX_COINS", "coinCount(level) > MAX_COINS + 1", "coin cap", "coins.test.mjs"],
     ["library.ts", "entry.coins = got;", "entry.coins = (entry.coins ?? 0) + got;", "best coins", "coins.test.mjs"],
     ["engine.ts", "if (fx.fired[t]) continue;", "if (false) continue;", "instant move by the offset", "triggers.test.mjs"],
@@ -115,6 +115,13 @@ try {
     ["run.ts", "createState(this.level);\n    this.deathTime", "createState(this.state.level);\n    this.deathTime", "restart, death and leaving", "triggers.test.mjs"],
     // a new move must start from the current pose, not from where the replaced move started
     ["engine.ts", "fx.move[m] = p.x;", "fx.move[m] = fx.movers.includes(i) ? fx.move[m] : p.x;", "overlap", "triggers.test.mjs"],
+    // a step's two contact passes (settle): fire on resolved reach, redo on the moved pose from the
+    // state before contact, fire nothing in the redo
+    ["engine.ts", "  fx.picked.length = 0;\n  contact(s, oldX, oldY, wasGrounded, height, forward, dt);\n  if (!runTriggers(s, fx)) return;", "  fx.picked.length = 0;\n  runTriggers(s, fx);\n  contact(s, oldX, oldY, wasGrounded, height, forward, dt);\n  if (s) return;", "a trigger fires on where the run really is", "triggers.test.mjs"],
+    ["engine.ts", "  if (!runTriggers(s, fx)) return;", "  runTriggers(s, fx);\n  if (s) return;", "an instant move clears the way in the very step it fires", "triggers.test.mjs"],
+    ["engine.ts", "gravity, mode, touchingPortals });", "gravity, mode });", "a second contact pass starts from the state before the step", "triggers.test.mjs"],
+    ["engine.ts", "  for (const i of fx.picked) fx.got[i] = 0;\n  fx.coins = coins;\n", "", "a portal or a coin moved away", "triggers.test.mjs"],
+    ["engine.ts", "  contact(s, oldX, oldY, wasGrounded, height, forward, dt);\n}\nfunction contact(", "  contact(s, oldX, oldY, wasGrounded, height, forward, dt);\n  runTriggers(s, fx);\n}\nfunction contact(", "a cascade waits a step", "triggers.test.mjs"],
     ["transfer.ts", "...(group === undefined ? {} : { group }),", "group,", "old share codes captured on main", "parity.test.mjs"],
     ["library.ts", "s.coins !== undefined &&", "true &&", "old saves captured on main", "parity.test.mjs"],
     // Release identity guards: each rejection must fail against its broken control.

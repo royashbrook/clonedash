@@ -8,7 +8,7 @@ import { LEVELS } from '../src/levels.ts';
 import { Run } from '../src/run.ts';
 import { render } from '../src/render.ts';
 
-// Group ids, move triggers and colour triggers (#16). docs/coins-and-triggers.md is the contract.
+// Group ids, move triggers and colour triggers (#101). docs/coins-and-triggers.md is the contract.
 const COURSES = structuredClone(LEVELS);
 after(() => assert.deepEqual(LEVELS, COURSES, 'no run in this file changed a built-in course'));
 
@@ -115,7 +115,7 @@ test('collisions use the moved pose: a block moved out of the path is passed, on
 test('a trigger fires on where the run really is: a wall that holds it short keeps the trigger unfired', () => {
   // a WALL PASS block at 4 holds the run with its x just under 3.5, so the trigger at 3.5 is never
   // reached, even though each step's forward move (before the wall pushes back) passes it
-  const held = createState(level([{ ...block(4, 0), wallPass: true }, block(10, 3, 1), move(3.5, { target: 1, moveY: 1 })]));
+  const held = createState(validateLevel(level([{ ...block(4, 0), wallPass: true }, block(10, 3, 1), move(3.5, { target: 1, moveY: 1 })])));
   let most = 0;
   for (let i = 0; i < 500; i++) {
     step(held, false);
@@ -130,6 +130,107 @@ test('a trigger fires on where the run really is: a wall that holds it short kee
   until(free, 4);
   assert.equal(free.fx.fired[1], 1);
   assert.deepEqual(pose(free, 0), [10, 4]);
+});
+
+// one step, one pose: the step that fires an instant move meets the moved pose in its own contact,
+// and the pose drawn after it is the pose contact used
+const valid = (objects, length) => createState(validateLevel(level(objects, length)));
+test('an instant move clears the way in the very step it fires, so the run is never killed by a block drawn out of it', () => {
+  // the block's face kills from x 9.48; the trigger at 9.5 is first reached in a step already that close
+  assert.equal(finish(valid([block(10, 0, 1)])).status, 'dead', 'control: the block kills where it stands');
+  const s = valid([block(10, 0, 1), move(9.5, { target: 1, moveY: 3 })]);
+  while (s.status === 'playing' && !s.fx.fired[1]) step(s, false);
+  assert.equal(s.status, 'playing', 'the firing step resolved against the moved block');
+  assert.deepEqual(pose(s, 0), [10, 3]);
+  assert.equal(finish(s).status, 'complete');
+});
+
+test('a trigger fired on reach stays fired when the block it moves holds the run back behind it', () => {
+  // the run reaches 7.5 and fires; the WALL PASS block it drops in front holds the run at 7.48
+  const s = valid([{ ...block(8, 3, 1), wallPass: true }, move(7.5, { target: 1, moveY: -3 })]);
+  let fired = -1;
+  for (let i = 0; i < 400 && s.status === 'playing'; i++) {
+    step(s, false);
+    if (fired < 0 && s.fx.fired[1]) fired = i;
+  }
+  assert.ok(fired >= 0, 'it fired');
+  assert.equal(s.status, 'playing', 'held, not killed: the step met the block where it now stands');
+  assert.ok(s.x < 7.5, `the run sits behind the fired trigger (x ${s.x})`);
+  assert.deepEqual(pose(s, 0), [8, 0]);
+});
+
+test('a cascade waits a step: a trigger reached only because a move cleared the way fires on the next step', () => {
+  // the wall at 4 holds the run at 3.48, where A fires and lifts it; the redo lets the run on past B
+  // (3.49), but B fires one step later, never in the step that lifted the wall
+  const s = valid([
+    { ...block(4, 0, 1), wallPass: true },
+    block(20, 3, 2),
+    move(3.48, { target: 1, moveY: 3 }),
+    move(3.49, { target: 2, moveY: 1 }),
+  ]);
+  while (s.status === 'playing' && !s.fx.fired[2]) step(s, false);
+  assert.ok(s.x >= 3.49, `the redo carried the run past B (x ${s.x})`);
+  assert.equal(s.fx.fired[3], 0, 'B waits');
+  assert.deepEqual(pose(s, 1), [20, 3]);
+  step(s, false);
+  assert.equal(s.fx.fired[3], 1, 'and fires on the next step');
+  assert.deepEqual(pose(s, 1), [20, 4]);
+});
+
+// The state a step leaves, minus the level: what a second contact pass has to reproduce exactly
+const player = (s) => ({ x: s.x, y: s.y, vy: s.vy, grounded: s.grounded, status: s.status, wall: s.wall, speed: s.speed,
+  gravity: s.gravity, mode: s.mode, touching: [...s.touchingPortals], coins: s.fx.coins, got: [...s.fx.got] });
+// plays a level with no input and returns the step (and x) on which `seen` first holds
+function first(objects, seen) {
+  const s = valid(objects);
+  for (let i = 0; i < 2000 && s.status === 'playing'; i++) {
+    step(s, false);
+    if (seen(s)) return { step: i, x: s.x };
+  }
+  throw Error('never happened');
+}
+const portalTouched = (s) => s.touchingPortals.length > 0,
+  coinPicked = (s) => s.fx.coins > 0;
+test('a second contact pass starts from the state before the step: portals already inside, entered this step, a coin', () => {
+  // a far block moved at once forces the redo; the control's trigger aims at an empty group, so it
+  // fires without a redo. every step, both runs leave the same player state.
+  const near = [{ ...object('gravity-up', 8, 0) }, object('coin', 8, 0)];
+  const touch = first([...near, block(30, 3, 2)], portalTouched).x,
+    pick = first([...near, block(30, 3, 2)], coinPicked).x;
+  assert.ok(touch < pick, 'the portal is touched before the smaller coin is picked up');
+  for (const [name, T] of [['the step it first touches the portal', touch], ['already inside the portal, the step it picks the coin', pick]]) {
+    const redo = valid([...near, block(30, 3, 1), move(T, { target: 1, moveY: 1 })]);
+    const plain = valid([...near, block(30, 3, 1), move(T, { target: 2, moveY: 1 })]);
+    for (let i = 0; i < 400 && redo.status === 'playing'; i++) {
+      step(redo, false);
+      step(plain, false);
+      assert.deepEqual(player(redo), player(plain), `${name}: step ${i}`);
+    }
+    assert.equal(redo.fx.fired[3], 1, `${name}: the redo trigger fired`);
+    assert.deepEqual(pose(redo, 2), [30, 4]);
+    assert.equal(plain.gravity, 1, `${name}: the portal really flipped gravity`);
+    assert.equal(plain.fx.coins, 1, `${name}: and the coin was really picked up`);
+  }
+});
+
+test('a portal or a coin moved away in the step that reaches it is not entered or kept', () => {
+  // a coin alone, so nothing else is at the spot; the trigger fires on the step pass one picks it up
+  const coin = first([object('coin', 8, 0), block(30, 3, 2)], coinPicked);
+  const c = valid([{ ...object('coin', 8, 0), group: 1 }, move(coin.x, { target: 1, moveY: 3 })]);
+  for (let i = 0; i <= coin.step; i++) step(c, false);
+  assert.equal(c.fx.fired[1], 1, 'fired on the step that first picked it up');
+  assert.equal(c.fx.coins, 0, 'the coin was moved away before it could be kept');
+  assert.equal(c.fx.got[0], 0);
+  assert.deepEqual(pose(c, 0), [8, 3]);
+  assert.equal(finish(c).fx.coins, 0, 'and the run never meets it again');
+  // the same for a gravity portal, on the step pass one first touches it
+  const portal = first([object('gravity-up', 8, 0), object('coin', 30, 3)], portalTouched);
+  const p = valid([{ ...object('gravity-up', 8, 0), group: 1 }, move(portal.x, { target: 1, moveY: 3 })]);
+  for (let i = 0; i <= portal.step; i++) step(p, false);
+  assert.equal(p.fx.fired[1], 1, 'fired on the step that first touched it');
+  assert.equal(p.gravity, -1, 'the portal was moved away before it could be entered');
+  assert.deepEqual(p.touchingPortals, []);
+  assert.deepEqual(pose(p, 0), [8, 3]);
 });
 
 test('restart, death and leaving put every moved piece, colour and coin back; the authored level is untouched', () => {

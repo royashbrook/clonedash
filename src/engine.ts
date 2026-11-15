@@ -229,6 +229,7 @@ export function effects(level: Level): { fx: RunEffects; level: Level } | null {
       coinTotal,
       coins: 0,
       got: new Uint8Array(n),
+      picked: [],
       triggers,
       fired: new Uint8Array(n),
       groups,
@@ -307,11 +308,12 @@ export function tintOf(fx: RunEffects, i: number, time: number, out = SCRATCH) {
   out[3] = a;
   return out;
 }
-// Fires every trigger the player's resolved x (after this step's contact) has reached, in authored
-// order, however many that is and wherever they are on screen. A new command on a piece starts from
-// where that piece is (or how it looks) right now and replaces the one it had. Running moves are
-// advanced by moveAll at the start of each step, before contact.
+// Fires every trigger the player's resolved x (after this step's first contact pass, settle) has
+// reached, in authored order, however many that is and wherever they are on screen. A new command on
+// a piece starts from where that piece is (or how it looks) right now and replaces the one it had.
+// True when a piece now stands somewhere else (an instant move), so contact has to run again.
 export function runTriggers(s: GameState, fx: RunEffects) {
+  let moved = false;
   for (let k = 0; k < fx.triggers.length; k++) {
     const t = fx.triggers[k];
     if (fx.fired[t]) continue;
@@ -333,6 +335,7 @@ export function runTriggers(s: GameState, fx: RunEffects) {
         fx.move[m + 5] = o.duration ?? 0;
         const done = place(s, fx, i),
           at = fx.movers.indexOf(i);
+        if (p.x !== fx.move[m] || p.y !== fx.move[m + 1]) moved = true;
         if (done && at >= 0) fx.movers.splice(at, 1);
         else if (!done && at < 0) fx.movers.push(i);
       } else {
@@ -350,6 +353,7 @@ export function runTriggers(s: GameState, fx: RunEffects) {
       }
     }
   }
+  return moved;
 }
 // Height of the actual triangle over the player's full horizontal footprint.
 export function rampSurface(
@@ -475,8 +479,48 @@ export function step(
   s.y += s.vy * dt + (acceleration * dt * dt) / 2;
   s.vy += acceleration * dt;
   if (s.mode === "plane") s.vy = Math.max(-4, Math.min(4, s.vy));
-  // before any contact, so this step's collisions meet pieces where triggers have put them
-  if (s.fx?.movers.length) moveAll(s, s.fx);
+  if (s.fx) settle(s, s.fx, oldX, oldY, wasGrounded, height, forward, dt);
+  else contact(s, oldX, oldY, wasGrounded, height, forward, dt);
+  if (s.status === "playing" && s.x >= s.level.length) s.status = "complete";
+  return s;
+}
+// A run with coins or triggers. Running moves are placed at this step's time before any contact.
+// Triggers then fire on where contact left the run (a wall that holds it short keeps them unfired),
+// in authored order. If that moved a piece at once, contact runs again from the state it started
+// from, on the moved pose, so a step's collision and the pose drawn after it are always the same.
+// The second pass is the step's result and fires nothing itself: a trigger only it reaches fires next
+// step, and a piece it moved into the way can hold the run back behind a trigger that already fired.
+function settle(
+  s: GameState,
+  fx: RunEffects,
+  oldX: number,
+  oldY: number,
+  wasGrounded: boolean,
+  height: number,
+  forward: number,
+  dt: number,
+) {
+  if (fx.movers.length) moveAll(s, fx);
+  const { x, y, vy, grounded, status, wall, speed, gravity, mode, touchingPortals } = s,
+    coins = fx.coins;
+  fx.picked.length = 0;
+  contact(s, oldX, oldY, wasGrounded, height, forward, dt);
+  if (!runTriggers(s, fx)) return;
+  Object.assign(s, { x, y, vy, grounded, status, wall, speed, gravity, mode, touchingPortals });
+  for (const i of fx.picked) fx.got[i] = 0;
+  fx.coins = coins;
+  fx.picked.length = 0;
+  contact(s, oldX, oldY, wasGrounded, height, forward, dt);
+}
+function contact(
+  s: GameState,
+  oldX: number,
+  oldY: number,
+  wasGrounded: boolean,
+  height: number,
+  forward: number,
+  dt: number,
+) {
   s.grounded = false;
   if (s.y <= 0) {
     s.y = 0;
@@ -509,6 +553,7 @@ export function step(
       if (s.fx && !s.fx.got[i] && intersects(body, polygon(o))) {
         s.fx.got[i] = 1;
         s.fx.coins++;
+        s.fx.picked.push(i);
       }
       continue;
     }
@@ -622,11 +667,6 @@ export function step(
     }
   }
   s.touchingPortals = touching;
-  // after contact, so a trigger fires only once the player has really reached it (a wall that
-  // holds the run short of a trigger keeps it unfired); what it moves meets the next step's contact
-  if (s.fx) runTriggers(s, s.fx);
-  if (s.status === "playing" && s.x >= s.level.length) s.status = "complete";
-  return s;
 }
 export function validateLevel(input: unknown): Level {
   // The assertion only gives names to the shape; every persisted field is checked below.

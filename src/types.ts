@@ -111,6 +111,7 @@ export interface RunEffects {
   coinTotal: number;
   coins: number; // picked up this run
   got: Uint8Array; // 1 once that coin is picked up
+  picked: number[]; // coins picked up by this step's contact pass, undone if contact runs again
   triggers: number[]; // trigger indices, in authored order (the order ties fire in)
   fired: Uint8Array; // 1 once that trigger has fired this run
   groups: Map<number, number[]>; // group id -> member indices, built once per run

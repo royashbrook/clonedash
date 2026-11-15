@@ -1,6 +1,6 @@
 # coins, group ids and triggers
 
-tracked in #16, from a ten-year-old tester's list: coins (at most 10), triggers with their own
+tracked in #101, from player feedback: coins (at most 10), triggers with their own
 editor tab, group ids in EDIT OBJECT, a move trigger and a colour trigger, and the name cube dash.
 
 ## the pieces
@@ -27,12 +27,21 @@ editor tab, group ids in EDIT OBJECT, a move trigger and a colour trigger, and t
    RESTART LEVEL, a replay or leaving test play builds a fresh state from it, so every moved
    position, colour and coin comes back. EDIT A COPY copies `Run.level`, never the moved copy.
    a level without coins or triggers gets no `fx` and plays its authored level, exactly as before.
-2. **firing.** each trigger fires once per run, in the fixed step where the player's resolved x
-   (after that step's contact, so after a wall has held the run back) first reaches the trigger's
-   x. a run held short of a trigger never fires it. every trigger crossed in a step fires in that
-   step, however many and wherever they are on screen, in authored order. running moves advance at
-   the start of each step, before contact; what a trigger moves meets contact from the next step
-   on, and drawing (after the step) shows the same pose that contact will use.
+2. **firing and contact, one step** (engine.ts `settle`, levels with coins or triggers only):
+   2a. running moves are placed at this step's time, before any contact.
+   2b. contact pass one, from the state the step had before contact.
+   2c. every unfired trigger whose x the run's x from pass one has reached fires, in authored
+       order, however many and wherever they are on screen. a run held short of a trigger (a wall)
+       never fires it. that pre-effect reach is what fires a trigger, not where the step ends.
+   2d. if a fired trigger moved a piece at once, contact runs again from the state before 2b
+       (position, speed, gravity, mode, ground, wall, the portals already touched, and any coin
+       pass one picked up), on the moved pose. that second pass is the step's result, so the
+       collision of the step that fires a move and the pose drawn after it are the same.
+   2e. the second pass fires nothing. a trigger only it reaches fires on the next step (a cascade
+       waits a step), and a piece it moved into the way can hold the run back behind a trigger
+       that already fired; that trigger stays fired.
+   a timed move starts where the piece already is, and colour never touches contact, so neither
+   needs a second pass.
 3. **overlap.** a new move on a piece starts from where that piece is at that moment and replaces
    the move it had (the rest of the old move is dropped). a new colour starts from the colour
    showing at that moment and replaces the fade it had. in one step, a later trigger in authored

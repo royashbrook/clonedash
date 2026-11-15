@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 
-// Coins, group ids, move and colour triggers, and the Cube Dash name (#16).
+// Coins, group ids, move and colour triggers, and the Cube Dash name (#101).
 const stored = page => page.evaluate(() => JSON.parse(localStorage.getItem('clonedash.v1')));
 const piece = (type, x, y = 0, extra = {}) => ({ type, x, y, rotation: 0, flipX: false, flipY: false, ...extra });
 const seed = (page, objects, length = 40) => page.addInitScript(([objects, length]) => {

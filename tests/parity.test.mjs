@@ -12,7 +12,7 @@ import { encodeLevel, decodeLevel } from '../src/transfer.ts';
 import { readSave } from '../src/library.ts';
 import { REMIX_INPUTS } from './remix-inputs.mjs';
 
-// Coins and triggers (#16) must leave every level without them exactly as main played it. MAIN is
+// Coins and triggers (#101) must leave every level without them exactly as main played it. MAIN is
 // the commit they were built on; its src is loaded from git next to today's, like the frozen tree
 // in migration.test.mjs, and the two are run side by side on the same input.
 const MAIN = 'bdf5958';

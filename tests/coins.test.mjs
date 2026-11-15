@@ -6,7 +6,7 @@ import { encodeLevel, decodeLevel, importLevel } from '../src/transfer.ts';
 import { readSave, keepCoins, shownCoins, SAVE } from '../src/library.ts';
 import { Run } from '../src/run.ts';
 
-// Coins (#16): a placeable piece, at most 10 a level, picked up by touch, best kept per level.
+// Coins (#101): a placeable piece, at most 10 a level, picked up by touch, best kept per level.
 const level = (objects, length = 40) => ({ name: 'Coins', length, objects });
 const coins = (n, y = 3) => Array.from({ length: n }, (_, i) => object('coin', 4 + i * 2, y));
 const raw = (value) => 'cdl1.0' + Buffer.from(JSON.stringify(value)).toString('base64url');
