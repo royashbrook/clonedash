@@ -313,6 +313,37 @@ footer button {
   font: 700 14px var(--font-mono);
   color: var(--ink-dim);
 }
+#coins {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font: 700 14px var(--font-mono);
+  color: var(--ink);
+  white-space: nowrap;
+}
+#coins[hidden] {
+  display: none;
+}
+.coin-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #ffd166;
+  border: 2px solid #fff;
+}
+.object-settings {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.object-settings label {
+  justify-content: space-between;
+}
+.object-settings input,
+.object-settings select {
+  width: 110px;
+  font-size: 16px; /* 16px keeps phones from zooming into the field */
+}
 .run-label {
   max-width: 400px;
   flex: 1;
