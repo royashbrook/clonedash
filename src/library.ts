@@ -1,5 +1,5 @@
 import { MAX_COINS, coinCount, validateLevel } from "./engine.ts";
-import type { Level, SaveData } from "./types.ts";
+import type { GameState, Level, SaveData } from "./types.ts";
 
 export const SAVE = "clonedash.v1";
 const coinBest = (v: unknown) =>
@@ -12,11 +12,13 @@ export const shownCoins = (best: number | undefined, level: Level) =>
 // the most picked up in one completed run, never a sum over tries. True when the save changed.
 export function keepCoins(
   save: SaveData,
-  got: number,
+  run: GameState,
   level: Level,
   custom: boolean,
   trail: number,
 ) {
+  if (run.status !== "complete" || !run.fx?.coinTotal) return false;
+  const got = run.fx.coins;
   if (custom) {
     const entry = save.customLevels.find((e) => e.id === save.activeLevel);
     if (!entry || got <= shownCoins(entry.coins, level)) return false;

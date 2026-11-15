@@ -369,12 +369,7 @@
   function record() {
     const s = run.state;
     // coins count only for a finished run; the best is the most in one, on built-ins and my levels
-    if (
-      s.status === "complete" &&
-      s.fx?.coinTotal &&
-      keepCoins(save, s.fx.coins, run.level, custom, current)
-    )
-      persist();
+    if (keepCoins(save, s, run.level, custom, current)) persist();
     if (custom) return;
     const percent =
       s.status === "complete"
