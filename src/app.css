@@ -444,6 +444,15 @@ dialog:has(.transfer) #sheet-close {
   min-height: 44px;
   color: var(--ink-dim);
 }
+/* about's text links are thumb targets too: 44px tall and wide, like the maker links */
+.about-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  min-width: 44px;
+  vertical-align: middle;
+}
 .maker svg {
   width: 16px;
   fill: var(--mark-heart);
