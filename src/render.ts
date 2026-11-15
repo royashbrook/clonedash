@@ -8,8 +8,24 @@ import {
   SPEED,
   ringReady,
   levelHeight,
+  tintOf,
+  TRIGGERS,
+  COIN_RADIUS,
 } from "./engine.ts";
 import type { GameState, Level } from "./types.ts";
+// A colour trigger's colour laid over a piece's own colour (#rrggbb), for the pieces drawn in one
+// colour: rings, portals and coins.
+const hex = (v: number) => Math.round(v).toString(16).padStart(2, "0");
+function over(base: string, t: Float64Array | null) {
+  if (!t) return base;
+  const at = (k: number) => parseInt(base.slice(1 + k * 2, 3 + k * 2), 16);
+  return `#${hex(at(0) + (t[0] - at(0)) * t[3])}${hex(at(1) + (t[1] - at(1)) * t[3])}${hex(at(2) + (t[2] - at(2)) * t[3])}`;
+}
+export const COIN = "#ffd166";
+const TRIGGER_LOOK: Record<string, [string, string]> = {
+  "move-trigger": ["#53e3ff", "MOVE"],
+  "color-trigger": ["#ff8ac4", "COLOR"],
+};
 const portalLook: Record<string, [string, string, string]> = {
   plane: ["#ffd166", "FLY", "▷"],
   square: ["#72f7dc", "JUMP", "□"],
@@ -179,10 +195,15 @@ export function render(
   for (const background of [true, false])
     level.objects.forEach((o, index) => {
       if ((o.layer === "background") !== background) return;
-      if (ZONES.includes(o.type) && state && !editing) return; // invisible in play
+      if ((ZONES.includes(o.type) || TRIGGERS.includes(o.type)) && state && !editing) return; // invisible in play
       if (o.hidden && !editing) return; // HIDDEN: still solid, never drawn outside the editor (#96)
+      if (o.type === "coin" && state?.fx?.got[index]) return; // picked up this run
       const k = o.scale ?? 1; // a scaled piece reaches further than its anchor cell
+      // o is the run's own moved piece in play, so a piece a trigger moves into view is drawn
+      // where it collides
       if (X(o.x) < -unit * 2 * k || X(o.x) > w + unit * k) return;
+      // a colour trigger's colour, read on the run's clock (null for an untouched piece)
+      const tint = state?.fx ? tintOf(state.fx, index, state.time) : null;
       ctx.save();
       ctx.globalAlpha = background
         ? editing && layer === "background"
@@ -193,7 +214,7 @@ export function render(
       if (o.type === "ring") {
         const active = state && ringReady(state, o, index),
           used = state?.usedRings.includes(index),
-          c = o.color ?? "#ffd166";
+          c = over(o.color ?? "#ffd166", tint);
         ctx.save();
         ctx.globalAlpha *= used ? 0.25 : 1;
         ctx.strokeStyle = active ? "#ffffff" : c;
@@ -241,7 +262,8 @@ export function render(
       } else if (PORTALS.includes(o.type)) {
         const x = X(o.x + 0.3),
           y = Y(o.y + 1.25),
-          [c, label, icon] = portalLook[o.type];
+          [look, label, icon] = portalLook[o.type],
+          c = over(look, tint);
         ctx.save();
         ctx.strokeStyle = c;
         ctx.lineWidth = 3;
@@ -272,6 +294,37 @@ export function render(
         ctx.textBaseline = "middle";
         ctx.fillText(icon, 0, 0);
         ctx.restore();
+      } else if (o.type === "coin") {
+        const c = over(COIN, tint),
+          r = unit * COIN_RADIUS;
+        ctx.fillStyle = c;
+        ctx.strokeStyle = "#ffffff";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(X(o.x + 0.5), Y(o.y + 0.5), r, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        ctx.strokeStyle = "#b8860b";
+        ctx.beginPath();
+        ctx.arc(X(o.x + 0.5), Y(o.y + 0.5), r * 0.6, 0, Math.PI * 2);
+        ctx.stroke();
+      } else if (TRIGGERS.includes(o.type)) {
+        // editor only: a dashed cell with what it does and the group it works on
+        const [look, word] = TRIGGER_LOOK[o.type],
+          c = o.type === "color-trigger" ? (o.color ?? "#ffd166") : look;
+        ctx.strokeStyle = c;
+        ctx.fillStyle = `${c}22`;
+        ctx.lineWidth = 2;
+        ctx.setLineDash([unit * 0.12, unit * 0.08]);
+        ctx.fillRect(X(o.x), Y(o.y + 1), unit, unit);
+        ctx.strokeRect(X(o.x), Y(o.y + 1), unit, unit);
+        ctx.setLineDash([]);
+        ctx.fillStyle = c;
+        ctx.font = `bold ${unit * 0.22}px system-ui`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(word, X(o.x + 0.5), Y(o.y + 0.7));
+        ctx.fillText(o.target === undefined ? "G -" : `G ${o.target}`, X(o.x + 0.5), Y(o.y + 0.3));
       } else {
         const p = polygon(o);
         ctx.beginPath();
@@ -293,6 +346,11 @@ export function render(
           ? "#000000"
           : grad;
         if (o.type !== "outline" && !ZONES.includes(o.type)) ctx.fill();
+        if (tint) {
+          // a colour trigger's colour over the piece, as much of it as the fade has reached
+          ctx.fillStyle = `rgba(${Math.round(tint[0])},${Math.round(tint[1])},${Math.round(tint[2])},${tint[3]})`;
+          ctx.fill();
+        }
         // a zone is coloured and dashed, so the block it lies over still reads as that block
         const zoneColor = o.type === "w-block" ? "#53e3ff" : "#ffb477";
         ctx.strokeStyle = ZONES.includes(o.type) ? zoneColor : "#ffffff";
@@ -380,8 +438,8 @@ export function render(
         ctx.setLineDash([]);
       }
       // what EDIT OBJECT changed, marked in the editor only: NT no touch, H hidden, W wall pass,
-      // R roof pass
-      const marks = [o.noTouch && "NT", o.hidden && "H", o.wallPass && "W", o.roofPass && "R"].filter(Boolean);
+      // R roof pass, G and its group id
+      const marks = [o.noTouch && "NT", o.hidden && "H", o.wallPass && "W", o.roofPass && "R", o.group && `G${o.group}`].filter(Boolean);
       if (editing && marks.length) {
         const b = bounds(o);
         ctx.globalAlpha = 1;
