@@ -68,8 +68,9 @@ editor tab, group ids in EDIT OBJECT, a move trigger and a colour trigger, and t
    clamped to what the level holds now (the stored number is left alone, it only ever shows as
    at most the count).
 9. **old data.** every new field is optional and absent by default, so old saves read back byte
-   for byte, old `cdl1` codes decode to the same level and re-encode to the same code, and the
-   envelope is unchanged. an older copy of the game refuses a level with coins or triggers rather
+   for byte, old `cdl1` codes decode to the same level, an old level re-encodes to a code that both this
+   version and main read back as that same level (the compressed bytes are not pinned: they follow
+   the zlib build), and the envelope is unchanged. an older copy of the game refuses a level with coins or triggers rather
    than dropping them silently.
 
 ## how it is pinned

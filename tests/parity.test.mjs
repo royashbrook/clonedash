@@ -96,12 +96,17 @@ test('each Remix witness recording replays to the same frames on main and today'
   });
 });
 
-test('old share codes captured on main decode exactly as main decoded them, and encode to the same code', async () => {
-  for (const [name, { code, decoded }] of Object.entries(FIXTURE.codes)) {
-    assert.deepEqual(await decodeLevel(code), decoded, name);
-    assert.equal(await encodeLevel(decoded), code, `${name}: the cdl1 envelope is unchanged`);
-  }
+// the compressed bytes of a code depend on the zlib build (node 22 on ci and node 26 locally differ),
+// so a re-encode is held to what a reader gets out of it, by this decoder and by main's, never to bytes
+test('old share codes captured on main decode exactly as main decoded them, and old levels encode to codes main reads the same', async () => {
   await withMain(async (main) => {
+    for (const [name, { code, decoded }] of Object.entries(FIXTURE.codes)) {
+      assert.deepEqual(await decodeLevel(code), decoded, name);
+      const again = await encodeLevel(decoded);
+      assert.equal(again.slice(0, 6), code.slice(0, 6), `${name}: the cdl1 envelope is unchanged`);
+      assert.deepEqual(await decodeLevel(again), decoded, `${name}: this version reads its own code back`);
+      assert.deepEqual(await main.transfer.decodeLevel(again), decoded, `${name}: and main reads it the same`);
+    }
     // the other way: main refuses a level with a coin rather than dropping it silently
     const coin = await encodeLevel({ name: 'New', length: 40, objects: [object('coin', 6, 0)] });
     await assert.rejects(() => main.transfer.decodeLevel(coin));
