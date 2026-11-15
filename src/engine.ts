@@ -708,7 +708,8 @@ export function validateLevel(input: unknown): Level {
     )
       throw Error("Invalid dash orb");
     const trigger = TRIGGERS.includes(o.type);
-    if (o.noTouch !== undefined && (o.noTouch !== true || ZONES.includes(o.type) || trigger))
+    // a coin is always there to pick up, so it can be hidden (a secret coin) but never no-touch
+    if (o.noTouch !== undefined && (o.noTouch !== true || ZONES.includes(o.type) || trigger || o.type === "coin"))
       throw Error("Invalid no touch");
     if (o.hidden !== undefined && (o.hidden !== true || ZONES.includes(o.type) || trigger))
       throw Error("Invalid hidden");

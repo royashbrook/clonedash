@@ -43,24 +43,26 @@ test('coin cap: ten is fine, an eleventh is refused by every reader', async () =
 });
 
 test('coin pickup: touching one counts it once, it never blocks or kills, and a far one is left', () => {
-  const l = level([object('coin', 6, 0), object('coin', 9, 4), { ...object('coin', 12, 0), noTouch: true }]);
+  // a coin is always there to pick up: it can be hidden (a secret coin) but never NO TOUCH
+  assert.throws(() => validateLevel(level([{ ...object('coin', 12, 0), noTouch: true }])), /no touch/i);
+  const l = validateLevel(level([object('coin', 6, 0), object('coin', 9, 4), { ...object('coin', 12, 0), hidden: true }]));
   const s = createState(l);
   assert.equal(s.fx.coinTotal, 3);
   for (let i = 0; i < 2000 && s.status === 'playing'; i++) {
     step(s, false);
-    if (s.x > 7.5) assert.equal(s.fx.coins, 1, 'the floor coin is picked up as the run passes it');
+    if (s.x > 7.5 && s.x < 11) assert.equal(s.fx.coins, 1, 'the floor coin is picked up as the run passes it');
   }
   assert.equal(s.status, 'complete', 'a coin is not solid');
-  assert.equal(s.fx.coins, 1, 'the high coin was never touched, a NO TOUCH coin is never picked up');
-  assert.deepEqual([...s.fx.got.slice(0, 3)], [1, 0, 0]);
+  assert.equal(s.fx.coins, 2, 'the high coin was never touched, the hidden one was picked up');
+  assert.deepEqual([...s.fx.got.slice(0, 3)], [1, 0, 1]);
   // a restart puts every coin back
   const run = new Run(l);
   run.readyTime = 0;
   for (let i = 0; i < 400; i++) run.advance(1 / 120);
-  assert.equal(run.state.fx.coins, 1);
+  assert.equal(run.state.fx.coins, 2);
   run.reset();
   assert.equal(run.state.fx.coins, 0);
-  assert.equal(run.state.fx.got[0], 0);
+  assert.deepEqual([...run.state.fx.got.slice(0, 3)], [0, 0, 0]);
 });
 
 test('best coins: the most in one completed run, never a sum over tries, clamped to the level', () => {

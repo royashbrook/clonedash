@@ -1024,7 +1024,7 @@
     string,
     (o: Piece) => boolean,
   ][] = [
-    ["noTouch", "NO TOUCH", "you see it but go right through it", (o) => !ZONES.includes(o.type) && !TRIGGERS.includes(o.type)],
+    ["noTouch", "NO TOUCH", "you see it but go right through it", (o) => !ZONES.includes(o.type) && !TRIGGERS.includes(o.type) && o.type !== "coin"],
     ["hidden", "HIDDEN", "it is invisible in play but still there", (o) => !ZONES.includes(o.type) && !TRIGGERS.includes(o.type)],
     ["wallPass", "WALL PASS", "its sides stop you instead of killing you", (o) => BLOCKS.includes(o.type) || SLOPES.includes(o.type)],
     ["roofPass", "ROOF PASS", "you bump your head on it instead of dying", (o) => BLOCKS.includes(o.type)],

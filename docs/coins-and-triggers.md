@@ -6,8 +6,8 @@ editor tab, group ids in EDIT OBJECT, a move trigger and a colour trigger, and t
 ## the pieces
 
 - **coin**: placed from the COINS tab. a disc in the middle of its cell, picked up when the
-  player's full body touches it, never solid, never lethal. a NO TOUCH coin is never picked up; a
-  HIDDEN one is picked up but not drawn. the run HUD shows `picked up / in the level` on a level
+  player's full body touches it, never solid, never lethal. a coin can never be NO TOUCH (every
+  reader refuses it and EDIT OBJECT does not offer it) or on the background layer; a HIDDEN one is picked up but not drawn. the run HUD shows `picked up / in the level` on a level
   that has coins and nothing on one that doesn't.
 - **group id**: `group`, a whole number 1 to 99 on any piece but a trigger, set in EDIT OBJECT
   (blank or 0 is none, stored as no field). ids are level-local: there is no registry across
