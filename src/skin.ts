@@ -249,6 +249,18 @@ export function skinArt(input: Skin): SkinArt {
   return art;
 }
 
+// A list thumbnail: the skin's own pixels at 1:1, scaled up by CSS (image-rendering: pixelated),
+// fitted in a 64px square with its aspect kept.
+export function paintThumb(canvas: HTMLCanvasElement, skin: Skin) {
+  const art = skinArt(skin),
+    scale = 64 / Math.max(art.width, art.height);
+  canvas.width = art.width;
+  canvas.height = art.height;
+  canvas.style.width = `${art.width * scale}px`;
+  canvas.style.height = `${art.height * scale}px`;
+  canvas.getContext("2d")?.drawImage(art.image, 0, 0);
+}
+
 // ---- the editor's model: one colour string per cell, "" for empty ----
 
 export function toCells(skin: Skin): string[] {
