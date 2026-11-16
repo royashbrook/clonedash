@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
 import jsQR from "jsqr";
+import QRCode from "qrcode";
 import { readFile } from "node:fs/promises";
 import { decodeSkin, encodeSkin, lineCells, skinLink } from "../src/skin.ts";
 import { encodeLevel } from "../src/transfer.ts";
@@ -417,7 +418,10 @@ test("a worst-case 32x32 noise skin gets no QR but its complete code and file", 
   await expect(page.locator(".level-qr")).toHaveCount(0);
   await page.locator("#copy-level").click();
   expect(await decodeSkin(await page.evaluate(() => window.copied))).toEqual(noise);
-  expect(skinLink(await encodeSkin(noise), "https://clonedash.royashbrook.com/").length).toBeGreaterThan(1000);
+  // the QR policy itself (LevelTransfer.svelte: version 15 at medium correction), not a link length,
+  // which follows the zlib build (1042 on node 26, 993 on node 22)
+  const link = skinLink(await encodeSkin(noise), "https://clonedash.royashbrook.com/");
+  expect(QRCode.create(link, { errorCorrectionLevel: "M" }).version).toBeGreaterThan(15);
 });
 
 test("the creator fits 320 wide and phone landscape: no sideways scroll, 44px targets, the whole editor reachable", async ({ browser, baseURL }) => {
