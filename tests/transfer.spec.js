@@ -440,6 +440,14 @@ test(`share and import sheets fit ${width}x${height} with owned touch targets an
           document.querySelector("#sheet").clientWidth,
       ),
     ).toBe(0);
+    // and the scrolling content, which the clipping dialog hides (as on the share side)
+    expect(
+      await page.evaluate(
+        () =>
+          document.querySelector("#sheet-content").scrollWidth -
+          document.querySelector("#sheet-content").clientWidth,
+      ),
+    ).toBeLessThanOrEqual(0);
     await page.locator("#sheet-close").click();
   }
 });
