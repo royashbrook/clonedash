@@ -885,18 +885,18 @@
     if (rotate || panel) return;
     const view = draw(),
       at: Point = [view.x(e.clientX), view.y(e.clientY)];
-    if (tool === "erase") group = []; // indices move as pieces go
     stroke = {
       id: e.pointerId,
       last: at,
       before: structuredClone(draft.objects),
-      group: [...group],
+      group: [...group], // the selection as it was, for undo, before an erase clears it
       placed: -1,
       changed: false,
       stopped: false,
       said: new Set(),
       visited: new Set(),
     };
+    if (tool === "erase") group = []; // indices move as pieces go
     strokeTo(at);
   }
   // the stretch of the stroke from its last sample to this one, every cell on the way (rule 6b)
@@ -948,7 +948,10 @@
         /* already gone */
       }
     }
-    if (!st.changed) return; // nothing changed: nothing saved, no history step
+    if (!st.changed) {
+      group = st.group; // nothing changed: nothing saved, no history step, the selection as it was
+      return;
+    }
     try {
       validateLevel(draft);
     } catch {

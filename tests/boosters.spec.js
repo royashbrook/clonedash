@@ -130,6 +130,27 @@ test('SWIPE on: a fast native drag paints every cell on its path, saves once, an
   expect(await cells(page)).toHaveLength(9);
 });
 
+test('SWIPE erase keeps the selection it started with: undo brings it back, and a stroke that erases nothing leaves it alone', async ({ page }) => {
+  await seed(page, [piece('spike', 20, 0), piece('block', 5, 0)]);
+  await openEditor(page);
+  const at = await grid(page);
+  await page.locator('#select-tool').click();
+  await page.mouse.click(...at(20, 0));
+  await expect(page.locator('#selection')).toContainText('SPIKE');
+  await page.locator('#swipe-tool').click();
+  await page.locator('#erase-tool').click();
+  // a stroke over empty cells changes nothing: no undo step, the spike still selected
+  await page.mouse.move(...at(9, 3)); await page.mouse.down(); await page.mouse.move(...at(11, 3)); await page.mouse.up();
+  await expect(page.locator('#undo')).toBeDisabled();
+  await expect(page.locator('#selection')).toContainText('SPIKE');
+  // a stroke that erases the block, then undo: the block and the spike's selection come back
+  await page.mouse.move(...at(4.6, 0)); await page.mouse.down(); await page.mouse.move(...at(5.4, 0)); await page.mouse.up();
+  expect(await cells(page)).toEqual([['spike', 20, 0]]);
+  await page.locator('#undo').click();
+  expect(await cells(page)).toEqual([['spike', 20, 0], ['block', 5, 0]]);
+  await expect(page.locator('#selection')).toContainText('SPIKE', { message: 'the selection from before the erase' });
+});
+
 test('SWIPE undo and redo: one step per stroke, the selection comes back, a new stroke drops the redo, another edit clears it', async ({ page }) => {
   await seed(page, [piece('spike', 20, 0)]);
   await openEditor(page);
