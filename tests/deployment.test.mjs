@@ -93,3 +93,33 @@ test("analytics CSP permits only the approved additions and retains object prote
   assert.ok(headers.includes("object-src 'none'"));
   assert.ok(!headers.includes("unsafe-inline"));
 });
+
+// #105: a pass that needed a retry is a failure on CI, and both workflows keep the
+// results of every run, so the first attempt's trace survives a retry that passed
+test("on CI a retried pass fails the run and every run keeps its browser results", async () => {
+  const load = async (ci) => {
+    const saved = process.env.CI;
+    if (ci) process.env.CI = "true";
+    else delete process.env.CI;
+    try {
+      return (await import(`../playwright.config.js?ci=${ci}`)).default;
+    } finally {
+      if (saved === undefined) delete process.env.CI;
+      else process.env.CI = saved;
+    }
+  };
+  const [ci, local] = [await load(true), await load(false)];
+  assert.equal(ci.failOnFlakyTests, true);
+  assert.equal(local.failOnFlakyTests, false);
+  const retries = (config, name) => config.projects.find((p) => p.name === name).retries ?? 0;
+  assert.deepEqual([retries(ci, "chromium"), retries(ci, "webkit")], [0, 1]);
+  assert.deepEqual([retries(local, "chromium"), retries(local, "webkit")], [0, 0]);
+  assert.equal(ci.timeout, 60000);
+  for (const name of ["check.yml", "deploy.yml"]) {
+    const workflow = readFileSync(new URL(`../.github/workflows/${name}`, import.meta.url), "utf8");
+    const upload = workflow.match(/- uses: actions\/upload-artifact@v7\n(?:\s+#.*\n)*\s+if: (.+)\n[\s\S]*?path: (.+)\n/);
+    assert.ok(upload, name);
+    assert.deepEqual([upload[1], upload[2]], ["always()", "test-results/"], name);
+    assert.ok(workflow.indexOf("- run: npm run test:browser") < workflow.indexOf("actions/upload-artifact"), name);
+  }
+});
