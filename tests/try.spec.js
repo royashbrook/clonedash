@@ -10,9 +10,10 @@ test('TRY plays the draft over the editor, restarts on death, jumps on Space, an
   });
   await page.goto('/');
   // paused once loaded, so only runFor moves game time: a running clock kept ticking between
-  // steps, and on a busy machine the Space below came late and missed (#111). a fixed point ahead
-  // of install, since "now plus a little" can already be past by the time the pause arrives
-  await page.clock.pauseAt(10_000);
+  // steps, and on a busy machine the Space below came late and missed (#111). until the pause the
+  // page clock only runs in real time from 0, so it cannot have reached this test's own timeout
+  // without the test failing first: "now plus a little" was already past when the pause arrived
+  await page.clock.pauseAt(test.info().timeout);
   await page.locator('#editor-open').click();
   // real time passing does not move the page's clock
   const frozen = await page.evaluate(() => Date.now());
