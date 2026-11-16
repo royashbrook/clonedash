@@ -1,23 +1,31 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import QRCode from "qrcode";
-  import { decodeLevel, encodeLevel, levelLink, MAX_CODE } from "./transfer.ts";
+  import { codeKind, decodeLevel, encodeLevel, levelLink, MAX_CODE } from "./transfer.ts";
+  import { decodeSkin, encodeSkin, paintThumb, skinLink, skinName, type Skin } from "./skin.ts";
   import { trackFor } from "./music.ts";
   import type { Level } from "./types.ts";
 
+  // One sheet shares a level or a skin, and imports either: a pasted code, link or file goes to
+  // the level or the skin decoder by its prefix (transfer.ts codeKind, docs/skins.md).
   let {
     level,
+    skin,
     initial = "",
     add,
+    addSkin,
   }: {
     level?: Level;
+    skin?: Skin;
     initial?: string;
     add: (level: Level) => void;
+    addSkin: (skin: Skin) => void;
   } = $props();
   let input = $state(""),
     code = $state(""),
     link = $state("");
   let preview = $state.raw<Level | null>(null),
+    skinPreview = $state.raw<Skin | null>(null),
     qr = $state("");
   let busy = $state(true),
     message = $state(""),
@@ -35,12 +43,12 @@
   }
   async function prepare() {
     try {
-      const encoded = await encodeLevel(level!);
+      const encoded = skin ? await encodeSkin(skin) : await encodeLevel(level!);
       if (!alive) return;
       code = encoded;
-      link = levelLink(code, location.href);
+      link = skin ? skinLink(code, location.href) : levelLink(code, location.href);
       // the .clonedash.txt ending stays: the import picker and older copies of the game look for it
-      file = new File([code], "cube-dash-level.clonedash.txt", {
+      file = new File([code], skin ? "cube-dash-skin.clonedash.txt" : "cube-dash-level.clonedash.txt", {
         type: "text/plain",
       });
       download = URL.createObjectURL(file);
@@ -68,7 +76,13 @@
     message = "";
     failed = false;
     preview = null;
+    skinPreview = null;
     try {
+      if (codeKind(text) === "skin") {
+        const decoded = await decodeSkin(text);
+        if (alive) skinPreview = decoded;
+        return;
+      }
       const decoded = await decodeLevel(text);
       if (alive) preview = decoded;
     } catch (cause) {
@@ -81,6 +95,7 @@
     const picked = (event.currentTarget as HTMLInputElement).files?.[0];
     if (!picked) return;
     preview = null;
+    skinPreview = null;
     message = "";
     busy = true;
     try {
@@ -100,10 +115,11 @@
     message = "";
     failed = false;
     // Everything was prepared before this fresh tap, preserving native share activation.
+    const title = skin ? skinName(skin) : level!.name;
     const data: ShareData =
       link.length <= 4096
-        ? { title: level!.name, text: "Play my Cube Dash level", url: link }
-        : { title: level!.name, files: [file!] };
+        ? { title, text: skin ? "Wear my Cube Dash skin" : "Play my Cube Dash level", url: link }
+        : { title, files: [file!] };
     try {
       if (navigator.canShare && !navigator.canShare(data))
         throw Error("Use COPY CODE or DOWNLOAD FILE on this device.");
@@ -126,18 +142,22 @@
     }
   }
   function confirm() {
-    if (!preview) return;
     try {
-      add(preview);
+      if (skinPreview) addSkin(skinPreview);
+      else if (preview) add(preview);
     } catch (cause) {
       error(cause);
     }
+  }
+  function thumb(node: HTMLCanvasElement, value: Skin) {
+    paintThumb(node, value);
+    return { update: (next: Skin) => paintThumb(node, next) };
   }
   onMount(() => {
     alive = true;
     input = initial;
     nativeShare = typeof navigator.share === "function";
-    if (level) void prepare();
+    if (level || skin) void prepare();
     else if (initial) void inspect();
     else busy = false;
     return () => {
@@ -148,20 +168,25 @@
 </script>
 
 <div class="transfer" aria-busy={busy}>
-  {#if level}
+  {#if skin}
+    <h3>{skinName(skin)}</h3>
+    <p>Send this skin. Your levels, progress and other skins stay private.</p>
+  {:else if level}
     <h3>{level.name || "Untitled trail"}</h3>
     <p>Send this level. Your other levels and progress stay private.</p>
-    {#if busy}<p role="status">Preparing your level…</p>
+  {/if}
+  {#if level || skin}
+    {#if busy}<p role="status">Preparing…</p>
     {:else if code}
       {#if nativeShare}<button id="send-level" class="primary" onclick={share}
-          >SHARE LEVEL</button
+          >{skin ? "SHARE SKIN" : "SHARE LEVEL"}</button
         >{/if}
       {#if qr}<img
           class="level-qr"
           src={qr}
           width="340"
           height="340"
-          alt={`Scan to preview ${level.name || "this level"}`}
+          alt={`Scan to preview ${skin ? skinName(skin) : level?.name || "this level"}`}
         />
       {:else}<p class="qr-fallback">
           Too much detail for a clear QR. Send the complete code or file
@@ -172,8 +197,10 @@
         >DOWNLOAD FILE</a
       >
       <details bind:open={showCode}>
-        <summary>Level code</summary>
-        <label for="level-code">Copy into My Levels → Import level</label>
+        <summary>{skin ? "Skin code" : "Level code"}</summary>
+        <label for="level-code"
+          >{skin ? "Copy into My skins → Import skin" : "Copy into My Levels → Import level"}</label
+        >
         <textarea
           id="level-code"
           readonly
@@ -182,7 +209,7 @@
       </details>
     {/if}
   {:else}
-    <label for="import-code">Paste a level code or link</label>
+    <label for="import-code">Paste a level or skin code or link</label>
     <textarea
       id="import-code"
       maxlength={MAX_CODE}
@@ -190,6 +217,7 @@
       disabled={busy}
       oninput={() => {
         preview = null;
+        skinPreview = null;
         message = "";
       }}
       spellcheck="false"
@@ -198,9 +226,9 @@
       id="preview-level"
       class="primary"
       disabled={busy || !input.trim()}
-      onclick={() => inspect()}>PREVIEW LEVEL</button
+      onclick={() => inspect()}>PREVIEW</button
     >
-    <label class="file-label" for="level-file">Or open a level file</label>
+    <label class="file-label" for="level-file">Or open a level or skin file</label>
     <input
       id="level-file"
       type="file"
@@ -208,7 +236,19 @@
       disabled={busy}
       onchange={readFile}
     />
-    {#if busy}<p role="status">Checking level…</p>{/if}
+    {#if busy}<p role="status">Checking…</p>{/if}
+    {#if skinPreview}
+      <section class="import-preview" aria-label="Skin preview">
+        <h3>{skinName(skinPreview)}</h3>
+        <div class="skin-thumb"><canvas use:thumb={skinPreview} aria-hidden="true"></canvas></div>
+        <p>{skinPreview.width} × {skinPreview.height} pixels · {skinPreview.palette.length} colours</p>
+        <p>
+          Adds a new skin to My skins. Nothing is replaced, and you keep wearing what you wear now
+          until you pick USE.
+        </p>
+        <button id="add-skin" class="primary" onclick={confirm}>ADD TO MY SKINS</button>
+      </section>
+    {/if}
     {#if preview}
       <section class="import-preview" aria-label="Level preview">
         <h3>{preview.name || "Untitled trail"}</h3>
@@ -293,6 +333,17 @@
     color: var(--ink);
     padding: 8px;
     margin-right: 8px;
+  }
+  .skin-thumb {
+    display: grid;
+    place-items: center;
+    width: 72px;
+    height: 72px;
+    border-radius: 8px;
+    background: repeating-conic-gradient(#26364a 0 25%, #1b2939 0 50%) 0 0 / 16px 16px;
+  }
+  .skin-thumb canvas {
+    image-rendering: pixelated;
   }
   .import-preview {
     border-top: 1px solid var(--line);

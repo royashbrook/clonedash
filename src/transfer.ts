@@ -57,7 +57,7 @@ function portableLevel(input: unknown): Level {
   };
 }
 
-function base64(bytes: Uint8Array): string {
+export function base64(bytes: Uint8Array): string {
   let binary = "";
   for (const byte of bytes) binary += String.fromCharCode(byte);
   return btoa(binary)
@@ -66,8 +66,11 @@ function base64(bytes: Uint8Array): string {
     .replace(/=+$/, "");
 }
 
-async function boundedBytes(
+// a skin code (src/skin.ts) reads through this same bounded reader, with its own byte bound
+export async function boundedBytes(
   stream: ReadableStream<Uint8Array>,
+  limit = MAX_LEVEL_BYTES,
+  kind = "level",
 ): Promise<Uint8Array<ArrayBuffer>> {
   const reader = stream.getReader();
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -81,7 +84,7 @@ async function boundedBytes(
           if (done) break;
           size += value.byteLength;
           // Bound inflation while reading, not after allocating its entire output.
-          if (size > MAX_LEVEL_BYTES) throw Error("This level is too large.");
+          if (size > limit) throw Error(`This ${kind} is too large.`);
           chunks.push(value);
         }
         const result = new Uint8Array(size);
@@ -94,7 +97,7 @@ async function boundedBytes(
       })(),
       new Promise<never>((_, reject) => {
         timer = setTimeout(
-          () => reject(Error("Level decoding timed out.")),
+          () => reject(Error(`${kind[0].toUpperCase()}${kind.slice(1)} decoding timed out.`)),
           DECODE_MS,
         );
       }),
@@ -137,7 +140,7 @@ export async function decodeLevel(text: string): Promise<Level> {
   if (/^https?:\/\//i.test(code)) {
     const url = new URL(code),
       params = new URLSearchParams(url.hash.slice(1));
-    if (params.getAll("level").length !== 1)
+    if (params.getAll("level").length !== 1 || params.has("skin"))
       throw Error("This link does not contain one level.");
     code = params.get("level")!;
   }
@@ -166,6 +169,28 @@ export async function decodeLevel(text: string): Promise<Level> {
   return portableLevel(
     JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(decoded)),
   );
+}
+
+// Import takes one text and hands it to one domain decoder: a cds1 code or a #skin= link is a
+// skin (src/skin.ts decodeSkin), anything else goes to decodeLevel exactly as before. A link must
+// carry exactly one level or exactly one skin; both, or either twice, is ambiguous.
+export function codeKind(text: string): "level" | "skin" {
+  if (text.length > MAX_CODE) throw Error("This code is too large.");
+  const code = text.trim();
+  if (/^https?:\/\//i.test(code)) {
+    let params: URLSearchParams;
+    try {
+      params = new URLSearchParams(new URL(code).hash.slice(1));
+    } catch {
+      throw Error("This link does not contain one level or one skin.");
+    }
+    const levels = params.getAll("level").length,
+      skins = params.getAll("skin").length;
+    if (levels + skins !== 1)
+      throw Error("This link does not contain one level or one skin.");
+    return skins ? "skin" : "level";
+  }
+  return code.startsWith("cds1.") ? "skin" : "level";
 }
 
 export function levelLink(code: string, address: string): string {

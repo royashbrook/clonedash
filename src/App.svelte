@@ -44,6 +44,18 @@
   import { updateControl, type UpdateCheck } from "./pwa.ts";
   import LevelTransfer from "./LevelTransfer.svelte";
   import { importLevel } from "./transfer.ts";
+  import SkinCreator from "./SkinCreator.svelte";
+  import {
+    SKINS,
+    addSkin,
+    commitSkins,
+    emptyStore,
+    readSkins,
+    skinArt,
+    wornSkin,
+    type Skin,
+    type SkinStore,
+  } from "./skin.ts";
   import { pinchStart, pinchTransform, type Pinch } from "./gesture.ts";
   import { duplicateGroup, inBox, transformGroup } from "./group.ts";
   import { cellsAlong, eraseAlong, paintCell, StrokeHistory, type Step } from "./swipe.ts";
@@ -56,7 +68,7 @@
     Transform,
   } from "./types.ts";
 
-  type Screen = "home" | "library" | "editor" | "play";
+  type Screen = "home" | "library" | "editor" | "play" | "skins";
   type Action = [label: string, handler: () => void, primary?: boolean];
   type Sheet = {
     title: string;
@@ -276,7 +288,12 @@
     checking = $state(false),
     pull = $state(0),
     pulled = $state(false);
-  let transfer = $state.raw<{ level?: Level; initial?: string }>({});
+  let transfer = $state.raw<{ level?: Level; skin?: Skin; initial?: string }>({});
+  // skins live under their own key (docs/skins.md): a level write never touches them
+  let skins = $state.raw<SkinStore>(emptyStore()),
+    skinsBroken = $state(false);
+  const worn = $derived(wornSkin(skins));
+  const wornArt = $derived(worn ? skinArt(worn) : null);
   let canvas: HTMLCanvasElement,
     dialog: HTMLDialogElement,
     editorHead: HTMLElement,
@@ -446,10 +463,51 @@
   }
   function receiveLevel() {
     const params = new URLSearchParams(location.hash.slice(1));
-    if (!params.has("level")) return;
+    if (!params.has("level") && !params.has("skin")) return;
     const initial = location.href;
     history.replaceState(null, "", location.pathname + location.search);
-    sharing(undefined, initial);
+    // a skin link only opens the preview; it is never added or worn without a tap
+    if (params.has("skin") && !params.has("level")) skinSheet({ initial });
+    else sharing(undefined, initial);
+  }
+  function openSkins() {
+    closeSheet();
+    paused = false;
+    setMode("skins");
+  }
+  function skinSheet(next: { skin?: Skin; initial?: string }) {
+    openSkins();
+    transfer = next;
+    void sheet(next.skin ? "Share skin" : "Import", "", [], true, "transfer");
+  }
+  // every skin write re-reads the skins key (skin.ts commitSkins, stale-tab preservation); a
+  // refused write throws and leaves the last confirmed skins showing
+  function commitSkin(change: (latest: SkinStore) => void) {
+    skins = commitSkins(localStorage, change);
+    skinsBroken = false;
+    return skins;
+  }
+  function addSharedSkin(skin: Skin) {
+    commitSkin((s) => void addSkin(s, skin));
+    openSkins();
+    toast("Skin added. Find it in My skins.");
+  }
+  function askSkin(title: string, text: string, yes: string, run: () => void) {
+    void sheet(
+      title,
+      text,
+      [
+        ["KEEP IT", closeSheet, true],
+        [
+          yes,
+          () => {
+            closeSheet();
+            run();
+          },
+        ],
+      ],
+      false,
+    );
   }
   function addSharedLevel(level: Level) {
     if (!storageOK)
@@ -719,6 +777,7 @@
     return render(canvas, {
       level,
       state: live() ? run.state : mode === "home" ? attract : null,
+      skin: wornArt,
       camera: live() ? run.camera : mode === "editor" ? pan : 0,
       cameraY: live() ? run.cameraY : mode === "editor" ? panY : 0,
       editing: mode === "editor",
@@ -772,6 +831,7 @@
       !document.hidden &&
         (mode === "home" ||
           mode === "library" ||
+          mode === "skins" ||
           (mode === "editor" && !rotate) ||
           (mode === "play" &&
             !paused &&
@@ -1479,6 +1539,12 @@
       storageOK = false;
     }
     draft = structuredClone(save.draft);
+    try {
+      skins = readSkins(localStorage.getItem(SKINS));
+    } catch {
+      // never replaced by fallback data: the green cube shows and every skin write is refused
+      skinsBroken = true;
+    }
     nextTrail();
     orientation();
     document.body.dataset.mode = mode;
@@ -1503,6 +1569,21 @@
     );
     window.addEventListener("keydown", keydown, { signal });
     window.addEventListener("hashchange", receiveLevel, { signal });
+    // another tab saved skins: show them (each write here re-reads anyway)
+    window.addEventListener(
+      "storage",
+      (e) => {
+        if (e.key !== SKINS && e.key !== null) return;
+        try {
+          skins = readSkins(localStorage.getItem(SKINS));
+          skinsBroken = false;
+        } catch {
+          skins = emptyStore();
+          skinsBroken = true;
+        }
+      },
+      { signal },
+    );
     window.addEventListener(
       "keyup",
       (e) => {
@@ -1676,6 +1757,7 @@
         /></svg
       > MY LEVELS</button
     ><button id="editor-open" onclick={openEditor}>＋ LEVEL EDITOR</button
+    ><button id="skins-open" onclick={openSkins}>SKINS</button
     ><button id="how" onclick={how}>HOW TO PLAY</button><button
       id="install"
       hidden={!installVisible}
@@ -1754,6 +1836,15 @@
       </article>{/each}
   </div>
 </section>
+{#if mode === "skins"}<SkinCreator
+    store={skins}
+    broken={skinsBroken}
+    commit={commitSkin}
+    confirm={askSkin}
+    share={(skin) => skinSheet({ skin })}
+    importSkin={() => skinSheet({})}
+    back={home}
+  />{/if}
 <section id="hud" hidden={mode !== "play"}>
   <button
     id="menu"
@@ -2110,6 +2201,7 @@
       {#if panel.extra === "transfer"}{#key transfer}<LevelTransfer
             {...transfer}
             add={addSharedLevel}
+            addSkin={addSharedSkin}
           />{/key}{/if}
       {#if panel.extra === "settings"}<div class="level-settings">
           <label
