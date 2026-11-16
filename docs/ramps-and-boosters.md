@@ -120,8 +120,11 @@ size for every object, and two new rings, a black one with a down arrow and a gr
        drops what could have been redone. any other edit (a tap, a move, a size, a setting, another
        level) clears the history, so an older stroke can never undo it. at most 30 strokes are kept.
 7. **old data.** every new field and type is optional and new, so old saves read back as they
-   did, old `cdl1` codes decode to the same level, an old level encodes as main encodes it, and an
-   older copy of the game refuses a level that uses a new piece or field rather than dropping it.
+   did, old `cdl1` codes decode to the same level, and an old level encodes as main encodes it.
+   an older copy of the game refuses a level with a booster (a piece it does not know) or with a
+   sized ring, portal or coin (a size it refuses). a black or gray ring is the one thing it does
+   not refuse: its reader drops fields it does not know, so it reads one as a plain ring of that
+   colour. the envelope stays `cdl1` by the contract above, so that limit is pinned, not fixed.
 
 ## how it is pinned
 
