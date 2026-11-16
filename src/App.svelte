@@ -12,6 +12,7 @@
     SCALABLE,
     TURNABLE,
     PADS,
+    RINGS,
     RING_BOUNCE,
     ZONES,
     OUTLINED,
@@ -148,7 +149,7 @@
   // are solid blocks with an outline variant; the Edges control gives any outlined block one.
   const presets: Record<
     string,
-    Pick<Piece, "type"> & Partial<Pick<Piece, "color" | "bounce" | "flipsGravity" | "boost" | "dash" | "drop" | "stop" | "edges" | "target" | "moveY" | "duration">>
+    Pick<Piece, "type"> & Partial<Pick<Piece, "color" | "bounce" | "flipsGravity" | "boost" | "dash" | "edges" | "target" | "moveY" | "duration">>
   > = {
     // a new trigger works on group 1 straight away; EDIT OBJECT changes any of it
     "move-trigger": { type: "move-trigger", target: 1, moveY: 2, duration: 1 },
@@ -160,8 +161,9 @@
     "green-ring": { type: "ring", color: "#9aff6b", flipsGravity: true, boost: true },
     "dash-ring": { type: "ring", color: "#ff8ac4", dash: true },
     "gravity-dash-ring": { type: "ring", dash: true, flipsGravity: true },
-    "black-ring": { type: "ring", color: "#000000", drop: true },
-    "gray-ring": { type: "ring", color: "#9a9a9a", stop: true },
+    // their own pieces (#106), so an older copy refuses them rather than playing a plain ring
+    "black-ring": { type: "drop-ring", color: "#000000" },
+    "gray-ring": { type: "stop-ring", color: "#9a9a9a" },
     "edge-block": { type: "block", edges: "edge" },
     "parallel-block": { type: "block", edges: "parallel" },
     "outer-corner": { type: "block", edges: "outer" },
@@ -1189,7 +1191,7 @@
         if (change.bounce === RING_BOUNCE) delete piece.bounce;
         else piece.bounce = change.bounce;
       }
-    }, (o) => o.type === "ring" && (change.bounce === undefined || !(o.flipsGravity || o.dash || o.drop || o.stop)));
+    }, (o) => RINGS.includes(o.type) && (change.bounce === undefined || (o.type === "ring" && !(o.flipsGravity || o.dash))));
     validateLevel(next);
     draft = next;
     saveDraft();
@@ -1931,7 +1933,7 @@
           id="ring-color"
           aria-label="Ring colour"
           value={selection?.color ?? RING_COLORS[0][0]}
-          disabled={selection?.type !== "ring"}
+          disabled={!selection || !RINGS.includes(selection.type)}
           onchange={(e) => setRing({ color: e.currentTarget.value })}
           >{#each RING_COLORS as [hex, name]}<option value={hex}>{name}</option
             >{/each}</select
@@ -1945,7 +1947,7 @@
           step="0.25"
           aria-label="Bounce height"
           value={selection?.bounce ?? RING_BOUNCE}
-          disabled={selection?.type !== "ring" || selection.flipsGravity || selection.dash || selection.drop || selection.stop}
+          disabled={selection?.type !== "ring" || selection.flipsGravity || selection.dash}
           oninput={(e) => setRing({ bounce: +e.currentTarget.value })}
         /></label
       ><label
@@ -1991,7 +1993,7 @@
           : group.length > 1
           ? `${group.length} PIECES · MOVE, TURN, FLIP, COPY OR DELETE THEM TOGETHER`
           : selection
-          ? `${labelOf(selection.type)} · x ${selection.x.toFixed(2)} / y ${selection.y.toFixed(2)} · ${selection.rotation}° · ×${(selection.scale ?? 1).toFixed(2)}${selection.type === "ring" ? (selection.dash ? (selection.flipsGravity ? " · ➤ DASH + GRAVITY" : " · ➤ DASH") : selection.flipsGravity ? (selection.boost ? " · ⇈ GRAVITY + BOUNCE" : " · ⇅ GRAVITY") : selection.drop ? " · ↓ DROP" : selection.stop ? " · − STOP" : ` · ↑${selection.bounce ?? RING_BOUNCE}`) : ""}${selection.edges ? ` · ${EDGE_NAMES.find(([v]) => v === selection.edges)?.[1]}` : ""}${OPTIONS.filter(([key]) => selection[key]).map(([, name]) => ` · ${name}`).join("")}${selection.group ? ` · GROUP ${selection.group}` : ""}${triggerText(selection)}`
+          ? `${labelOf(selection.type)} · x ${selection.x.toFixed(2)} / y ${selection.y.toFixed(2)} · ${selection.rotation}° · ×${(selection.scale ?? 1).toFixed(2)}${selection.type === "ring" ? (selection.dash ? (selection.flipsGravity ? " · ➤ DASH + GRAVITY" : " · ➤ DASH") : selection.flipsGravity ? (selection.boost ? " · ⇈ GRAVITY + BOUNCE" : " · ⇅ GRAVITY") : ` · ↑${selection.bounce ?? RING_BOUNCE}`) : selection.type === "drop-ring" ? " · ↓ DROP" : selection.type === "stop-ring" ? " · − STOP" : ""}${selection.edges ? ` · ${EDGE_NAMES.find(([v]) => v === selection.edges)?.[1]}` : ""}${OPTIONS.filter(([key]) => selection[key]).map(([, name]) => ` · ${name}`).join("")}${selection.group ? ` · GROUP ${selection.group}` : ""}${triggerText(selection)}`
           : tool === "select"
             ? "Tap an object to select it."
             : tool === "multi"

@@ -6,8 +6,9 @@ import { encodeLevel, decodeLevel } from '../src/transfer.ts';
 // #106, docs/ramps-and-boosters.md rules 3 and 4: the black and gray rings, and boosters.
 const level = (objects, extra = {}) => ({ name: 'Boosters', length: 80, objects, ...extra });
 const ring = (x, y, extra = {}) => ({ ...object('ring', x, y), ...extra });
-const black = (x, y) => ring(x, y, { color: '#000000', drop: true });
-const gray = (x, y) => ring(x, y, { color: '#9a9a9a', stop: true });
+// their own pieces, so an older copy refuses them (rule 7)
+const black = (x, y) => ({ ...object('drop-ring', x, y), color: '#000000' });
+const gray = (x, y) => ({ ...object('stop-ring', x, y), color: '#9a9a9a' });
 // a run in the air on a ring, moving the given way
 const airborne = (objects, extra = {}) => ({ ...createState(level(objects)), x: 5, y: 3, vy: 8, grounded: false, ...extra });
 const close = (a, b) => Math.abs(a - b) < 1e-9;
@@ -82,21 +83,18 @@ test('a portal touched later in the same step sets its own speed over a black ri
   assert.equal(plane.vy, 3);
 });
 
-test('every reader refuses a drop or stop mixed with another effect, on anything but a ring, or not true', () => {
-  const ok = level([black(10, 2), gray(12, 2)]);
+test('every reader refuses a black or gray ring mixed with another effect: bounce, gravity, boost and dash are plain ring fields', () => {
+  const ok = level([black(10, 2), gray(12, 2), { ...object('stop-ring', 14, 2) }, { ...black(16, 2), scale: 2, hidden: true, group: 3 }]);
   assert.deepEqual(validateLevel(ok), ok);
-  for (const bad of [
-    ring(10, 2, { drop: true, stop: true }),
-    ring(10, 2, { drop: true, bounce: 3 }),
-    ring(10, 2, { drop: true, flipsGravity: true }),
-    ring(10, 2, { stop: true, flipsGravity: true, boost: true }),
-    ring(10, 2, { stop: true, dash: true }),
-    ring(10, 2, { drop: 1 }),
-    ring(10, 2, { stop: false }),
-    { ...object('block', 10, 2), drop: true },
-    { ...object('yellow-pad', 10, 2), stop: true },
+  for (const [bad, refusal] of [
+    [{ ...black(10, 2), bounce: 3 }, /Invalid ring bounce/],
+    [{ ...gray(10, 2), flipsGravity: true }, /Invalid gravity ring/],
+    [{ ...gray(10, 2), flipsGravity: true, boost: true }, /Invalid gravity ring/],
+    [{ ...black(10, 2), dash: true }, /Invalid dash orb/],
+    [{ ...black(10, 2), rotation: 45 }, /Invalid object/],
+    [{ ...object('yellow-pad', 10, 2), color: '#000000' }, /Invalid ring colour/],
   ])
-    assert.throws(() => validateLevel(level([bad])), /Invalid (drop or stop ring|gravity ring|dash orb)/, JSON.stringify(bad));
+    assert.throws(() => validateLevel(level([bad])), refusal, JSON.stringify(bad));
 });
 
 test('a share code keeps the black and gray rings and every booster', async () => {
@@ -226,6 +224,33 @@ test('a booster first touched in a step where an instant move goes elsewhere fir
   assert.deepEqual(s.fx.pads, [2]);
   assert.equal(s.gravity, 1, 'flipped once, not twice');
   assert.equal(s.vy, FALL);
+});
+
+// rule 4a: a booster is touched by where the run ends up after every portal and support, not by
+// where it was partway through the contact pass
+test('a booster is touched by the final pose: a plane portal that lifts the run off it first means no fire, in either authored order', () => {
+  for (const objects of [[object('yellow-pad', 5, 0), object('plane', 5, 0)], [object('plane', 5, 0), object('yellow-pad', 5, 0)]]) {
+    const s = { ...createState(level(objects)), x: 5, y: 0, vy: 0, grounded: true };
+    step(s, false);
+    assert.equal(s.mode, 'plane', objects[0].type);
+    assert.equal(s.y > 0.25, true, 'lifted clear of the strip');
+    assert.equal(s.vy, 3, `${objects[0].type} first: the plane's speed, no bounce`);
+    assert.deepEqual(s.fx.pads, [], `${objects[0].type} first: nothing touched`);
+  }
+});
+
+// rule 3b: the plane's limit holds in the step a booster fires, as it does for a ring
+test('in a plane the speed limit holds in the step a booster fires: a black or yellow booster leaves at most 4, and the next step travels as a capped run', () => {
+  for (const [type, cap] of [['black-pad', -4], ['yellow-pad', 4]]) {
+    const s = { ...createState(level([object(type, 5, 3)])), mode: 'plane', x: 5, y: 3.1, vy: 0, grounded: false };
+    step(s, false);
+    assert.deepEqual(s.fx.pads, [0], `${type} fired`);
+    assert.equal(s.vy, cap, `${type}: held to the plane's limit at the end of the firing step`);
+    // the next step, released: a capped run moves cap * STEP plus the plane's fall of 12
+    const y = s.y;
+    step(s, false);
+    assert.ok(close(s.y - y, cap * STEP - 6 * STEP * STEP), `${type}: next step travel ${s.y - y}`);
+  }
 });
 
 test('a level with no booster, coin or trigger has no run effects', () => {

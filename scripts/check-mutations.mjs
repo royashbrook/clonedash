@@ -144,18 +144,24 @@ try {
     ["engine.ts", "else if (e.stop) s.vy = 0;", "else if (e.stop) s.vy += 0;", "a black ring sends you down", "boosters.test.mjs"],
     ["engine.ts", "    !halt &&\n", "", "a drop or stop ring is the step", "boosters.test.mjs"],
     ["engine.ts", "      s.dash = null;\n      halt = true;", "      halt = true;", "a drop or stop ring is the step", "boosters.test.mjs"],
-    ["engine.ts", 'if (s.mode === "angle" && (o.drop || o.stop)) return false;', "", "in angle mode a black or gray ring is not ready", "boosters.test.mjs"],
-    ["engine.ts", '(key === "drop" && o.stop !== undefined))', "false)", "every reader refuses a drop or stop", "boosters.test.mjs"],
-    ["transfer.ts", "...(drop === undefined ? {} : { drop }),", "", "a share code keeps the black and gray rings", "boosters.test.mjs"],
+    ["engine.ts", 'if (s.mode === "angle" && o.type !== "ring") return false;', "", "in angle mode a black or gray ring is not ready", "boosters.test.mjs"],
+    ["engine.ts", '"drop-ring": { drop: true }', '"drop-ring": {}', "a black ring sends you down", "boosters.test.mjs"],
+    // a black or gray ring is its own piece: the plain ring's fields stay refused on it
+    ["engine.ts", '(o.type !== "ring" ||\n        !Number.isFinite(o.bounce)', '(!RINGS.includes(o.type) ||\n        !Number.isFinite(o.bounce)', "every reader refuses a black or gray ring mixed", "boosters.test.mjs"],
+    ["engine.ts", '(o.type !== "ring" || o.flipsGravity !== true', '(!RINGS.includes(o.type) || o.flipsGravity !== true', "every reader refuses a black or gray ring mixed", "boosters.test.mjs"],
     // 4. boosters
     ["engine.ts", "pads.find((i) => !s.fx!.pads.includes(i))", "pads.find(() => true)", "a booster fires once per touch", "boosters.test.mjs"],
     ["engine.ts", "    s.fx.pads = pads;\n  }\n}", "    s.fx.pads = [...new Set([...s.fx.pads, ...pads])];\n  }\n}", "a booster fires once per touch", "boosters.test.mjs"],
-    ["engine.ts", 'if (s.mode === "angle") pads.length = 0;', "", "boosters are inert in angle mode", "boosters.test.mjs"],
+    ["engine.ts", '        s.mode === "angle"\n          ? []', "        false\n          ? []", "boosters are inert in angle mode", "boosters.test.mjs"],
+    // a booster is touched by the final pose, after every portal and support
+    ["engine.ts", "const final = playerPolygon(s),", "const final = body,", "a booster is touched by the final pose", "boosters.test.mjs"],
+    // the plane's limit holds in the step a booster fires
+    ["engine.ts", '      if (s.mode === "plane") s.vy = Math.max(-4, Math.min(4, s.vy));\n', "", "in a plane the speed limit holds in the step a booster fires", "boosters.test.mjs"],
     ["engine.ts", '"pink-pad": { bounce: 1 },', '"pink-pad": { bounce: 2 },', "each booster does what its ring does", "boosters.test.mjs"],
     ["engine.ts", "pads.find(", "pads.findLast(", "one booster a step", "boosters.test.mjs"],
     ["engine.ts", "  fx.pads = pads;\n  for (const i of fx.picked)", "  for (const i of fx.picked)", "a booster first touched in a step where an instant move goes elsewhere", "boosters.test.mjs"],
     ["engine.ts", "touchingPortals, dash });", "touchingPortals });", "a booster an instant move takes away in that step", "boosters.test.mjs"],
-    ["engine.ts", "!triggers.length && !pads) return null;", "!triggers.length) return null;", "a level with no booster, coin or trigger", "boosters.test.mjs"],
+    ["engine.ts", "!triggers.length && !boosters.length) return null;", "!triggers.length) return null;", "a level with no booster, coin or trigger", "boosters.test.mjs"],
     // 5. size
     ["engine.ts", "export const SCALABLE = TYPES.filter((t) => !TRIGGERS.includes(t));", "export const SCALABLE = TYPES.filter((t) => TURNABLE.includes(t));", "the ceiling covers sized rings", "size.test.mjs"],
     ["engine.ts", "const [cx, cy] = pointOf(o, 0.5, 0.5),", "const [cx, cy] = [o.x + 0.5, o.y + 0.5],", "a sized ring is reached at its drawn centre", "size.test.mjs"],

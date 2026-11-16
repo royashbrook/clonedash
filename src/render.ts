@@ -15,6 +15,7 @@ import {
   pointOf,
   reach,
   scaleOf,
+  RINGS,
 } from "./engine.ts";
 import type { GameState, Level } from "./types.ts";
 // A colour trigger's colour laid over a piece's own colour (#rrggbb), for the pieces drawn in one
@@ -234,7 +235,9 @@ export function render(
           : 0.3
         : 1;
       if (o.hidden) ctx.globalAlpha *= 0.3; // faint, so it can still be found and edited
-      if (o.type === "ring") {
+      if (RINGS.includes(o.type)) {
+        const drop = o.type === "drop-ring",
+          stop = o.type === "stop-ring";
         const active = state && ringReady(state, o, index),
           used = state?.usedRings.includes(index),
           c = over(o.color ?? "#ffd166", tint);
@@ -250,7 +253,7 @@ export function render(
         ctx.beginPath();
         ctx.arc(X(mx), Y(my), unit * 0.6 * s, 0, Math.PI * 2);
         ctx.stroke();
-        if (o.flipsGravity || o.dash || o.drop || o.stop) {
+        if (o.flipsGravity || o.dash || drop || stop) {
           // gravity rings, the dash orb and the black and gray rings are orbs: filled, so they read
           // apart from the jump rings
           ctx.fillStyle = `${c}88`;
@@ -258,7 +261,7 @@ export function render(
           ctx.arc(X(mx), Y(my), unit * 0.45 * s, 0, Math.PI * 2);
           ctx.fill();
         }
-        if ((o.drop || o.stop) && !active) {
+        if ((drop || stop) && !active) {
           // a thin white rim, so a black orb shows on the dark sky
           ctx.strokeStyle = "#ffffff";
           ctx.lineWidth = 1;
@@ -281,7 +284,7 @@ export function render(
           ctx.stroke();
         } else {
           const down = (state?.gravity ?? -1) < 0;
-          ctx.fillStyle = o.flipsGravity || o.drop || o.stop ? "#ffffff" : c;
+          ctx.fillStyle = o.flipsGravity || drop || stop ? "#ffffff" : c;
           ctx.font = `bold ${unit * 0.4 * s}px system-ui`;
           ctx.textAlign = "center";
           ctx.textBaseline = "middle";
@@ -290,11 +293,11 @@ export function render(
               ? o.boost
                 ? "⇈"
                 : "⇅"
-              : o.drop // the black ring's arrow points the way gravity pulls
+              : drop // the black ring's arrow points the way gravity pulls
                 ? down
                   ? "↓"
                   : "↑"
-                : o.stop
+                : stop
                   ? "−"
                   : down
                     ? "↑"

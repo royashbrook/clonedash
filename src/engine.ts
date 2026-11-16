@@ -102,8 +102,12 @@ const PAD_STRIP = [
 // The black ring and booster: a fast drop in the current gravity's direction, set once (1.5 s of
 // the level's gravity). Not a fall limit; there is none.
 export const DROP_SPEED = 24;
-type Effect = Pick<Piece, "bounce" | "flipsGravity" | "boost" | "drop" | "stop">;
-export const TYPES = [...BLOCKS, ...ZONES, ...SPIKES, ...PORTALS, ...SLOPES, "ring", "coin", ...TRIGGERS, ...PADS];
+type Effect = Pick<Piece, "bounce" | "flipsGravity" | "boost"> & { drop?: true; stop?: true };
+// The black and gray rings (#106) are their own pieces, not fields on "ring", so an older copy of
+// the game refuses them as pieces it does not know instead of reading them as plain rings.
+export const RINGS = ["ring", "drop-ring", "stop-ring"];
+const RING_EFFECTS: Record<string, Effect> = { "drop-ring": { drop: true }, "stop-ring": { stop: true } };
+export const TYPES = [...BLOCKS, ...ZONES, ...SPIKES, ...PORTALS, ...SLOPES, "ring", "coin", ...TRIGGERS, ...PADS, "drop-ring", "stop-ring"];
 // Ids that were renamed after they had been stored. validateLevel accepts the old id and returns
 // the new one, so an old save, share code or link still loads; nothing writes the old id again.
 export const LEGACY_TYPES: Partial<Record<string, ObjectType>> = {
@@ -186,7 +190,7 @@ export function polygon(o: Piece): Point[] {
         [1, 0],
         [1, 1],
       ]
-    : o.type === "ring" || o.type === "coin"
+    : RINGS.includes(o.type) || o.type === "coin"
       ? Array.from({ length: 16 }, (_, i) => [
           0.5 + (o.type === "coin" ? COIN_RADIUS : 0.45) * Math.cos((i * Math.PI) / 8),
           0.5 + (o.type === "coin" ? COIN_RADIUS : 0.45) * Math.sin((i * Math.PI) / 8),
@@ -252,12 +256,12 @@ export function effects(level: Level): { fx: RunEffects; level: Level } | null {
     triggers: number[] = [],
     groups = new Map<number, number[]>();
   let coinTotal = 0,
-    moves = false,
-    pads = false;
+    moves = false;
+  const boosters: number[] = [];
   for (let i = 0; i < n; i++) {
     const o = level.objects[i];
     if (o.type === "coin") coinTotal++;
-    if (PADS.includes(o.type)) pads = true;
+    if (PADS.includes(o.type)) boosters.push(i);
     if (TRIGGERS.includes(o.type)) {
       triggers.push(i);
       if (o.type === "move-trigger") moves = true;
@@ -268,7 +272,7 @@ export function effects(level: Level): { fx: RunEffects; level: Level } | null {
       else groups.set(o.group, [i]);
     }
   }
-  if (!coinTotal && !triggers.length && !pads) return null;
+  if (!coinTotal && !triggers.length && !boosters.length) return null;
   return {
     fx: {
       coinTotal,
@@ -283,6 +287,7 @@ export function effects(level: Level): { fx: RunEffects; level: Level } | null {
       tint: new Float64Array(n * 8),
       fade: new Float64Array(n),
       tinted: new Uint8Array(n),
+      boosters,
       pads: [],
     },
     level: moves ? { ...level, objects: level.objects.map((o) => ({ ...o })) } : level,
@@ -318,7 +323,7 @@ function baseState(level: Level): GameState {
 // has its centre where its drawing has it (grown from its base) and a reach as many times as large.
 // The black and gray rings are not ready in angle mode (#106 rule 3b).
 export function ringReady(s: GameState, o: Piece, index: number) {
-  if (s.mode === "angle" && (o.drop || o.stop)) return false;
+  if (s.mode === "angle" && o.type !== "ring") return false;
   const [cx, cy] = pointOf(o, 0.5, 0.5),
     r = 0.6 * scaleOf(o);
   const dx = Math.max(s.x - cx, 0, cx - s.x - SIZE);
@@ -490,7 +495,7 @@ export function step(
   // A dash orb starts on a hold, not only a fresh tap, and lasts until the hold ends.
   if (!held) s.dash = null;
   const ring = s.level.objects.findIndex(
-    (o, i) => o.type === "ring" && (o.dash ? held : tapped) && ringReady(s, o, i),
+    (o, i) => RINGS.includes(o.type) && (o.dash ? held : tapped) && ringReady(s, o, i),
   );
   // a black or gray ring that fires is the step's last word on the speed (#106 rule 3b): it ends a
   // dash and that step's square or pogo jump does not happen
@@ -505,8 +510,8 @@ export function step(
       s.dash = dashClimb(o);
       if (o.flipsGravity) s.gravity *= -1;
       s.grounded = false;
-    } else launch(s, o);
-    if (o.drop || o.stop) {
+    } else launch(s, RING_EFFECTS[o.type] ?? o);
+    if (o.type !== "ring") {
       s.dash = null;
       halt = true;
     }
@@ -609,7 +614,6 @@ function contact(
   }
   s.wall = null;
   const touching = [],
-    pads: number[] = [],
     body = playerPolygon(s),
     inZone = (type: string) =>
       s.level.objects.some((o) => o.type === type && intersects(body, polygon(o))),
@@ -618,15 +622,12 @@ function contact(
   for (let i = 0; i < s.level.objects.length; i++) {
     const o = s.level.objects[i];
     if (o.layer === "background" || o.noTouch) continue;
-    if (o.type === "ring" || ZONES.includes(o.type) || TRIGGERS.includes(o.type)) continue;
+    if (RINGS.includes(o.type) || ZONES.includes(o.type) || TRIGGERS.includes(o.type)) continue;
     // past its reach a piece cannot touch the body this step (its old x included), at any size
     const r = reach(o);
     if (o.x - r > s.x + SIZE + 1 || o.x + r < s.x - 1) continue;
-    if (PADS.includes(o.type)) {
-      // a booster is never solid: what it does is decided once the step's contact is done
-      if (intersects(playerPolygon(s), polygon(o))) pads.push(i);
-      continue;
-    }
+    // a booster is never solid: it is touched by the final pose, once the step's contact is done
+    if (PADS.includes(o.type)) continue;
     if (o.type === "coin") {
       // the whole body picks a coin up, like it touches a portal; a coin never blocks or kills
       if (s.fx && !s.fx.got[i] && intersects(body, polygon(o))) {
@@ -774,15 +775,25 @@ function contact(
     }
   }
   s.touchingPortals = touching;
-  // Boosters (#106 rule 4): after every portal and support, so a booster's speed is the step's
-  // last word. The first one the body newly touches, in authored order, fires; the rest count as
-  // touched. One stays touched, and silent, until the body leaves it. Inert in angle mode.
+  // Boosters (#106 rule 4): touched by the final pose, after every portal and support, so a
+  // booster's speed is the step's last word and a portal that moves the run off one first means it
+  // is not touched. The first one the body newly touches, in authored order, fires; the rest count
+  // as touched. One stays touched, and silent, until the body leaves it. Inert in angle mode.
   if (s.fx) {
-    if (s.mode === "angle") pads.length = 0;
+    const final = playerPolygon(s),
+      pads =
+        s.mode === "angle"
+          ? []
+          : s.fx.boosters.filter((i) => {
+              const o = s.level.objects[i];
+              return !o.noTouch && intersects(final, polygon(o));
+            });
     const fire = s.status === "playing" ? pads.find((i) => !s.fx!.pads.includes(i)) : undefined;
     if (fire !== undefined) {
       launch(s, PAD_EFFECTS[s.level.objects[fire].type]);
       s.dash = null;
+      // the plane's limit holds in the step a booster fires, as it does for a ring (rule 3b)
+      if (s.mode === "plane") s.vy = Math.max(-4, Math.min(4, s.vy));
     }
     s.fx.pads = pads;
   }
@@ -844,7 +855,7 @@ export function validateLevel(input: unknown): Level {
       throw Error("Invalid scale");
     if (
       o.color !== undefined &&
-      ((o.type !== "ring" && o.type !== "color-trigger") ||
+      ((!RINGS.includes(o.type) && o.type !== "color-trigger") ||
         typeof o.color !== "string" ||
         !/^#[\da-f]{6}$/i.test(o.color))
     )
@@ -869,19 +880,6 @@ export function validateLevel(input: unknown): Level {
       (o.type !== "ring" || o.dash !== true || o.boost || o.bounce !== undefined)
     )
       throw Error("Invalid dash orb");
-    // the black and gray rings (#106 rule 3d): one effect each, never mixed with another
-    for (const key of ["drop", "stop"] as const)
-      if (
-        o[key] !== undefined &&
-        (o.type !== "ring" ||
-          o[key] !== true ||
-          o.bounce !== undefined ||
-          o.flipsGravity !== undefined ||
-          o.boost !== undefined ||
-          o.dash !== undefined ||
-          (key === "drop" && o.stop !== undefined))
-      )
-        throw Error("Invalid drop or stop ring");
     const trigger = TRIGGERS.includes(o.type);
     // a coin is always there to pick up, so it can be hidden (a secret coin) but never no-touch
     if (o.noTouch !== undefined && (o.noTouch !== true || ZONES.includes(o.type) || trigger || o.type === "coin"))

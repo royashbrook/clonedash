@@ -6,9 +6,10 @@ size for every object, and two new rings, a black one with a down arrow and a gr
 
 ## the pieces
 
-- **black ring** (`drop: true`): a tap sends you down fast, as if you had been falling from high
-  for a while. **gray ring** (`stop: true`): a tap stops your rise or fall, as if you were neither
-  falling nor bouncing. Both are rings: tapped, once per run, coloured like any ring.
+- **black ring** (`drop-ring`): a tap sends you down fast, as if you had been falling from high
+  for a while. **gray ring** (`stop-ring`): a tap stops your rise or fall, as if you were neither
+  falling nor bouncing. Both act like rings (tapped, once per run, any ring colour) but are pieces
+  of their own, not fields on `ring`, so an older copy of the game refuses them (rule 7).
 - **booster** (a pad): a flat strip along the bottom of its cell. Touch it and it fires, no tap.
   Seven kinds, one for each ring effect: `yellow-pad` (the yellow ring's bounce), `pink-pad` (a
   one block hop, the small ring's bounce), `red-pad` (a five block launch), `blue-pad` (gravity
@@ -57,17 +58,22 @@ size for every object, and two new rings, a black one with a down arrow and a gr
        gray ring is not ready (not drawn lit, the tap is not used) and every booster is inert
        (it neither fires nor counts as touched). a plane's speed limit (4 blocks a second up or
        down) applies after, as it does to every ring, so a black ring in a plane is a dive at that
-       limit. a gravity or plane portal touched later in the same step sets its own speed over
-       the ring's, as it does over the yellow ring.
+       limit. a booster that fires in a plane is held to the same limit in the step it fires
+       (the limit is applied again after it), so a black booster dives at 4 and a yellow one
+       climbs at 4, never at their full speed for a step. a gravity or plane portal touched
+       later in the same step sets its own speed over the ring's, as it does over the yellow ring.
    3c. old rings are untouched: the yellow, coloured, gravity, green and dash rings keep exactly
        the order they had.
-   3d. refused by every reader: `drop` or `stop` with `bounce`, `flipsGravity`, `boost` or `dash`,
-       `drop` and `stop` together, either on anything but a ring, or any value but `true`.
+   3d. refused by every reader: a black or gray ring with `bounce`, `flipsGravity`, `boost` or
+       `dash` (those are the plain ring's fields), or turned off a quarter turn. a ring cannot be
+       both, since each is its own piece.
 4. **boosters.**
    4a. the active face is the strip: the bottom quarter of the cell, inset a tenth at each side.
        it turns with the piece, so a booster turned 180 degrees hugs the top of its cell, for a
        ceiling. it fires when the player's body overlaps the strip, wherever it is: on the floor,
-       on a block, on a ceiling or in the air (a booster needs nothing under it).
+       on a block, on a ceiling or in the air (a booster needs nothing under it). the overlap is
+       read from the final pose, after every portal and support of the step, so a portal that
+       moves the run off a booster first means it was not touched, whichever was authored first.
    4b. fire once per touch: a booster fires when the body first overlaps it, not again while it
        stays overlapped, and again after the body has left it and comes back. this is not a
        ring's once per run.
@@ -121,10 +127,10 @@ size for every object, and two new rings, a black one with a down arrow and a gr
        level) clears the history, so an older stroke can never undo it. at most 30 strokes are kept.
 7. **old data.** every new field and type is optional and new, so old saves read back as they
    did, old `cdl1` codes decode to the same level, and an old level encodes as main encodes it.
-   an older copy of the game refuses a level with a booster (a piece it does not know) or with a
-   sized ring, portal or coin (a size it refuses). a black or gray ring is the one thing it does
-   not refuse: its reader drops fields it does not know, so it reads one as a plain ring of that
-   colour. the envelope stays `cdl1` by the contract above, so that limit is pinned, not fixed.
+   an older copy of the game refuses a level that uses anything new rather than playing it as
+   something else: a booster or a black or gray ring is a piece it does not know, and a sized
+   ring, portal or coin is a size it refuses. (its reader drops fields it does not know, which is
+   why the black and gray rings are pieces, not fields.)
 
 ## how it is pinned
 

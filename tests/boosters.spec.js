@@ -69,7 +69,7 @@ test('the BOOSTERS tab places all seven, the RINGS tab the black and gray rings,
   await page.getByRole('tab', { name: 'RINGS', exact: true }).click();
   await page.getByRole('button', { name: '◉ BLACK · DROP', exact: true }).click();
   await page.mouse.click(...at(12, 2));
-  await expect(page.locator('#selection')).toContainText('RING');
+  await expect(page.locator('#selection')).toContainText('BLACK RING');
   await expect(page.locator('#selection')).toContainText('↓ DROP');
   await page.getByRole('button', { name: '◉ GRAY · STOP', exact: true }).click();
   await page.mouse.click(...at(14, 2));
@@ -77,7 +77,7 @@ test('the BOOSTERS tab places all seven, the RINGS tab the black and gray rings,
   await expect(page.locator('#bounce')).toBeDisabled();
   const objects = (await stored(page)).draft.objects;
   expect(objects.slice(1, 8).map(o => o.type)).toEqual(['yellow-pad', 'pink-pad', 'red-pad', 'blue-pad', 'green-pad', 'black-pad', 'gray-pad']);
-  expect(objects.slice(8)).toEqual([piece('ring', 12, 2, { color: '#000000', drop: true }), piece('ring', 14, 2, { color: '#9a9a9a', stop: true })]);
+  expect(objects.slice(8)).toEqual([piece('drop-ring', 12, 2, { color: '#000000' }), piece('stop-ring', 14, 2, { color: '#9a9a9a' })]);
   // the selected gray ring takes a size
   await expect(page.locator('#scale')).toBeEnabled();
   await page.locator('#scale').fill('2');

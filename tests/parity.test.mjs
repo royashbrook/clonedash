@@ -172,10 +172,13 @@ test('old share codes captured on main decode exactly as main decoded them, and 
     // the other way: main refuses a level with a coin rather than dropping it silently
     const coin = await encodeLevel({ name: 'New', length: 40, objects: [object('coin', 6, 0)] });
     await assert.rejects(() => main.transfer.decodeLevel(coin));
-    // #106: main refuses a booster and a sized ring, portal or coin; a black or gray ring is the
-    // one new thing it reads, as a plain ring of that colour (docs/ramps-and-boosters.md rule 7)
+    // #106: main refuses every new piece of the round rather than playing it as something else:
+    // a booster, a black or gray ring, and a sized ring, portal or coin (docs/ramps-and-boosters.md
+    // rule 7)
     for (const [piece, refusal] of [
       [object('yellow-pad', 6, 0), /Invalid object/],
+      [{ ...object('drop-ring', 6, 1), color: '#000000' }, /Invalid object/],
+      [{ ...object('stop-ring', 6, 1), color: '#9a9a9a' }, /Invalid object/],
       [{ ...object('ring', 6, 1), scale: 2 }, /Invalid scale/],
       [{ ...object('plane', 6, 0), scale: 2 }, /Invalid scale/],
       [{ ...object('coin', 6, 0), scale: 2 }, /Invalid (object|scale)/], // this main has no coins at all
@@ -183,9 +186,6 @@ test('old share codes captured on main decode exactly as main decoded them, and 
       const code = await encodeLevel({ name: 'New', length: 40, objects: [piece] });
       await assert.rejects(() => main.transfer.decodeLevel(code), refusal, piece.type);
     }
-    const black = { ...object('ring', 6, 1), color: '#000000', drop: true };
-    const read = await main.transfer.decodeLevel(await encodeLevel({ name: 'New', length: 40, objects: [black] }));
-    assert.deepEqual(read.objects, [{ ...object('ring', 6, 1), color: '#000000' }]);
   });
 });
 
