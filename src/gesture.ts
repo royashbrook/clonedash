@@ -24,13 +24,14 @@ export function pinchTransform(
   b: Point,
   snap: boolean,
   scalable: boolean,
+  turnable = scalable, // any angle; otherwise quarter turns (a ring sizes but quarter-turns, #106)
 ) {
   const d = Math.hypot(b[0] - a[0], b[1] - a[1]),
     angle = Math.atan2(b[1] - a[1], b[0] - a[0]);
   const rawScale = (p.scale0 * d) / p.d0,
     rawRotation = p.rotation0 - ((angle - p.a0) * 180) / Math.PI;
   const scaleStep = snap ? SNAP_SCALE : 0.05,
-    angleStep = scalable ? (snap ? SNAP_ANGLE : 1) : 90;
+    angleStep = turnable ? (snap ? SNAP_ANGLE : 1) : 90;
   const scale = scalable
     ? Math.min(4, Math.max(0.25, Math.round(rawScale / scaleStep) * scaleStep))
     : 1;

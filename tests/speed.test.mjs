@@ -58,7 +58,9 @@ test('speed portals are portals for placement, validation and share codes', asyn
   for (const type of Object.keys(SPEEDS)) {
     assert.ok(PORTALS.includes(type)); assert.ok(TYPES.includes(type));
     assert.doesNotThrow(() => validateLevel({ ...empty, objects: [object(type, 10, 1)] }));
-    assert.throws(() => validateLevel({ ...empty, objects: [{ ...object(type, 10, 1), scale: 2 }] }), /Invalid scale/);
+    // a size since #106, still only quarter turns
+    assert.doesNotThrow(() => validateLevel({ ...empty, objects: [{ ...object(type, 10, 1), scale: 2 }] }));
+    assert.throws(() => validateLevel({ ...empty, objects: [{ ...object(type, 10, 1), rotation: 45 }] }), /Invalid object/);
   }
   const level = { ...empty, objects: Object.keys(SPEEDS).map((t, i) => object(t, 10 + i * 3, 0)) };
   assert.deepEqual((await decodeLevel(await encodeLevel(level))).objects.map((o) => o.type), Object.keys(SPEEDS));

@@ -1,4 +1,4 @@
-import { SCALABLE, bounds, intersects, pieceSize, polygon, transform, validateLevel } from "./engine.ts";
+import { scaleOf, bounds, intersects, pieceSize, polygon, transform, validateLevel } from "./engine.ts";
 import type { Level, Piece, Transform } from "./types.ts";
 
 // Multi-select (#87): the editor acts on several pieces at once. These are the pure parts, so
@@ -60,7 +60,7 @@ export function transformGroup(pieces: Piece[], action: Transform, step = 1) {
       else o.flipY = !o.flipY;
     } else transform(o, action);
     // a scaled piece grows from its own base, which a flip top to bottom moves to the other side
-    const k = SCALABLE.includes(o.type) ? (o.scale ?? 1) : 1,
+    const k = scaleOf(o),
       lift = action === "flipY" ? (k - 1) * h : 0,
       a = (o.rotation * Math.PI) / 180;
     o.x = nx + lift * Math.sin(a) - w / 2;

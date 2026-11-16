@@ -10,6 +10,9 @@
     levelHeight,
     MAX_LENGTH,
     SCALABLE,
+    TURNABLE,
+    PADS,
+    RINGS,
     RING_BOUNCE,
     ZONES,
     OUTLINED,
@@ -55,6 +58,7 @@
   } from "./skin.ts";
   import { pinchStart, pinchTransform, type Pinch } from "./gesture.ts";
   import { duplicateGroup, inBox, transformGroup } from "./group.ts";
+  import { cellsAlong, eraseAlong, paintCell, StrokeHistory, type Step } from "./swipe.ts";
   import type {
     Edges,
     Level,
@@ -119,6 +123,8 @@
       ["green-ring", "◉ GREEN · GRAVITY + BOUNCE"],
       ["dash-ring", "➤ PINK · DASH"],
       ["gravity-dash-ring", "➤ YELLOW · DASH + GRAVITY"],
+      ["black-ring", "◉ BLACK · DROP"],
+      ["gray-ring", "◉ GRAY · STOP"],
       ["w-block", "W · WALL PASS"],
       ["r-block", "R · ROOF PASS"],
     ],
@@ -132,6 +138,16 @@
       ["hill", "◠ HILL"],
       ["hill-grid", "◠ HILL GRID"],
       ["hill-black", "◠ HILL BLACK"],
+    ],
+    // flat pads that fire when you touch them, no tap: each does what one ring does (#106)
+    boosters: [
+      ["yellow-pad", "▬ YELLOW · JUMP"],
+      ["pink-pad", "▬ PINK · SMALL"],
+      ["red-pad", "▬ RED · BIG"],
+      ["blue-pad", "▬ BLUE · GRAVITY"],
+      ["green-pad", "▬ GREEN · GRAVITY + BOUNCE"],
+      ["black-pad", "▬ BLACK · DROP"],
+      ["gray-pad", "▬ GRAY · STOP"],
     ],
     coins: [["coin", "● COIN"]],
     // invisible in play; each fires once when you pass it and works on one group id
@@ -157,6 +173,9 @@
     "green-ring": { type: "ring", color: "#9aff6b", flipsGravity: true, boost: true },
     "dash-ring": { type: "ring", color: "#ff8ac4", dash: true },
     "gravity-dash-ring": { type: "ring", dash: true, flipsGravity: true },
+    // their own pieces (#106), so an older copy refuses them rather than playing a plain ring
+    "black-ring": { type: "drop-ring", color: "#000000" },
+    "gray-ring": { type: "stop-ring", color: "#9a9a9a" },
     "edge-block": { type: "block", edges: "edge" },
     "parallel-block": { type: "block", edges: "parallel" },
     "outer-corner": { type: "block", edges: "outer" },
@@ -181,6 +200,8 @@
     ["#ff8ac4", "PINK"],
     ["#ffb477", "ORANGE"],
     ["#2b4cff", "DARK BLUE"],
+    ["#000000", "BLACK"],
+    ["#9a9a9a", "GRAY"],
   ];
   const article = (name: string) => (/^[aeiou]/.test(name) ? "an " : "a ") + name;
   // what a selected trigger will do, for the editor's status line
@@ -228,6 +249,24 @@
   // Two fingers on the editor canvas size and turn the selected piece (photo-crop style).
   const fingers = new Map<number, Point>();
   let pinch: Pinch | null = null;
+  // SWIPE (#106, docs/ramps-and-boosters.md rule 6): off at first, and off the editor is as it
+  // was. On, one finger paints the chosen piece, or with ERASE removes pieces, along its path
+  // (src/swipe.ts). A stroke is saved once, when it ends, as one step of a strokes-only history.
+  let swipe = $state(false),
+    canUndo = $state(false),
+    canRedo = $state(false);
+  let stroke: {
+    id: number;
+    last: Point;
+    before: Piece[];
+    group: number[];
+    placed: number;
+    changed: boolean;
+    stopped: boolean;
+    said: Set<string>;
+    visited: Set<string>;
+  } | null = null;
+  const strokes = new StrokeHistory();
   let portrait = $state(false),
     paused = false,
     testing = $state(false), // a run over the editor grid, palette still up (TRY)
@@ -343,6 +382,7 @@
     current = COURSE_ORDER.find((i) => save.best[i] !== 100) ?? COURSE_ORDER[0];
   }
   function setMode(next: Screen) {
+    endStroke();
     mode = next;
     testing = false;
     document.body.dataset.mode = next;
@@ -378,6 +418,7 @@
     closable = true,
     extra?: Sheet["extra"],
   ) {
+    endStroke(); // a sheet ends a stroke (rule 6d)
     const next = { title, text, actions, closable, extra };
     panel = next;
     await tick();
@@ -475,6 +516,7 @@
       );
     save = importLevel(localStorage, save, level, LEVELS.length);
     draft = structuredClone(save.draft);
+    forget();
     library();
     toast("Level added. Find it in My Levels.");
   }
@@ -511,6 +553,7 @@
         true,
       );
       draft = structuredClone(save.draft);
+      forget();
       select(-1);
       pan = panY = 0;
       openEditor();
@@ -574,6 +617,7 @@
       pause();
   }
   function interrupt() {
+    endStroke(); // the window lost focus or the page went away: the stroke ends (rule 6d)
     pause();
     run.interrupt();
     music.stop();
@@ -633,8 +677,11 @@
     if (mode === "editor" && !testing) {
       fingers.set(e.pointerId, [e.clientX, e.clientY]);
       capture(e.pointerId);
-      if (fingers.size === 1) editAt(e);
-      else if (fingers.size === 2 && selected >= 0 && !rotate && !panel) {
+      if (stroke) endStroke(false); // a second finger ends the stroke before a pinch (rule 6d)
+      if (fingers.size === 1) {
+        if (painting()) startStroke(e);
+        else editAt(e);
+      } else if (fingers.size === 2 && selected >= 0 && !rotate && !panel) {
         sweep = null;
         const [a, b] = [...fingers.values()],
           piece = draft.objects[selected];
@@ -798,7 +845,12 @@
     if (live()) snapshot();
     raf = requestAnimationFrame(frame);
   }
-  function saveDraft() {
+  // Every edit saves through here. Any edit but a stroke, an undo or a redo clears the strokes
+  // history, so an older stroke can never undo it (rule 6e).
+  function saveDraft(stroked = false) {
+    if (!stroked) strokes.clear();
+    canUndo = strokes.done.length > 0;
+    canRedo = strokes.undone.length > 0;
     try {
       storeDraft(save, draft);
       persist();
@@ -810,6 +862,134 @@
     draft = { ...draft, objects: [...draft.objects] };
     if (testing) run = new Run(draft); // an edit mid-run starts the run over on the new trail
   }
+  // another level in the editor: the strokes history was for the old one
+  function forget() {
+    endStroke();
+    strokes.clear();
+    canUndo = canRedo = false;
+  }
+  const painting = () => swipe && tool !== "select" && tool !== "multi";
+  function toggleSwipe() {
+    endStroke();
+    swipe = !swipe;
+    if (!swipe && tool === "erase") tool = choices[tab][0][0];
+  }
+  // a stroke says each thing it has to say once
+  function say(text: string) {
+    if (stroke && !stroke.said.has(text)) {
+      stroke.said.add(text);
+      toast(text);
+    }
+  }
+  function startStroke(e: PointerEvent) {
+    if (rotate || panel) return;
+    const view = draw(),
+      at: Point = [view.x(e.clientX), view.y(e.clientY)];
+    stroke = {
+      id: e.pointerId,
+      last: at,
+      before: structuredClone(draft.objects),
+      group: [...group], // the selection as it was, for undo, before an erase clears it
+      placed: -1,
+      changed: false,
+      stopped: false,
+      said: new Set(),
+      visited: new Set(),
+    };
+    if (tool === "erase") group = []; // indices move as pieces go
+    strokeTo(at);
+  }
+  // the stretch of the stroke from its last sample to this one, every cell on the way (rule 6b)
+  function strokeTo(at: Point) {
+    const st = stroke!,
+      from = st.last,
+      activeLayer = layer === "background" ? "background" : undefined;
+    st.last = at;
+    if (tool === "erase") {
+      if (eraseAlong(draft, from, at, activeLayer)) st.changed = true;
+      return;
+    }
+    for (const [ox, oy] of cellsAlong(from, at, stepSize)) {
+      if (st.stopped) return;
+      const key = `${ox},${oy}`;
+      if (oy < 0 || oy >= levelHeight(draft) || st.visited.has(key)) continue;
+      st.visited.add(key);
+      const piece: Piece = { ...object(typeOf(tool), ox, oy), ...presets[tool] };
+      if (activeLayer) piece.layer = activeLayer;
+      const done = paintCell(draft, piece);
+      if (done === "placed") {
+        st.changed = true;
+        st.placed = draft.objects.length - 1;
+      } else if (done === "outside") say("Leave three blocks at the start and two at the finish.");
+      else if (done === "invalid")
+        say("That piece extends above the ceiling. Increase the height or place it lower.");
+      else if (done === "full" || done === "coins") {
+        // a cap: stop placing, keep what was placed (rule 6c)
+        st.stopped = true;
+        say(
+          done === "full"
+            ? "This trail has reached 600 objects."
+            : `This trail already has ${MAX_COINS} coins. That is the most a level can hold.`,
+        );
+      }
+    }
+  }
+  function endStroke(drop = true) {
+    const st = stroke;
+    if (!st) return;
+    stroke = null;
+    // ended by something other than its finger (blur, a hidden page, a sheet, leaving the editor):
+    // the finger stops counting, so a lift that never reaches the canvas leaves nothing behind
+    if (drop) {
+      fingers.delete(st.id);
+      try {
+        canvas.releasePointerCapture(st.id);
+      } catch {
+        /* already gone */
+      }
+    }
+    if (!st.changed) {
+      group = st.group; // nothing changed: nothing saved, no history step, the selection as it was
+      return;
+    }
+    try {
+      validateLevel(draft);
+    } catch {
+      // every cell was checked as it went, so this only guards: never save an invalid level
+      draft = { ...draft, objects: st.before };
+      return;
+    }
+    group = tool === "erase" || st.placed < 0 ? [] : [st.placed];
+    strokes.push({
+      before: st.before,
+      after: structuredClone(draft.objects),
+      groupBefore: st.group,
+      groupAfter: [...group],
+    });
+    saveDraft(true);
+  }
+  function stepTo(step: Step | null, side: "before" | "after") {
+    if (step) {
+      const next = { ...draft, objects: structuredClone(step[side]) };
+      try {
+        validateLevel(next);
+        draft = next;
+        group = [...(side === "before" ? step.groupBefore : step.groupAfter)];
+      } catch {
+        strokes.clear();
+      }
+    } else if (!strokes.done.length && !strokes.undone.length)
+      toast("Something else changed since that swipe, so it cannot be undone.");
+    saveDraft(true);
+  }
+  function undo() {
+    endStroke();
+    stepTo(strokes.undo(draft.objects), "before");
+  }
+  function redo() {
+    endStroke();
+    stepTo(strokes.redo(draft.objects), "after");
+  }
   function openEditor() {
     closeSheet();
     paused = false;
@@ -817,6 +997,7 @@
   }
   function loadCustom(id: number) {
     draft = selectLevel(save, id);
+    forget();
     select(-1);
     pan = 0;
     panY = 0;
@@ -825,6 +1006,7 @@
   function createLevel() {
     try {
       draft = newLevel(save);
+      forget();
       select(-1);
       pan = 0;
       panY = 0;
@@ -844,6 +1026,7 @@
           "DELETE LEVEL",
           () => {
             draft = deleteLevel(save, id);
+            forget();
             select(-1);
             pan = 0;
             panY = 0;
@@ -1049,7 +1232,7 @@
     if (selected < 0) return;
     const next = changed((piece) => {
       piece.rotation = ((Math.round(value) % 360) + 360) % 360;
-    }, (o) => SCALABLE.includes(o.type) || !!o.dash);
+    }, (o) => TURNABLE.includes(o.type) || !!o.dash);
     try {
       validateLevel(next);
     } catch {
@@ -1071,7 +1254,7 @@
         if (change.bounce === RING_BOUNCE) delete piece.bounce;
         else piece.bounce = change.bounce;
       }
-    }, (o) => o.type === "ring" && (change.bounce === undefined || !(o.flipsGravity || o.dash)));
+    }, (o) => RINGS.includes(o.type) && (change.bounce === undefined || (o.type === "ring" && !(o.flipsGravity || o.dash))));
     validateLevel(next);
     draft = next;
     saveDraft();
@@ -1184,6 +1367,15 @@
     saveDraft();
   }
   function pointermove(e: PointerEvent) {
+    if (stroke && e.pointerId === stroke.id) {
+      // where the finger is now, so a pinch that ends the stroke starts from here
+      fingers.set(e.pointerId, [e.clientX, e.clientY]);
+      if (fingers.size === 1) {
+        const view = draw();
+        strokeTo([view.x(e.clientX), view.y(e.clientY)]);
+      }
+      return;
+    }
     if (sweep && fingers.has(e.pointerId) && fingers.size === 1) {
       const view = draw();
       sweep = { ...sweep, to: [view.x(e.clientX), view.y(e.clientY)] };
@@ -1194,7 +1386,14 @@
     if (fingers.size < 2) return;
     const [a, b] = [...fingers.values()],
       piece = structuredClone(draft.objects[selected]),
-      next = pinchTransform(pinch, a, b, snap, SCALABLE.includes(piece.type));
+      next = pinchTransform(
+        pinch,
+        a,
+        b,
+        snap,
+        SCALABLE.includes(piece.type),
+        TURNABLE.includes(piece.type),
+      );
     if (next.scale === 1) delete piece.scale;
     else piece.scale = next.scale;
     piece.rotation = next.rotation;
@@ -1211,6 +1410,8 @@
   }
   function pointerup(e: PointerEvent) {
     run.release();
+    // a lift, a cancel or a lost capture of the stroke's finger ends the stroke (rule 6d)
+    if (stroke?.id === e.pointerId) endStroke(false);
     if (!fingers.delete(e.pointerId)) return;
     if (!fingers.size) endSweep();
     if (pinch && fingers.size < 2) {
@@ -1258,7 +1459,7 @@
   function how() {
     void sheet(
       "One button. Find your flow.",
-      "Square: tap or press Space to jump onto two-block ledges. Hold for another jump when you land. Pogo: same as square, but every fresh tap lets you jump again in midair. Jump before a wall to clear it. Try Air Steps! Plane: hold to fly against gravity; release to fall. Landings and ceiling contact are safe while flying, but wall impacts kill. Angle: hold to climb at 45 degrees, release to dive at 45 degrees. Floors, ceilings and block faces are safe; walls are not. Wheel: land on a block, floor or ceiling, then tap or press Space to flip gravity. Midair taps are ignored; holding does not flip again when you land. Croissant: land, then tap to teleport straight across to the floor, ceiling or block on the other side, with gravity flipped. UP and DOWN portals set gravity without changing your shape. Speed portals change how fast you move forward: SLOW, 1X, FAST and FASTER. Shape and gravity stay the same. Under upside-down gravity, land and jump on ceilings. All spikes kill, including the tiny quarter-size ones. Outline blocks are transparent but solid. Hitting a wall kills in ALL modes, including the vertical face of a ramp. Your smaller hazard hitbox still forgives edge grazes. Background blocks never collide. Rings: tap or press Space while reaching a glowing ring for a midair jump, once per ring per run. Purple and red rings bounce one and five blocks; a white ring takes any colour and height. A dark blue gravity ring flips your gravity and you drop the new way at once; a green one flips it and bounces you away from the new gravity. UP and DOWN portals drop you the new way at once too. Hold on a pink dash orb and you dash the way it points, with no gravity, until you let go: turn it with the angle slider to aim it. A yellow dash orb flips your gravity as well. EDIT OBJECT switches a piece to NO TOUCH (seen, never touched), HIDDEN (touched, never seen in play; faint in the editor), WALL PASS (its sides stop you, like a W) or ROOF PASS (you bump your head, like an R). Wall pass (W) and roof pass (R) are invisible in play: lay them over blocks, or right where you hit them. While you touch a W, a wall stops you instead of crashing you, and a jump over it carries on; while you touch an R, you bump your head and fall back instead of crashing. Spikes still kill. Ramps: walk up or down the white diagonal slope. Curves are rounded ramps: a scoop bends up like a skate ramp, a hill bulges out: run into its side and you ride up it. Find RINGS and RAMP tabs in the editor. In the editor, pinch a selected piece with two fingers to size it and turn it, like cropping a photo; Snap holds 15 degrees and quarter sizes. MULTI selects a group: tap pieces to add them, or swipe a box over a lot of them, then move, turn, flip, copy or delete them together. Edge, parallel, outer corner, inner corner and no outline blocks are solid blocks with the white line on only some sides (or none, for the middle of a shape), so a big shape reads as one piece: turn them to face the outside, and pick EDGES on any selected block. Coins: touch one to pick it up; a level holds up to 10, and your best is the most you picked up in one finished run. Triggers are invisible in play and fire once when you run past them. Give pieces a GROUP ID in EDIT OBJECT, then a MOVE trigger slides every piece in that group some blocks over a time you choose, and a COLOR trigger paints them a colour. Find them on the COINS and TRIGGERS tabs.",
+      "Square: tap or press Space to jump onto two-block ledges. Hold for another jump when you land. Pogo: same as square, but every fresh tap lets you jump again in midair. Jump before a wall to clear it. Try Air Steps! Plane: hold to fly against gravity; release to fall. Landings and ceiling contact are safe while flying, but wall impacts kill. Angle: hold to climb at 45 degrees, release to dive at 45 degrees. The floor and the ceiling are safe to slide along; touching any block, ramp or curve is a crash, unless a W stops you at its side or an R bumps your head. Wheel: land on a block, floor or ceiling, then tap or press Space to flip gravity. Midair taps are ignored; holding does not flip again when you land. Croissant: land, then tap to teleport straight across to the floor, ceiling or block on the other side, with gravity flipped. UP and DOWN portals set gravity without changing your shape. Speed portals change how fast you move forward: SLOW, 1X, FAST and FASTER. Shape and gravity stay the same. Under upside-down gravity, land and jump on ceilings. All spikes kill, including the tiny quarter-size ones. Outline blocks are transparent but solid. Hitting a wall kills in ALL modes, including the vertical face of a ramp. Your smaller hazard hitbox still forgives edge grazes. Background blocks never collide. Rings: tap or press Space while reaching a glowing ring for a midair jump, once per ring per run. Purple and red rings bounce one and five blocks; a white ring takes any colour and height. A dark blue gravity ring flips your gravity and you drop the new way at once; a green one flips it and bounces you away from the new gravity. UP and DOWN portals drop you the new way at once too. Hold on a pink dash orb and you dash the way it points, with no gravity, until you let go: turn it with the angle slider to aim it. A yellow dash orb flips your gravity as well. A black ring sends you down fast, as if you had been falling for a while; a gray ring stops your rise or fall. Boosters are flat pads with no tap: touch one and it does what its ring does, once each time you land on it. Turn one upside down for a ceiling. The Size slider (or a pinch) sizes any piece but a trigger.EDIT OBJECT switches a piece to NO TOUCH (seen, never touched), HIDDEN (touched, never seen in play; faint in the editor), WALL PASS (its sides stop you, like a W) or ROOF PASS (you bump your head, like an R). Wall pass (W) and roof pass (R) are invisible in play: lay them over blocks, or right where you hit them. While you touch a W, a wall stops you instead of crashing you, and a jump over it carries on; while you touch an R, you bump your head and fall back instead of crashing. Spikes still kill. Ramps: walk up or down the white diagonal slope. Curves are rounded ramps: a scoop bends up like a skate ramp, a hill bulges out: run into its side and you ride up it. Find RINGS and RAMP tabs in the editor. In the editor, pinch a selected piece with two fingers to size it and turn it, like cropping a photo; Snap holds 15 degrees and quarter sizes. MULTI selects a group: tap pieces to add them, or swipe a box over a lot of them, then move, turn, flip, copy or delete them together. Edge, parallel, outer corner, inner corner and no outline blocks are solid blocks with the white line on only some sides (or none, for the middle of a shape), so a big shape reads as one piece: turn them to face the outside, and pick EDGES on any selected block. Coins: touch one to pick it up; a level holds up to 10, and your best is the most you picked up in one finished run. Triggers are invisible in play and fire once when you run past them. Give pieces a GROUP ID in EDIT OBJECT, then a MOVE trigger slides every piece in that group some blocks over a time you choose, and a COLOR trigger paints them a colour. Find them on the COINS and TRIGGERS tabs.",
     );
   }
   // Every check says what it found, so a tap never looks like nothing happened. A pull is
@@ -1748,7 +1949,18 @@
         id="multi-tool"
         aria-pressed={tool === "multi"}
         onclick={() => (tool = "multi")}>MULTI</button
-      ><button id="duplicate-object" disabled={!selection} onclick={duplicate}
+      ><button
+        id="swipe-tool"
+        aria-pressed={swipe}
+        aria-label="Swipe to place or erase"
+        onclick={toggleSwipe}>SWIPE</button
+      >{#if swipe}<button
+          id="erase-tool"
+          aria-pressed={tool === "erase"}
+          onclick={() => (tool = "erase")}>ERASE</button
+        ><button id="undo" disabled={!canUndo} onclick={undo}>UNDO</button
+        ><button id="redo" disabled={!canRedo} onclick={redo}>REDO</button
+        >{/if}<button id="duplicate-object" disabled={!selection} onclick={duplicate}
         >COPY + PASTE</button
       ><button id="edit-object" disabled={!selection} onclick={editObject}
         >EDIT OBJECT</button
@@ -1807,7 +2019,7 @@
           step="1"
           aria-label="Angle"
           value={selection?.rotation ?? 0}
-          disabled={!selection || !(SCALABLE.includes(selection.type) || selection.dash)}
+          disabled={!selection || !(TURNABLE.includes(selection.type) || selection.dash)}
           oninput={(e) => setAngle(+e.currentTarget.value)}
         /></label
       ><label
@@ -1815,7 +2027,7 @@
           id="ring-color"
           aria-label="Ring colour"
           value={selection?.color ?? RING_COLORS[0][0]}
-          disabled={selection?.type !== "ring"}
+          disabled={!selection || !RINGS.includes(selection.type)}
           onchange={(e) => setRing({ color: e.currentTarget.value })}
           >{#each RING_COLORS as [hex, name]}<option value={hex}>{name}</option
             >{/each}</select
@@ -1875,12 +2087,14 @@
           : group.length > 1
           ? `${group.length} PIECES · MOVE, TURN, FLIP, COPY OR DELETE THEM TOGETHER`
           : selection
-          ? `${labelOf(selection.type)} · x ${selection.x.toFixed(2)} / y ${selection.y.toFixed(2)} · ${selection.rotation}° · ×${(selection.scale ?? 1).toFixed(2)}${selection.type === "ring" ? (selection.dash ? (selection.flipsGravity ? " · ➤ DASH + GRAVITY" : " · ➤ DASH") : selection.flipsGravity ? (selection.boost ? " · ⇈ GRAVITY + BOUNCE" : " · ⇅ GRAVITY") : ` · ↑${selection.bounce ?? RING_BOUNCE}`) : ""}${selection.edges ? ` · ${EDGE_NAMES.find(([v]) => v === selection.edges)?.[1]}` : ""}${OPTIONS.filter(([key]) => selection[key]).map(([, name]) => ` · ${name}`).join("")}${selection.group ? ` · GROUP ${selection.group}` : ""}${triggerText(selection)}`
+          ? `${labelOf(selection.type)} · x ${selection.x.toFixed(2)} / y ${selection.y.toFixed(2)} · ${selection.rotation}° · ×${(selection.scale ?? 1).toFixed(2)}${selection.type === "ring" ? (selection.dash ? (selection.flipsGravity ? " · ➤ DASH + GRAVITY" : " · ➤ DASH") : selection.flipsGravity ? (selection.boost ? " · ⇈ GRAVITY + BOUNCE" : " · ⇅ GRAVITY") : ` · ↑${selection.bounce ?? RING_BOUNCE}`) : selection.type === "drop-ring" ? " · ↓ DROP" : selection.type === "stop-ring" ? " · − STOP" : ""}${selection.edges ? ` · ${EDGE_NAMES.find(([v]) => v === selection.edges)?.[1]}` : ""}${OPTIONS.filter(([key]) => selection[key]).map(([, name]) => ` · ${name}`).join("")}${selection.group ? ` · GROUP ${selection.group}` : ""}${triggerText(selection)}`
           : tool === "select"
             ? "Tap an object to select it."
             : tool === "multi"
               ? "Tap pieces to add them, or swipe a box over a lot of them."
-            : `Tap the grid to place ${tool === "half" ? "a half spike" : article(tool in presets ? tool.replace("-", " ") : tool.startsWith("speed-") ? labelOf(tool).toLowerCase() + " portal" : tool)}.`}{layer ===
+            : tool === "erase"
+              ? "Swipe over pieces to take them away."
+            : `${swipe ? "Tap or swipe across" : "Tap"} the grid to place ${tool === "half" ? "a half spike" : article(tool in presets ? tool.replace("-", " ") : tool.startsWith("speed-") ? labelOf(tool).toLowerCase() + " portal" : PADS.includes(tool) ? labelOf(tool).toLowerCase() : tool)}.`}{layer ===
         "background"
           ? " · BACKGROUND: no collision"
           : ""}</output

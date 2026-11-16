@@ -10,6 +10,15 @@ const LABELS: Partial<Record<string, string>> = {
   "speed-faster": "FASTER",
   "move-trigger": "MOVE TRIGGER",
   "color-trigger": "COLOR TRIGGER",
+  "yellow-pad": "YELLOW BOOSTER",
+  "pink-pad": "PINK BOOSTER",
+  "red-pad": "RED BOOSTER",
+  "blue-pad": "BLUE BOOSTER",
+  "green-pad": "GREEN BOOSTER",
+  "black-pad": "BLACK BOOSTER",
+  "gray-pad": "GRAY BOOSTER",
+  "drop-ring": "BLACK RING",
+  "stop-ring": "GRAY RING",
 };
 export const labelOf = (id: string): string => LABELS[id] ?? id.toUpperCase();
 export type ObjectType =
@@ -43,7 +52,16 @@ export type ObjectType =
   | "ring"
   | "coin"
   | "move-trigger"
-  | "color-trigger";
+  | "color-trigger"
+  | "yellow-pad"
+  | "pink-pad"
+  | "red-pad"
+  | "blue-pad"
+  | "green-pad"
+  | "black-pad"
+  | "gray-pad"
+  | "drop-ring"
+  | "stop-ring";
 export type Point = [number, number];
 export type Transform =
   "left" | "right" | "up" | "down" | "cw" | "ccw" | "flipX" | "flipY";
@@ -55,7 +73,7 @@ export interface Piece {
   flipX: boolean;
   flipY: boolean;
   layer?: "background";
-  scale?: number; // blocks, spikes and ramps only; absent means 1 (kept absent so old levels stay byte-identical)
+  scale?: number; // 0.25..4 on any piece with a body (not triggers); absent means 1 (kept absent so old levels stay byte-identical)
   color?: string; // rings and colour triggers, #rrggbb; absent means the original yellow
   bounce?: number; // rings only, peak height in blocks; absent means the original 2.25
   flipsGravity?: true; // rings only, the dark blue orb: a tap flips gravity instead of bouncing
@@ -122,6 +140,8 @@ export interface RunEffects {
   tint: Float64Array;
   fade: Float64Array;
   tinted: Uint8Array;
+  boosters: number[]; // booster indices, in authored order, built once per run
+  pads: number[]; // boosters the body touched at the end of the last step; one fires on first touch
 }
 export interface SaveData {
   version: 1;

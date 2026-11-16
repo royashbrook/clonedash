@@ -8,6 +8,8 @@ import {
   step,
   validateLevel,
   SCALABLE,
+  TURNABLE,
+  TYPES,
   SIZE,
 } from "../src/engine.ts";
 import { encodeLevel, decodeLevel } from "../src/transfer.ts";
@@ -27,8 +29,9 @@ test("a scaled piece grows from its base, sideways about its centre; absent and 
   const ceiling = bounds({ ...object("spike", 5, 6), rotation: 180, scale: 2 });
   assert.equal(ceiling.top, 7);
   assert.equal(ceiling.bottom, 5);
-  // rings and portals ignore a scale entirely
-  for (const type of ["ring", "plane"]) {
+  // a trigger has no body and ignores a scale entirely (rings and portals take one since #106,
+  // tests/size.test.mjs)
+  for (const type of ["move-trigger", "color-trigger"]) {
     const o = object(type, 5, 2);
     assert.deepEqual(polygon({ ...o, scale: 3 }), polygon(o));
   }
@@ -38,15 +41,18 @@ test("a scaled piece grows from its base, sideways about its centre; absent and 
   assert.equal(+(rotated.top - rotated.bottom).toFixed(6), 2);
 });
 
-test("scale is validated: 0.25 to 4, blocks/spikes/ramps only; the exporter keeps it", async () => {
+test("scale is validated: 0.25 to 4 on every piece with a body, never a trigger; the exporter keeps it", async () => {
   const ok = level([{ ...object("grid", 10, 1), scale: 2.5 }]);
   assert.deepEqual(validateLevel(ok), ok);
   for (const bad of [0.2, 4.01, NaN, Infinity, "2"]) {
     assert.throws(() => validateLevel(level([{ ...object("block", 10, 1), scale: bad }])), /Invalid scale/);
   }
-  assert.throws(() => validateLevel(level([{ ...object("ring", 10, 1), scale: 2 }])), /Invalid scale/);
-  assert.throws(() => validateLevel(level([{ ...object("plane", 10, 1), scale: 2 }])), /Invalid scale/);
-  assert.deepEqual([...SCALABLE].sort(), ["black", "block", "grid", "half", "outline", "plain-black", "w-block", "r-block", "quarter", "ramp", "ramp-black", "ramp-grid", "small", "spike", "scoop", "scoop-grid", "scoop-black", "hill", "hill-grid", "hill-black"].sort());
+  // #106: rings and portals take a size now; triggers never do
+  assert.doesNotThrow(() => validateLevel(level([{ ...object("ring", 10, 1), scale: 2 }])));
+  assert.doesNotThrow(() => validateLevel(level([{ ...object("plane", 10, 1), scale: 2 }])));
+  assert.throws(() => validateLevel(level([{ ...object("move-trigger", 10, 1), scale: 2 }])), /Invalid scale/);
+  assert.deepEqual([...TURNABLE].sort(), ["black", "block", "grid", "half", "outline", "plain-black", "w-block", "r-block", "quarter", "ramp", "ramp-black", "ramp-grid", "small", "spike", "scoop", "scoop-grid", "scoop-black", "hill", "hill-grid", "hill-black"].sort());
+  assert.deepEqual([...SCALABLE].sort(), TYPES.filter((t) => !t.endsWith("-trigger")).sort());
   // share code round trip
   const code = await encodeLevel(ok);
   assert.deepEqual((await decodeLevel(code)).objects[0].scale, 2.5);

@@ -7,7 +7,7 @@ import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { LEVELS } from '../src/levels.ts';
 import { Run } from '../src/run.ts';
-import { STEP, object } from '../src/engine.ts';
+import { STEP, SIZE, BLOCKS, SLOPES, PORTALS, object, polygon, intersects } from '../src/engine.ts';
 import { encodeLevel, decodeLevel } from '../src/transfer.ts';
 import { readSave } from '../src/library.ts';
 import { REMIX_INPUTS } from './remix-inputs.mjs';
@@ -96,6 +96,66 @@ test('each Remix witness recording replays to the same frames on main and today'
   });
 });
 
+// The angle now dies on solid contact (#106, docs/ramps-and-boosters.md). Four Remix witnesses rode
+// block faces in their angle sections; no geometry changed, only those timelines were re-recorded
+// from their angle portal on (scripts/remix-witness.mjs "<trail>@<x>"), and the test above holds
+// every new timeline to main frame for frame. This is the old control: each old timeline still
+// finishes on main, today's frames match it until that section, where they part in angle mode (main
+// lands on a face) and today dies there against a solid. Every flip before the section was kept.
+const RERECORDED = { 'Shapeshifter': 240, 'Quick Change': 156, 'Block Party': 126, 'Grand Finale': 182 };
+test('the old witnesses of the re-recorded angle sections finish on main and die on solid contact today', async () => {
+  const old = await import(`data:text/javascript,${encodeURIComponent(execFileSync('git', ['show', `${MAIN}:tests/remix-inputs.mjs`], { encoding: 'utf8' }))}`);
+  for (const name of Object.keys(REMIX_INPUTS))
+    if (!(name in RERECORDED)) assert.deepEqual(REMIX_INPUTS[name], old.REMIX_INPUTS[name], `${name} was not re-recorded`);
+  await withMain(async (main) => {
+    for (const [name, from] of Object.entries(RERECORDED)) {
+      const level = LEVELS.find((l) => l.name === name),
+        flips = old.REMIX_INPUTS[name],
+        runs = [new main.run.Run(level), new Run(level)],
+        input = runs.map(() => ({ held: false, sample: 0, next: 0, firstAt: null }));
+      let death = null,
+        parted = null;
+      for (let tick = 0; tick < 12000 && runs[0].state.status === 'playing'; tick++) {
+        runs.forEach((run, k) => {
+          const t = input[k];
+          if (run.state.status !== 'playing') return;
+          if (tick % 6 === 0 && run.readyTime <= 0) {
+            if (t.firstAt === null && run.state.x >= from) t.firstAt = t.sample;
+            if (flips[t.next] === t.sample) {
+              t.next++;
+              t.held = !t.held;
+              if (t.held) run.press();
+              else run.release();
+            }
+            t.sample++;
+          }
+          run.advance(STEP);
+        });
+        const [a, b] = runs.map((r) => r.state);
+        if (death) continue;
+        if (!parted && JSON.stringify(frame(b)) !== JSON.stringify(frame(a))) parted = { x: b.x, mode: b.mode, main: a.status };
+        if (b.status === 'dead')
+          death = { x: b.x, mode: b.mode, touch: b.level.objects.some((o) => (BLOCKS.includes(o.type) || SLOPES.includes(o.type)) && o.layer !== 'background' && !o.noTouch && intersects([[b.x, b.y], [b.x + SIZE, b.y], [b.x + SIZE, b.y + SIZE], [b.x, b.y + SIZE]], polygon(o))) };
+      }
+      assert.equal(runs[0].state.status, 'complete', `${name}: the old timeline finishes on main`);
+      assert.ok(death, `${name}: and dies today`);
+      const angle = level.objects.find((o) => o.type === 'angle' && o.x >= from).x,
+        next = Math.min(...level.objects.filter((o) => PORTALS.includes(o.type) && o.x > angle && o.type !== 'angle').map((o) => o.x));
+      for (const [what, at] of [['part', parted], ['die', death]]) {
+        assert.equal(at.mode, 'angle', `${name}: ${what}s in angle mode`);
+        assert.ok(at.x > angle && at.x < next, `${name}: ${what}s inside its angle section (${angle} to ${next}), at ${at.x}`);
+      }
+      assert.equal(parted.main, 'playing');
+      assert.ok(death.touch, `${name}: against a solid`);
+      assert.ok(death.x - parted.x < 1, `${name}: within a block of where it parted from main`);
+      const kept = flips.filter((f) => f < input[1].firstAt);
+      assert.ok(kept.length > 10);
+      assert.deepEqual(REMIX_INPUTS[name].slice(0, kept.length), kept, `${name}: every flip before the section is kept`);
+      assert.ok(REMIX_INPUTS[name][kept.length] >= input[1].firstAt);
+    }
+  });
+});
+
 // the compressed bytes of a code depend on the zlib build (node 22 on ci and node 26 locally differ),
 // so a re-encode is held to main's encoder on the same runtime, and to what both decoders get out of it,
 // never to bytes captured on another machine
@@ -112,6 +172,20 @@ test('old share codes captured on main decode exactly as main decoded them, and 
     // the other way: main refuses a level with a coin rather than dropping it silently
     const coin = await encodeLevel({ name: 'New', length: 40, objects: [object('coin', 6, 0)] });
     await assert.rejects(() => main.transfer.decodeLevel(coin));
+    // #106: main refuses every new piece of the round rather than playing it as something else:
+    // a booster, a black or gray ring, and a sized ring, portal or coin (docs/ramps-and-boosters.md
+    // rule 7)
+    for (const [piece, refusal] of [
+      [object('yellow-pad', 6, 0), /Invalid object/],
+      [{ ...object('drop-ring', 6, 1), color: '#000000' }, /Invalid object/],
+      [{ ...object('stop-ring', 6, 1), color: '#9a9a9a' }, /Invalid object/],
+      [{ ...object('ring', 6, 1), scale: 2 }, /Invalid scale/],
+      [{ ...object('plane', 6, 0), scale: 2 }, /Invalid scale/],
+      [{ ...object('coin', 6, 0), scale: 2 }, /Invalid (object|scale)/], // this main has no coins at all
+    ]) {
+      const code = await encodeLevel({ name: 'New', length: 40, objects: [piece] });
+      await assert.rejects(() => main.transfer.decodeLevel(code), refusal, piece.type);
+    }
   });
 });
 

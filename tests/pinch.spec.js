@@ -43,16 +43,16 @@ test('a pinch on the selected block sizes and turns it with snap, freely without
   await finger(page, 'pointerup', 2, 0, 0);
   await page.reload(); await page.locator('#editor-open').click();
   expect((await stored(page)).draft.objects[0]).toMatchObject({ scale: 1.3, rotation: 55 });
-  // a ring only quarter-turns and never scales
+  // a ring only quarter-turns, and since #106 it takes a size like every piece with a body
   await page.locator('#select-tool').click();
   const rx = 14.5 * point.unit, ry = point.floor - 2.5 * point.unit;
   await finger(page, 'pointerdown', 1, rx, ry);
   await expect(page.locator('#selection')).toContainText('RING');
   await finger(page, 'pointerdown', 2, rx + 100, ry);
   await finger(page, 'pointermove', 2, rx, ry + 300);
-  await expect(page.locator('#selection')).toContainText('270° · ×1.00');
+  await expect(page.locator('#selection')).toContainText('270° · ×3.00');
   await finger(page, 'pointerup', 1, 0, 0);
   await finger(page, 'pointerup', 2, 0, 0);
   const ring = (await stored(page)).draft.objects[1];
-  expect(ring.rotation).toBe(270); expect('scale' in ring).toBe(false);
+  expect(ring.rotation).toBe(270); expect(ring.scale).toBe(3);
 });
