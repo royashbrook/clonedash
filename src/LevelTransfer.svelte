@@ -179,7 +179,7 @@
     {#if busy}<p role="status">Preparing…</p>
     {:else if code}
       {#if nativeShare}<button id="send-level" class="primary" onclick={share}
-          >SHARE LEVEL</button
+          >{skin ? "SHARE SKIN" : "SHARE LEVEL"}</button
         >{/if}
       {#if qr}<img
           class="level-qr"

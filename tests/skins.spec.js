@@ -312,6 +312,7 @@ test("share paths round-trip: QR link, code, file, the My Levels import; preview
     await page.locator("#skins-open").click();
     await page.getByRole("button", { name: "Share Robot" }).click();
     await expect(page.locator(".level-qr")).toBeVisible();
+    await expect(page.locator("#send-level")).toHaveText("SHARE SKIN");
     await page.locator("#send-level").click();
     const sent = await page.evaluate(() => window.sent);
     expect(sent.text).toBe("Wear my Cube Dash skin");
