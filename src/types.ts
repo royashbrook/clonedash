@@ -10,6 +10,13 @@ const LABELS: Partial<Record<string, string>> = {
   "speed-faster": "FASTER",
   "move-trigger": "MOVE TRIGGER",
   "color-trigger": "COLOR TRIGGER",
+  "yellow-pad": "YELLOW BOOSTER",
+  "pink-pad": "PINK BOOSTER",
+  "red-pad": "RED BOOSTER",
+  "blue-pad": "BLUE BOOSTER",
+  "green-pad": "GREEN BOOSTER",
+  "black-pad": "BLACK BOOSTER",
+  "gray-pad": "GRAY BOOSTER",
 };
 export const labelOf = (id: string): string => LABELS[id] ?? id.toUpperCase();
 export type ObjectType =
@@ -43,7 +50,14 @@ export type ObjectType =
   | "ring"
   | "coin"
   | "move-trigger"
-  | "color-trigger";
+  | "color-trigger"
+  | "yellow-pad"
+  | "pink-pad"
+  | "red-pad"
+  | "blue-pad"
+  | "green-pad"
+  | "black-pad"
+  | "gray-pad";
 export type Point = [number, number];
 export type Transform =
   "left" | "right" | "up" | "down" | "cw" | "ccw" | "flipX" | "flipY";
@@ -55,12 +69,14 @@ export interface Piece {
   flipX: boolean;
   flipY: boolean;
   layer?: "background";
-  scale?: number; // blocks, spikes and ramps only; absent means 1 (kept absent so old levels stay byte-identical)
+  scale?: number; // 0.25..4 on any piece with a body (not triggers); absent means 1 (kept absent so old levels stay byte-identical)
   color?: string; // rings and colour triggers, #rrggbb; absent means the original yellow
   bounce?: number; // rings only, peak height in blocks; absent means the original 2.25
   flipsGravity?: true; // rings only, the dark blue orb: a tap flips gravity instead of bouncing
   boost?: true; // gravity rings only, the green one: the flip comes with a bounce up the screen
   dash?: true; // rings only, the dash orb: held, it carries the run the way it points (yellow, with flipsGravity: it flips you too)
+  drop?: true; // rings only, the black ring: a tap sends you down fast (engine.ts DROP_SPEED)
+  stop?: true; // rings only, the gray ring: a tap stops your rise or fall
   noTouch?: true; // drawn, never collides (any piece but a zone)
   hidden?: true; // collides, never drawn in play; the editor shows it faint (any piece but a zone)
   wallPass?: true; // blocks and slopes: its side stops the run instead of crashing it, like a W
@@ -122,6 +138,7 @@ export interface RunEffects {
   tint: Float64Array;
   fade: Float64Array;
   tinted: Uint8Array;
+  pads: number[]; // boosters the body touched at the end of the last step; one fires on first touch
 }
 export interface SaveData {
   version: 1;

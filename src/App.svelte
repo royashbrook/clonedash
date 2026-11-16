@@ -10,6 +10,8 @@
     levelHeight,
     MAX_LENGTH,
     SCALABLE,
+    TURNABLE,
+    PADS,
     RING_BOUNCE,
     ZONES,
     OUTLINED,
@@ -107,6 +109,8 @@
       ["green-ring", "◉ GREEN · GRAVITY + BOUNCE"],
       ["dash-ring", "➤ PINK · DASH"],
       ["gravity-dash-ring", "➤ YELLOW · DASH + GRAVITY"],
+      ["black-ring", "◉ BLACK · DROP"],
+      ["gray-ring", "◉ GRAY · STOP"],
       ["w-block", "W · WALL PASS"],
       ["r-block", "R · ROOF PASS"],
     ],
@@ -121,6 +125,16 @@
       ["hill-grid", "◠ HILL GRID"],
       ["hill-black", "◠ HILL BLACK"],
     ],
+    // flat pads that fire when you touch them, no tap: each does what one ring does (#106)
+    boosters: [
+      ["yellow-pad", "▬ YELLOW · JUMP"],
+      ["pink-pad", "▬ PINK · SMALL"],
+      ["red-pad", "▬ RED · BIG"],
+      ["blue-pad", "▬ BLUE · GRAVITY"],
+      ["green-pad", "▬ GREEN · GRAVITY + BOUNCE"],
+      ["black-pad", "▬ BLACK · DROP"],
+      ["gray-pad", "▬ GRAY · STOP"],
+    ],
     coins: [["coin", "● COIN"]],
     // invisible in play; each fires once when you pass it and works on one group id
     triggers: [
@@ -133,7 +147,7 @@
   // are solid blocks with an outline variant; the Edges control gives any outlined block one.
   const presets: Record<
     string,
-    Pick<Piece, "type"> & Partial<Pick<Piece, "color" | "bounce" | "flipsGravity" | "boost" | "dash" | "edges" | "target" | "moveY" | "duration">>
+    Pick<Piece, "type"> & Partial<Pick<Piece, "color" | "bounce" | "flipsGravity" | "boost" | "dash" | "drop" | "stop" | "edges" | "target" | "moveY" | "duration">>
   > = {
     // a new trigger works on group 1 straight away; EDIT OBJECT changes any of it
     "move-trigger": { type: "move-trigger", target: 1, moveY: 2, duration: 1 },
@@ -145,6 +159,8 @@
     "green-ring": { type: "ring", color: "#9aff6b", flipsGravity: true, boost: true },
     "dash-ring": { type: "ring", color: "#ff8ac4", dash: true },
     "gravity-dash-ring": { type: "ring", dash: true, flipsGravity: true },
+    "black-ring": { type: "ring", color: "#000000", drop: true },
+    "gray-ring": { type: "ring", color: "#9a9a9a", stop: true },
     "edge-block": { type: "block", edges: "edge" },
     "parallel-block": { type: "block", edges: "parallel" },
     "outer-corner": { type: "block", edges: "outer" },
@@ -169,6 +185,8 @@
     ["#ff8ac4", "PINK"],
     ["#ffb477", "ORANGE"],
     ["#2b4cff", "DARK BLUE"],
+    ["#000000", "BLACK"],
+    ["#9a9a9a", "GRAY"],
   ];
   const article = (name: string) => (/^[aeiou]/.test(name) ? "an " : "a ") + name;
   // what a selected trigger will do, for the editor's status line
@@ -989,7 +1007,7 @@
     if (selected < 0) return;
     const next = changed((piece) => {
       piece.rotation = ((Math.round(value) % 360) + 360) % 360;
-    }, (o) => SCALABLE.includes(o.type) || !!o.dash);
+    }, (o) => TURNABLE.includes(o.type) || !!o.dash);
     try {
       validateLevel(next);
     } catch {
@@ -1011,7 +1029,7 @@
         if (change.bounce === RING_BOUNCE) delete piece.bounce;
         else piece.bounce = change.bounce;
       }
-    }, (o) => o.type === "ring" && (change.bounce === undefined || !(o.flipsGravity || o.dash)));
+    }, (o) => o.type === "ring" && (change.bounce === undefined || !(o.flipsGravity || o.dash || o.drop || o.stop)));
     validateLevel(next);
     draft = next;
     saveDraft();
@@ -1134,7 +1152,14 @@
     if (fingers.size < 2) return;
     const [a, b] = [...fingers.values()],
       piece = structuredClone(draft.objects[selected]),
-      next = pinchTransform(pinch, a, b, snap, SCALABLE.includes(piece.type));
+      next = pinchTransform(
+        pinch,
+        a,
+        b,
+        snap,
+        SCALABLE.includes(piece.type),
+        TURNABLE.includes(piece.type),
+      );
     if (next.scale === 1) delete piece.scale;
     else piece.scale = next.scale;
     piece.rotation = next.rotation;
@@ -1198,7 +1223,7 @@
   function how() {
     void sheet(
       "One button. Find your flow.",
-      "Square: tap or press Space to jump onto two-block ledges. Hold for another jump when you land. Pogo: same as square, but every fresh tap lets you jump again in midair. Jump before a wall to clear it. Try Air Steps! Plane: hold to fly against gravity; release to fall. Landings and ceiling contact are safe while flying, but wall impacts kill. Angle: hold to climb at 45 degrees, release to dive at 45 degrees. The floor and the ceiling are safe to slide along; touching any block, ramp or curve is a crash, unless a W stops you at its side or an R bumps your head. Wheel: land on a block, floor or ceiling, then tap or press Space to flip gravity. Midair taps are ignored; holding does not flip again when you land. Croissant: land, then tap to teleport straight across to the floor, ceiling or block on the other side, with gravity flipped. UP and DOWN portals set gravity without changing your shape. Speed portals change how fast you move forward: SLOW, 1X, FAST and FASTER. Shape and gravity stay the same. Under upside-down gravity, land and jump on ceilings. All spikes kill, including the tiny quarter-size ones. Outline blocks are transparent but solid. Hitting a wall kills in ALL modes, including the vertical face of a ramp. Your smaller hazard hitbox still forgives edge grazes. Background blocks never collide. Rings: tap or press Space while reaching a glowing ring for a midair jump, once per ring per run. Purple and red rings bounce one and five blocks; a white ring takes any colour and height. A dark blue gravity ring flips your gravity and you drop the new way at once; a green one flips it and bounces you away from the new gravity. UP and DOWN portals drop you the new way at once too. Hold on a pink dash orb and you dash the way it points, with no gravity, until you let go: turn it with the angle slider to aim it. A yellow dash orb flips your gravity as well. EDIT OBJECT switches a piece to NO TOUCH (seen, never touched), HIDDEN (touched, never seen in play; faint in the editor), WALL PASS (its sides stop you, like a W) or ROOF PASS (you bump your head, like an R). Wall pass (W) and roof pass (R) are invisible in play: lay them over blocks, or right where you hit them. While you touch a W, a wall stops you instead of crashing you, and a jump over it carries on; while you touch an R, you bump your head and fall back instead of crashing. Spikes still kill. Ramps: walk up or down the white diagonal slope. Curves are rounded ramps: a scoop bends up like a skate ramp, a hill bulges out: run into its side and you ride up it. Find RINGS and RAMP tabs in the editor. In the editor, pinch a selected piece with two fingers to size it and turn it, like cropping a photo; Snap holds 15 degrees and quarter sizes. MULTI selects a group: tap pieces to add them, or swipe a box over a lot of them, then move, turn, flip, copy or delete them together. Edge, parallel, outer corner, inner corner and no outline blocks are solid blocks with the white line on only some sides (or none, for the middle of a shape), so a big shape reads as one piece: turn them to face the outside, and pick EDGES on any selected block. Coins: touch one to pick it up; a level holds up to 10, and your best is the most you picked up in one finished run. Triggers are invisible in play and fire once when you run past them. Give pieces a GROUP ID in EDIT OBJECT, then a MOVE trigger slides every piece in that group some blocks over a time you choose, and a COLOR trigger paints them a colour. Find them on the COINS and TRIGGERS tabs.",
+      "Square: tap or press Space to jump onto two-block ledges. Hold for another jump when you land. Pogo: same as square, but every fresh tap lets you jump again in midair. Jump before a wall to clear it. Try Air Steps! Plane: hold to fly against gravity; release to fall. Landings and ceiling contact are safe while flying, but wall impacts kill. Angle: hold to climb at 45 degrees, release to dive at 45 degrees. The floor and the ceiling are safe to slide along; touching any block, ramp or curve is a crash, unless a W stops you at its side or an R bumps your head. Wheel: land on a block, floor or ceiling, then tap or press Space to flip gravity. Midair taps are ignored; holding does not flip again when you land. Croissant: land, then tap to teleport straight across to the floor, ceiling or block on the other side, with gravity flipped. UP and DOWN portals set gravity without changing your shape. Speed portals change how fast you move forward: SLOW, 1X, FAST and FASTER. Shape and gravity stay the same. Under upside-down gravity, land and jump on ceilings. All spikes kill, including the tiny quarter-size ones. Outline blocks are transparent but solid. Hitting a wall kills in ALL modes, including the vertical face of a ramp. Your smaller hazard hitbox still forgives edge grazes. Background blocks never collide. Rings: tap or press Space while reaching a glowing ring for a midair jump, once per ring per run. Purple and red rings bounce one and five blocks; a white ring takes any colour and height. A dark blue gravity ring flips your gravity and you drop the new way at once; a green one flips it and bounces you away from the new gravity. UP and DOWN portals drop you the new way at once too. Hold on a pink dash orb and you dash the way it points, with no gravity, until you let go: turn it with the angle slider to aim it. A yellow dash orb flips your gravity as well. A black ring sends you down fast, as if you had been falling for a while; a gray ring stops your rise or fall. Boosters are flat pads with no tap: touch one and it does what its ring does, once each time you land on it. Turn one upside down for a ceiling. The Size slider (or a pinch) sizes any piece but a trigger.EDIT OBJECT switches a piece to NO TOUCH (seen, never touched), HIDDEN (touched, never seen in play; faint in the editor), WALL PASS (its sides stop you, like a W) or ROOF PASS (you bump your head, like an R). Wall pass (W) and roof pass (R) are invisible in play: lay them over blocks, or right where you hit them. While you touch a W, a wall stops you instead of crashing you, and a jump over it carries on; while you touch an R, you bump your head and fall back instead of crashing. Spikes still kill. Ramps: walk up or down the white diagonal slope. Curves are rounded ramps: a scoop bends up like a skate ramp, a hill bulges out: run into its side and you ride up it. Find RINGS and RAMP tabs in the editor. In the editor, pinch a selected piece with two fingers to size it and turn it, like cropping a photo; Snap holds 15 degrees and quarter sizes. MULTI selects a group: tap pieces to add them, or swipe a box over a lot of them, then move, turn, flip, copy or delete them together. Edge, parallel, outer corner, inner corner and no outline blocks are solid blocks with the white line on only some sides (or none, for the middle of a shape), so a big shape reads as one piece: turn them to face the outside, and pick EDGES on any selected block. Coins: touch one to pick it up; a level holds up to 10, and your best is the most you picked up in one finished run. Triggers are invisible in play and fire once when you run past them. Give pieces a GROUP ID in EDIT OBJECT, then a MOVE trigger slides every piece in that group some blocks over a time you choose, and a COLOR trigger paints them a colour. Find them on the COINS and TRIGGERS tabs.",
     );
   }
   // Every check says what it found, so a tap never looks like nothing happened. A pull is
@@ -1716,7 +1741,7 @@
           step="1"
           aria-label="Angle"
           value={selection?.rotation ?? 0}
-          disabled={!selection || !(SCALABLE.includes(selection.type) || selection.dash)}
+          disabled={!selection || !(TURNABLE.includes(selection.type) || selection.dash)}
           oninput={(e) => setAngle(+e.currentTarget.value)}
         /></label
       ><label
@@ -1738,7 +1763,7 @@
           step="0.25"
           aria-label="Bounce height"
           value={selection?.bounce ?? RING_BOUNCE}
-          disabled={selection?.type !== "ring" || selection.flipsGravity || selection.dash}
+          disabled={selection?.type !== "ring" || selection.flipsGravity || selection.dash || selection.drop || selection.stop}
           oninput={(e) => setRing({ bounce: +e.currentTarget.value })}
         /></label
       ><label
@@ -1784,12 +1809,12 @@
           : group.length > 1
           ? `${group.length} PIECES · MOVE, TURN, FLIP, COPY OR DELETE THEM TOGETHER`
           : selection
-          ? `${labelOf(selection.type)} · x ${selection.x.toFixed(2)} / y ${selection.y.toFixed(2)} · ${selection.rotation}° · ×${(selection.scale ?? 1).toFixed(2)}${selection.type === "ring" ? (selection.dash ? (selection.flipsGravity ? " · ➤ DASH + GRAVITY" : " · ➤ DASH") : selection.flipsGravity ? (selection.boost ? " · ⇈ GRAVITY + BOUNCE" : " · ⇅ GRAVITY") : ` · ↑${selection.bounce ?? RING_BOUNCE}`) : ""}${selection.edges ? ` · ${EDGE_NAMES.find(([v]) => v === selection.edges)?.[1]}` : ""}${OPTIONS.filter(([key]) => selection[key]).map(([, name]) => ` · ${name}`).join("")}${selection.group ? ` · GROUP ${selection.group}` : ""}${triggerText(selection)}`
+          ? `${labelOf(selection.type)} · x ${selection.x.toFixed(2)} / y ${selection.y.toFixed(2)} · ${selection.rotation}° · ×${(selection.scale ?? 1).toFixed(2)}${selection.type === "ring" ? (selection.dash ? (selection.flipsGravity ? " · ➤ DASH + GRAVITY" : " · ➤ DASH") : selection.flipsGravity ? (selection.boost ? " · ⇈ GRAVITY + BOUNCE" : " · ⇅ GRAVITY") : selection.drop ? " · ↓ DROP" : selection.stop ? " · − STOP" : ` · ↑${selection.bounce ?? RING_BOUNCE}`) : ""}${selection.edges ? ` · ${EDGE_NAMES.find(([v]) => v === selection.edges)?.[1]}` : ""}${OPTIONS.filter(([key]) => selection[key]).map(([, name]) => ` · ${name}`).join("")}${selection.group ? ` · GROUP ${selection.group}` : ""}${triggerText(selection)}`
           : tool === "select"
             ? "Tap an object to select it."
             : tool === "multi"
               ? "Tap pieces to add them, or swipe a box over a lot of them."
-            : `Tap the grid to place ${tool === "half" ? "a half spike" : article(tool in presets ? tool.replace("-", " ") : tool.startsWith("speed-") ? labelOf(tool).toLowerCase() + " portal" : tool)}.`}{layer ===
+            : `Tap the grid to place ${tool === "half" ? "a half spike" : article(tool in presets ? tool.replace("-", " ") : tool.startsWith("speed-") ? labelOf(tool).toLowerCase() + " portal" : PADS.includes(tool) ? labelOf(tool).toLowerCase() : tool)}.`}{layer ===
         "background"
           ? " · BACKGROUND: no collision"
           : ""}</output

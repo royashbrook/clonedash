@@ -34,6 +34,9 @@ test('the pinch starts from the piece as it is, clamps to the size bounds, and q
   assert.deepEqual(pinchTransform(q, [0, 0], [0, 100], false, false), { scale: 1, rotation: 270 });
   const nudge = [100 * Math.cos(-20 * Math.PI / 180), 100 * Math.sin(-20 * Math.PI / 180)];
   assert.equal(pinchTransform(q, [0, 0], nudge, false, false).rotation, 0, 'twenty degrees is not yet a quarter turn');
+  // #106: a ring or portal takes a size from the pinch but still turns only in quarter turns
+  assert.deepEqual(pinchTransform(q, [0, 0], nudge.map((v) => v * 3), false, true, false), { scale: 3, rotation: 0 });
+  assert.deepEqual(pinchTransform(q, [0, 0], [0, 200], true, true, false), { scale: 2, rotation: 270 });
   // fingers on the same point never divide by zero
   const z = pinchStart([5, 5], [5, 5], 1, 0);
   assert.ok(Number.isFinite(pinchTransform(z, [5, 5], [50, 5], true, true).scale));

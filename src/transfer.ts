@@ -26,7 +26,7 @@ function portableLevel(input: unknown): Level {
     ...(level.note === undefined ? {} : { note: level.note }),
     ...(level.color === undefined ? {} : { color: level.color }),
     objects: level.objects.map(
-      ({ type, x, y, rotation, flipX, flipY, layer, scale, color, bounce, flipsGravity, boost, dash, noTouch, hidden, wallPass, roofPass, edges, group, target, moveX, moveY, duration }) => ({
+      ({ type, x, y, rotation, flipX, flipY, layer, scale, color, bounce, flipsGravity, boost, dash, drop, stop, noTouch, hidden, wallPass, roofPass, edges, group, target, moveX, moveY, duration }) => ({
         type,
         x,
         y,
@@ -52,6 +52,9 @@ function portableLevel(input: unknown): Level {
         ...(moveX === undefined ? {} : { moveX }),
         ...(moveY === undefined ? {} : { moveY }),
         ...(duration === undefined ? {} : { duration }),
+        // the black and gray rings (2026-11, #106): new optional fields, the same way
+        ...(drop === undefined ? {} : { drop }),
+        ...(stop === undefined ? {} : { stop }),
       }),
     ),
   };

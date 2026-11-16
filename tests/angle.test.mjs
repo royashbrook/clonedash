@@ -127,5 +127,7 @@ test('the angle portal switches mode, is a portal for placement and validation, 
   }
   assert.doesNotThrow(() => validateLevel({ ...empty, objects: [object('angle', 10, 1)] }));
   assert.throws(() => validateLevel({ ...empty, objects: [{ ...object('angle', 10, 1), rotation: 45 }] }), /Invalid object/);
-  assert.throws(() => validateLevel({ ...empty, objects: [{ ...object('angle', 10, 1), scale: 2 }] }), /Invalid scale/);
+  // a portal takes a size since #106 (tests/size.test.mjs), never past the bounds
+  assert.doesNotThrow(() => validateLevel({ ...empty, objects: [{ ...object('angle', 10, 1), scale: 2 }] }));
+  assert.throws(() => validateLevel({ ...empty, objects: [{ ...object('angle', 10, 1), scale: 5 }] }), /Invalid scale/);
 });

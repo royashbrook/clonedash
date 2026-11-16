@@ -80,20 +80,47 @@ export const MAX_COINS = 10;
 export const TRIGGERS = ["move-trigger", "color-trigger"];
 export const MAX_GROUP = 99;
 export const MAX_TRIGGER_TIME = 30; // seconds, so every move and fade finishes inside a run
-export const TYPES = [...BLOCKS, ...ZONES, ...SPIKES, ...PORTALS, ...SLOPES, "ring", "coin", ...TRIGGERS];
+// Boosters (#106): flat pads that fire on touch, no tap, each doing what one ring does (the
+// fields of that ring). docs/ramps-and-boosters.md rule 4.
+export const PADS = ["yellow-pad", "pink-pad", "red-pad", "blue-pad", "green-pad", "black-pad", "gray-pad"];
+export const PAD_EFFECTS: Record<string, Effect> = {
+  "yellow-pad": {},
+  "pink-pad": { bounce: 1 },
+  "red-pad": { bounce: 5 },
+  "blue-pad": { flipsGravity: true },
+  "green-pad": { flipsGravity: true, boost: true },
+  "black-pad": { drop: true },
+  "gray-pad": { stop: true },
+};
+// the strip a booster fires from, in its own cell: the bottom quarter, a tenth in from each side
+const PAD_STRIP = [
+  [0.1, 0],
+  [0.9, 0],
+  [0.9, 0.25],
+  [0.1, 0.25],
+];
+// The black ring and booster: a fast drop in the current gravity's direction, set once (1.5 s of
+// the level's gravity). Not a fall limit; there is none.
+export const DROP_SPEED = 24;
+type Effect = Pick<Piece, "bounce" | "flipsGravity" | "boost" | "drop" | "stop">;
+export const TYPES = [...BLOCKS, ...ZONES, ...SPIKES, ...PORTALS, ...SLOPES, "ring", "coin", ...TRIGGERS, ...PADS];
 // Ids that were renamed after they had been stored. validateLevel accepts the old id and returns
 // the new one, so an old save, share code or link still loads; nothing writes the old id again.
 export const LEGACY_TYPES: Partial<Record<string, ObjectType>> = {
   jumper: "pogo", // 2026-09-29, the stored id followed the POGO label (#33)
 };
-export const SCALABLE = [...BLOCKS, ...ZONES, ...SPIKES, ...SLOPES]; // pieces that take a scale; rings and portals stay 1x
+// Pieces that turn to any angle; every other piece turns in quarter turns (the dash orb aims too).
+export const TURNABLE = [...BLOCKS, ...ZONES, ...SPIKES, ...SLOPES];
+// Pieces that take a size (#106): everything with a body. Triggers have none.
+export const SCALABLE = TYPES.filter((t) => !TRIGGERS.includes(t));
+export const scaleOf = (o: Piece) => (SCALABLE.includes(o.type) ? (o.scale ?? 1) : 1);
 // Blocks drawn with a white outline take an edges field (types.ts Edges); NO BORDER has none.
 export const OUTLINED = ["block", "grid", "black", "outline"];
 export const EDGES = ["edge", "parallel", "outer", "inner", "none"];
 // A ring with no bounce field is the original: JUMP, a 2.25 block peak. A set bounce is the peak
 // height in blocks, so the launch speed is the one that reaches it under level gravity.
 export const RING_BOUNCE = 2.25;
-export const ringSpeed = (o: Piece) =>
+export const ringSpeed = (o: Pick<Piece, "bounce">) =>
   o.bounce === undefined ? JUMP : Math.sqrt(2 * GRAVITY * o.bounce);
 export const levelHeight = (level: Level) => level.height ?? 7;
 export const COIN_RADIUS = 0.3; // a coin is a disc in the middle of its cell
@@ -122,6 +149,33 @@ export function pieceSize(o: Piece) {
     h: portal ? 2.5 : o.type === "half" ? 0.5 : scale,
   };
 }
+// Where a point of a piece's unturned box (0..w by 0..h) lies in the world. A sized piece grows
+// from its own base, in its own turned frame: a floor spike stays on the floor and grows up, a
+// ceiling spike stays on the ceiling and grows down, a block grows up and sideways. At size 1 the
+// shift is zero and the shape is the legacy one. The outline (polygon), a ring's centre and every
+// reader of a piece's shape go through this one transform (#106).
+function frame(o: Piece) {
+  const { w, h } = pieceSize(o),
+    a = (o.rotation * Math.PI) / 180,
+    quarter = o.rotation % 90 === 0,
+    // quarter turns stay exactly axis-aligned (no 6e-17 drift into saved geometry); any other
+    // angle is a real rotation.
+    c = quarter ? Math.round(Math.cos(a)) : Math.cos(a),
+    s = quarter ? Math.round(Math.sin(a)) : Math.sin(a),
+    k = scaleOf(o);
+  return (x: number, y: number): Point => {
+    x = (x - w / 2) * k * (o.flipX ? -1 : 1);
+    y = (y - h / 2) * k * (o.flipY ? -1 : 1) + ((k - 1) * h) / 2;
+    return [o.x + w / 2 + x * c - y * s, o.y + h / 2 + x * s + y * c];
+  };
+}
+export const pointOf = (o: Piece, x: number, y: number) => frame(o)(x, y);
+// How far a piece's shape can lie from its anchor x, either way, at any turn, flip or size: the
+// contact pass skips a piece only past this.
+export function reach(o: Piece) {
+  const { w, h } = pieceSize(o);
+  return w / 2 + scaleOf(o) * (Math.hypot(w, h) / 2 + h / 2);
+}
 export function polygon(o: Piece): Point[] {
   const { w, h } = pieceSize(o);
   const points = CURVES.includes(o.type)
@@ -137,6 +191,8 @@ export function polygon(o: Piece): Point[] {
           0.5 + (o.type === "coin" ? COIN_RADIUS : 0.45) * Math.cos((i * Math.PI) / 8),
           0.5 + (o.type === "coin" ? COIN_RADIUS : 0.45) * Math.sin((i * Math.PI) / 8),
         ])
+      : PADS.includes(o.type)
+        ? PAD_STRIP
       : SPIKES.includes(o.type)
         ? [
             [0, 0],
@@ -149,21 +205,8 @@ export function polygon(o: Piece): Point[] {
             [w, h],
             [0, h],
           ];
-  const a = (o.rotation * Math.PI) / 180,
-    quarter = o.rotation % 90 === 0,
-    // quarter turns stay exactly axis-aligned (no 6e-17 drift into saved geometry); any other
-    // angle is a real rotation.
-    c = quarter ? Math.round(Math.cos(a)) : Math.cos(a),
-    s = quarter ? Math.round(Math.sin(a)) : Math.sin(a);
-  // A scaled piece grows from its own base, in its own rotated frame: a floor spike stays on
-  // the floor and grows up, a ceiling spike stays on the ceiling and grows down, a block grows
-  // up and sideways. At scale 1 the shift is zero and the shape is the legacy one.
-  const k = SCALABLE.includes(o.type) ? (o.scale ?? 1) : 1;
-  return points.map(([x, y]) => {
-    x = (x - w / 2) * k * (o.flipX ? -1 : 1);
-    y = (y - h / 2) * k * (o.flipY ? -1 : 1) + ((k - 1) * h) / 2;
-    return [o.x + w / 2 + x * c - y * s, o.y + h / 2 + x * s + y * c];
-  });
+  const at = frame(o);
+  return points.map(([x, y]) => at(x, y));
 }
 // The collision test only holds for convex shapes. A scoop curves inward, so it is checked as a
 // fan of thin triangles from its corner, which together are exactly its area; every other piece
@@ -209,10 +252,12 @@ export function effects(level: Level): { fx: RunEffects; level: Level } | null {
     triggers: number[] = [],
     groups = new Map<number, number[]>();
   let coinTotal = 0,
-    moves = false;
+    moves = false,
+    pads = false;
   for (let i = 0; i < n; i++) {
     const o = level.objects[i];
     if (o.type === "coin") coinTotal++;
+    if (PADS.includes(o.type)) pads = true;
     if (TRIGGERS.includes(o.type)) {
       triggers.push(i);
       if (o.type === "move-trigger") moves = true;
@@ -223,7 +268,7 @@ export function effects(level: Level): { fx: RunEffects; level: Level } | null {
       else groups.set(o.group, [i]);
     }
   }
-  if (!coinTotal && !triggers.length) return null;
+  if (!coinTotal && !triggers.length && !pads) return null;
   return {
     fx: {
       coinTotal,
@@ -238,6 +283,7 @@ export function effects(level: Level): { fx: RunEffects; level: Level } | null {
       tint: new Float64Array(n * 8),
       fade: new Float64Array(n),
       tinted: new Uint8Array(n),
+      pads: [],
     },
     level: moves ? { ...level, objects: level.objects.map((o) => ({ ...o })) } : level,
   };
@@ -268,10 +314,27 @@ function baseState(level: Level): GameState {
     level,
   };
 }
+// A ring is reached when the player's box comes within its reach of the ring's centre. A sized ring
+// has its centre where its drawing has it (grown from its base) and a reach as many times as large.
+// The black and gray rings are not ready in angle mode (#106 rule 3b).
 export function ringReady(s: GameState, o: Piece, index: number) {
-  const dx = Math.max(s.x - (o.x + 0.5), 0, o.x + 0.5 - s.x - SIZE);
-  const dy = Math.max(s.y - (o.y + 0.5), 0, o.y + 0.5 - s.y - SIZE);
-  return !o.noTouch && !s.usedRings.includes(index) && dx * dx + dy * dy <= 0.6 * 0.6;
+  if (s.mode === "angle" && (o.drop || o.stop)) return false;
+  const [cx, cy] = pointOf(o, 0.5, 0.5),
+    r = 0.6 * scaleOf(o);
+  const dx = Math.max(s.x - cx, 0, cx - s.x - SIZE);
+  const dy = Math.max(s.y - cy, 0, cy - s.y - SIZE);
+  return !o.noTouch && !s.usedRings.includes(index) && dx * dx + dy * dy <= r * r;
+}
+// What a ring or a booster does to the run; a booster does what its ring does (#106). A black ring
+// or booster sends you down at DROP_SPEED, a gray one stops your rise or fall, both once.
+function launch(s: GameState, e: Effect) {
+  if (e.flipsGravity) {
+    s.gravity *= -1;
+    s.vy = e.boost ? -s.gravity * ringSpeed(e) : s.gravity * FALL;
+  } else if (e.drop) s.vy = s.gravity * DROP_SPEED;
+  else if (e.stop) s.vy = 0;
+  else s.vy = -s.gravity * ringSpeed(e);
+  s.grounded = false;
 }
 // Moves and fades follow the run's own clock (state.time), never the wall clock, so pausing
 // freezes them and a replay of the same input sees the same frames.
@@ -429,6 +492,9 @@ export function step(
   const ring = s.level.objects.findIndex(
     (o, i) => o.type === "ring" && (o.dash ? held : tapped) && ringReady(s, o, i),
   );
+  // a black or gray ring that fires is the step's last word on the speed (#106 rule 3b): it ends a
+  // dash and that step's square or pogo jump does not happen
+  let halt = false;
   if (ring >= 0) {
     s.usedRings.push(ring);
     const o = s.level.objects[ring];
@@ -438,11 +504,12 @@ export function step(
     if (o.dash) {
       s.dash = dashClimb(o);
       if (o.flipsGravity) s.gravity *= -1;
-    } else if (o.flipsGravity) {
-      s.gravity *= -1;
-      s.vy = o.boost ? -s.gravity * ringSpeed(o) : s.gravity * FALL;
-    } else s.vy = -s.gravity * ringSpeed(o);
-    s.grounded = false;
+      s.grounded = false;
+    } else launch(s, o);
+    if (o.drop || o.stop) {
+      s.dash = null;
+      halt = true;
+    }
   }
   if (ring < 0 && s.mode === "wheel" && s.grounded && tapped) {
     s.gravity *= -1;
@@ -455,8 +522,9 @@ export function step(
     s.vy = 0;
   }
   if (
-    ((s.mode === "square" || s.mode === "pogo") && s.grounded && held) ||
-    (s.mode === "pogo" && tapped)
+    !halt &&
+    (((s.mode === "square" || s.mode === "pogo") && s.grounded && held) ||
+      (s.mode === "pogo" && tapped))
   ) {
     s.vy = -s.gravity * JUMP;
     s.grounded = false;
@@ -501,12 +569,16 @@ function settle(
   dt: number,
 ) {
   if (fx.movers.length) moveAll(s, fx);
-  const { x, y, vy, grounded, status, wall, speed, gravity, mode, touchingPortals } = s,
-    coins = fx.coins;
+  // the boosters touched before the step and the dash a booster ends go back too, so a booster
+  // fires in the second pass exactly when it really touches the moved pose (#106 rule 4f)
+  const { x, y, vy, grounded, status, wall, speed, gravity, mode, touchingPortals, dash } = s,
+    coins = fx.coins,
+    pads = fx.pads;
   fx.picked.length = 0;
   contact(s, oldX, oldY, wasGrounded, height, forward, dt);
   if (!runTriggers(s, fx)) return;
-  Object.assign(s, { x, y, vy, grounded, status, wall, speed, gravity, mode, touchingPortals });
+  Object.assign(s, { x, y, vy, grounded, status, wall, speed, gravity, mode, touchingPortals, dash });
+  fx.pads = pads;
   for (const i of fx.picked) fx.got[i] = 0;
   fx.coins = coins;
   fx.picked.length = 0;
@@ -537,6 +609,7 @@ function contact(
   }
   s.wall = null;
   const touching = [],
+    pads: number[] = [],
     body = playerPolygon(s),
     inZone = (type: string) =>
       s.level.objects.some((o) => o.type === type && intersects(body, polygon(o))),
@@ -546,8 +619,14 @@ function contact(
     const o = s.level.objects[i];
     if (o.layer === "background" || o.noTouch) continue;
     if (o.type === "ring" || ZONES.includes(o.type) || TRIGGERS.includes(o.type)) continue;
-    const reach = 2 * (o.scale ?? 1); // a scaled piece is wider than its anchor cell
-    if (o.x > s.x + reach || o.x < s.x - reach) continue;
+    // past its reach a piece cannot touch the body this step (its old x included), at any size
+    const r = reach(o);
+    if (o.x - r > s.x + SIZE + 1 || o.x + r < s.x - 1) continue;
+    if (PADS.includes(o.type)) {
+      // a booster is never solid: what it does is decided once the step's contact is done
+      if (intersects(playerPolygon(s), polygon(o))) pads.push(i);
+      continue;
+    }
     if (o.type === "coin") {
       // the whole body picks a coin up, like it touches a portal; a coin never blocks or kills
       if (s.fx && !s.fx.got[i] && intersects(body, polygon(o))) {
@@ -695,6 +774,18 @@ function contact(
     }
   }
   s.touchingPortals = touching;
+  // Boosters (#106 rule 4): after every portal and support, so a booster's speed is the step's
+  // last word. The first one the body newly touches, in authored order, fires; the rest count as
+  // touched. One stays touched, and silent, until the body leaves it. Inert in angle mode.
+  if (s.fx) {
+    if (s.mode === "angle") pads.length = 0;
+    const fire = s.status === "playing" ? pads.find((i) => !s.fx!.pads.includes(i)) : undefined;
+    if (fire !== undefined) {
+      launch(s, PAD_EFFECTS[s.level.objects[fire].type]);
+      s.dash = null;
+    }
+    s.fx.pads = pads;
+  }
 }
 export function validateLevel(input: unknown): Level {
   // The assertion only gives names to the shape; every persisted field is checked below.
@@ -736,7 +827,7 @@ export function validateLevel(input: unknown): Level {
       o.x > raw.length - 2 ||
       o.y < -0.5 ||
       o.y > height - 1 ||
-      (SCALABLE.includes(o.type) || o.dash === true // a dash orb aims at any angle
+      (TURNABLE.includes(o.type) || o.dash === true // a dash orb aims at any angle
         ? !(Number.isFinite(o.rotation) && o.rotation >= 0 && o.rotation < 360)
         : ![0, 90, 180, 270].includes(o.rotation)) ||
       typeof o.flipX !== "boolean" ||
@@ -778,6 +869,19 @@ export function validateLevel(input: unknown): Level {
       (o.type !== "ring" || o.dash !== true || o.boost || o.bounce !== undefined)
     )
       throw Error("Invalid dash orb");
+    // the black and gray rings (#106 rule 3d): one effect each, never mixed with another
+    for (const key of ["drop", "stop"] as const)
+      if (
+        o[key] !== undefined &&
+        (o.type !== "ring" ||
+          o[key] !== true ||
+          o.bounce !== undefined ||
+          o.flipsGravity !== undefined ||
+          o.boost !== undefined ||
+          o.dash !== undefined ||
+          (key === "drop" && o.stop !== undefined))
+      )
+        throw Error("Invalid drop or stop ring");
     const trigger = TRIGGERS.includes(o.type);
     // a coin is always there to pick up, so it can be hidden (a secret coin) but never no-touch
     if (o.noTouch !== undefined && (o.noTouch !== true || ZONES.includes(o.type) || trigger || o.type === "coin"))
@@ -822,7 +926,11 @@ export function validateLevel(input: unknown): Level {
       throw Error("Invalid layer");
     if (o.layer === "background" && !BLOCKS.includes(o.type) && !ZONES.includes(o.type))
       throw Error("Only blocks go in the background");
-    if (raw.height !== undefined && bounds(o).top > height + 0.00001)
+    // A sized ring, portal, coin or booster (new in #106) fits under the ceiling, the default 7 too.
+    // Other pieces keep the check they had, only on a level that sets its height, so a default
+    // height level saved before still loads.
+    const sizedNew = o.scale !== undefined && !TURNABLE.includes(o.type);
+    if ((raw.height !== undefined || sizedNew) && bounds(o).top > height + 0.00001)
       throw Error("Object above ceiling");
   }
   // every reader comes through here (saves, share codes, copies), so the cap holds for all of them

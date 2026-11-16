@@ -11,6 +11,10 @@ import {
   tintOf,
   TRIGGERS,
   COIN_RADIUS,
+  PADS,
+  pointOf,
+  reach,
+  scaleOf,
 } from "./engine.ts";
 import type { GameState, Level } from "./types.ts";
 // A colour trigger's colour laid over a piece's own colour (#rrggbb), for the pieces drawn in one
@@ -22,6 +26,16 @@ function over(base: string, t: Float64Array | null) {
   return `#${hex(at(0) + (t[0] - at(0)) * t[3])}${hex(at(1) + (t[1] - at(1)) * t[3])}${hex(at(2) + (t[2] - at(2)) * t[3])}`;
 }
 export const COIN = "#ffd166";
+// a booster is drawn in the colour of the ring it matches (#106)
+export const PAD_LOOK: Record<string, string> = {
+  "yellow-pad": "#ffd166",
+  "pink-pad": "#ff8ac4",
+  "red-pad": "#ff5c7a",
+  "blue-pad": "#2b4cff",
+  "green-pad": "#9aff6b",
+  "black-pad": "#000000",
+  "gray-pad": "#9a9a9a",
+};
 const TRIGGER_LOOK: Record<string, [string, string]> = {
   "move-trigger": ["#53e3ff", "MOVE"],
   "color-trigger": ["#ff8ac4", "COLOR"],
@@ -200,8 +214,17 @@ export function render(
       if (o.type === "coin" && state?.fx?.got[index]) return; // picked up this run
       const k = o.scale ?? 1; // a scaled piece reaches further than its anchor cell
       // o is the run's own moved piece in play, so a piece a trigger moves into view is drawn
-      // where it collides
-      if (X(o.x) < -unit * 2 * k || X(o.x) > w + unit * k) return;
+      // where it collides. An unsized piece keeps the cull it always had; a sized one is culled by
+      // how far its shape reaches (#106), the same reach the contact pass uses.
+      if (
+        o.scale === undefined
+          ? X(o.x) < -unit * 2 || X(o.x) > w + unit
+          : X(o.x + reach(o)) < 0 || X(o.x - reach(o)) > w
+      )
+        return;
+      // where a round piece's middle is, and how many times its drawing is grown (rule 5b)
+      const s = scaleOf(o),
+        [mx, my] = pointOf(o, 0.5, 0.5);
       // a colour trigger's colour, read on the run's clock (null for an untouched piece)
       const tint = state?.fx ? tintOf(state.fx, index, state.time) : null;
       ctx.save();
@@ -220,26 +243,35 @@ export function render(
         ctx.strokeStyle = active ? "#ffffff" : c;
         ctx.lineWidth = active ? 4 : 3;
         ctx.beginPath();
-        ctx.arc(X(o.x + 0.5), Y(o.y + 0.5), unit * 0.45, 0, Math.PI * 2);
+        ctx.arc(X(mx), Y(my), unit * 0.45 * s, 0, Math.PI * 2);
         ctx.stroke();
         ctx.strokeStyle = `${c}66`;
         ctx.lineWidth = 1;
         ctx.beginPath();
-        ctx.arc(X(o.x + 0.5), Y(o.y + 0.5), unit * 0.6, 0, Math.PI * 2);
+        ctx.arc(X(mx), Y(my), unit * 0.6 * s, 0, Math.PI * 2);
         ctx.stroke();
-        if (o.flipsGravity || o.dash) {
-          // gravity rings and the dash orb are orbs: filled, so they read apart from the jump rings
+        if (o.flipsGravity || o.dash || o.drop || o.stop) {
+          // gravity rings, the dash orb and the black and gray rings are orbs: filled, so they read
+          // apart from the jump rings
           ctx.fillStyle = `${c}88`;
           ctx.beginPath();
-          ctx.arc(X(o.x + 0.5), Y(o.y + 0.5), unit * 0.45, 0, Math.PI * 2);
+          ctx.arc(X(mx), Y(my), unit * 0.45 * s, 0, Math.PI * 2);
           ctx.fill();
+        }
+        if ((o.drop || o.stop) && !active) {
+          // a thin white rim, so a black orb shows on the dark sky
+          ctx.strokeStyle = "#ffffff";
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.arc(X(mx), Y(my), unit * 0.45 * s, 0, Math.PI * 2);
+          ctx.stroke();
         }
         if (o.dash) {
           // a > turned the way the orb points (the canvas y runs down, so the turn is negated)
           const a = (-o.rotation * Math.PI) / 180,
-            r = unit * 0.2,
+            r = unit * 0.2 * s,
             at = (x: number, y: number) =>
-              [X(o.x + 0.5) + x * Math.cos(a) - y * Math.sin(a), Y(o.y + 0.5) + x * Math.sin(a) + y * Math.cos(a)] as const;
+              [X(mx) + x * Math.cos(a) - y * Math.sin(a), Y(my) + x * Math.sin(a) + y * Math.cos(a)] as const;
           ctx.strokeStyle = "#ffffff";
           ctx.lineWidth = 3;
           ctx.beginPath();
@@ -248,20 +280,34 @@ export function render(
           ctx.lineTo(...at(-r * 0.6, r));
           ctx.stroke();
         } else {
-          ctx.fillStyle = o.flipsGravity ? "#ffffff" : c;
-          ctx.font = `bold ${unit * 0.4}px system-ui`;
+          const down = (state?.gravity ?? -1) < 0;
+          ctx.fillStyle = o.flipsGravity || o.drop || o.stop ? "#ffffff" : c;
+          ctx.font = `bold ${unit * 0.4 * s}px system-ui`;
           ctx.textAlign = "center";
           ctx.textBaseline = "middle";
           ctx.fillText(
-            o.flipsGravity ? (o.boost ? "⇈" : "⇅") : (state?.gravity ?? -1) > 0 ? "↓" : "↑",
-            X(o.x + 0.5),
-            Y(o.y + 0.5),
+            o.flipsGravity
+              ? o.boost
+                ? "⇈"
+                : "⇅"
+              : o.drop // the black ring's arrow points the way gravity pulls
+                ? down
+                  ? "↓"
+                  : "↑"
+                : o.stop
+                  ? "−"
+                  : down
+                    ? "↑"
+                    : "↓",
+            X(mx),
+            Y(my),
           );
         }
         ctx.restore();
       } else if (PORTALS.includes(o.type)) {
-        const x = X(o.x + 0.3),
-          y = Y(o.y + 1.25),
+        const [px, py] = pointOf(o, 0.3, 1.25),
+          x = X(px),
+          y = Y(py),
           [look, label, icon] = portalLook[o.type],
           c = over(look, tint);
         ctx.save();
@@ -272,8 +318,8 @@ export function render(
         ctx.ellipse(
           x,
           y,
-          unit * 0.3,
-          unit * 1.25,
+          unit * 0.3 * s,
+          unit * 1.25 * s,
           (-o.rotation * Math.PI) / 180,
           0,
           Math.PI * 2,
@@ -283,30 +329,47 @@ export function render(
         ctx.fillStyle = c;
         ctx.font = `bold ${Math.max(12, unit * 0.28)}px system-ui`;
         ctx.textAlign = "center";
-        ctx.fillText(label, x, y - unit * 1.4);
+        ctx.fillText(label, x, y - unit * 1.4 * s);
         ctx.translate(x, y);
         ctx.rotate((-o.rotation * Math.PI) / 180);
         ctx.scale(o.flipX ? -1 : 1, o.flipY ? -1 : 1);
         ctx.strokeStyle = "#fff";
         ctx.lineWidth = 2;
         ctx.fillStyle = "#fff";
-        ctx.font = `bold ${unit * 0.55}px system-ui`;
+        ctx.font = `bold ${unit * 0.55 * s}px system-ui`;
         ctx.textBaseline = "middle";
         ctx.fillText(icon, 0, 0);
         ctx.restore();
       } else if (o.type === "coin") {
         const c = over(COIN, tint),
-          r = unit * COIN_RADIUS;
+          r = unit * COIN_RADIUS * s;
         ctx.fillStyle = c;
         ctx.strokeStyle = "#ffffff";
         ctx.lineWidth = 2;
         ctx.beginPath();
-        ctx.arc(X(o.x + 0.5), Y(o.y + 0.5), r, 0, Math.PI * 2);
+        ctx.arc(X(mx), Y(my), r, 0, Math.PI * 2);
         ctx.fill();
         ctx.stroke();
         ctx.strokeStyle = "#b8860b";
         ctx.beginPath();
-        ctx.arc(X(o.x + 0.5), Y(o.y + 0.5), r * 0.6, 0, Math.PI * 2);
+        ctx.arc(X(mx), Y(my), r * 0.6, 0, Math.PI * 2);
+        ctx.stroke();
+      } else if (PADS.includes(o.type)) {
+        // a booster: its strip in its ring's colour, the face it fires from lit white
+        const p = polygon(o),
+          c = over(PAD_LOOK[o.type], tint);
+        ctx.beginPath();
+        p.forEach(([x, y], i) => (i ? ctx.lineTo(X(x), Y(y)) : ctx.moveTo(X(x), Y(y))));
+        ctx.closePath();
+        ctx.fillStyle = c;
+        ctx.fill();
+        ctx.strokeStyle = "#ffffff";
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(X(p[3][0]), Y(p[3][1]));
+        ctx.lineTo(X(p[2][0]), Y(p[2][1]));
+        ctx.lineWidth = 3;
         ctx.stroke();
       } else if (TRIGGERS.includes(o.type)) {
         // editor only: a dashed cell with what it does and the group it works on
