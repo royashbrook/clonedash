@@ -3,12 +3,22 @@ import { test, expect } from '@playwright/test';
 // TRY runs the trail over the editor grid with the palette still up. Space or a canvas tap
 // jumps, a death restarts the run, and Esc or STOP drops back to editing where the run was.
 test('TRY plays the draft over the editor, restarts on death, jumps on Space, and Esc returns at the spot', async ({ page }) => {
-  await page.clock.install();
+  await page.clock.install({ time: 0 });
   await page.addInitScript(() => {
     const piece = (type, x, y = 0) => ({ type, x, y, rotation: 0, flipX: false, flipY: false });
     localStorage.setItem('clonedash.v1', JSON.stringify({ version: 1, best: {}, sound: false, draft: { name: 'Try loop', length: 40, objects: [piece('spike', 6)] } }));
   });
-  await page.goto('/'); await page.locator('#editor-open').click();
+  await page.goto('/');
+  // paused once loaded, so only runFor moves game time: a running clock keeps ticking between
+  // steps, so a Space held back 600ms misses the spike (#111). until the pause the
+  // page clock only runs in real time from 0, so it cannot have reached this test's own timeout
+  // without the test failing first: "now plus a little" was already past when the pause arrived
+  await page.clock.pauseAt(test.info().timeout);
+  await page.locator('#editor-open').click();
+  // real time passing does not move the page's clock
+  const frozen = await page.evaluate(() => Date.now());
+  await page.waitForTimeout(300);
+  expect(await page.evaluate(() => Date.now())).toBe(frozen);
   await expect(page.locator('#try-level')).toHaveText('▶ TRY');
   await page.locator('#try-level').click();
   await expect(page.locator('#try-level')).toHaveText('■ STOP');
