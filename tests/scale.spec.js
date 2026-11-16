@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 
 // Smooth scaling from the editor: a Size slider on the transform row. Scale 1 is stored as
-// "no field" so old levels stay byte-identical; rings and portals cannot be scaled.
+// "no field" so old levels stay byte-identical.
 const stored = page => page.evaluate(() => JSON.parse(localStorage.getItem('clonedash.v1')));
 const slide = (page, value) => page.locator('#scale').evaluate((e, v) => { e.value = String(v); e.dispatchEvent(new Event('input', { bubbles: true })); }, value);
 
@@ -33,8 +33,10 @@ test('the Size slider scales a block smoothly, shows it in the readout, persists
   await slide(page, 1);
   await expect(page.locator('#selection')).toContainText('×1.00');
   expect('scale' in (await stored(page)).draft.objects[0]).toBe(false);
-  // a ring cannot be scaled
+  // a ring takes a size since #106 (rings, portals, coins and boosters all do; triggers never)
   await page.mouse.click((12 + .5) * point.unit, point.floor - 2.5 * point.unit);
   await expect(page.locator('#selection')).toContainText('RING');
-  await expect(page.locator('#scale')).toBeDisabled();
+  await expect(page.locator('#scale')).toBeEnabled();
+  await slide(page, 1.5);
+  await expect.poll(async () => (await stored(page)).draft.objects[1].scale).toBe(1.5);
 });

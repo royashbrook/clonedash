@@ -45,6 +45,7 @@
   import { importLevel } from "./transfer.ts";
   import { pinchStart, pinchTransform, type Pinch } from "./gesture.ts";
   import { duplicateGroup, inBox, transformGroup } from "./group.ts";
+  import { cellsAlong, eraseAlong, paintCell, StrokeHistory, type Step } from "./swipe.ts";
   import type {
     Edges,
     Level,
@@ -234,6 +235,24 @@
   // Two fingers on the editor canvas size and turn the selected piece (photo-crop style).
   const fingers = new Map<number, Point>();
   let pinch: Pinch | null = null;
+  // SWIPE (#106, docs/ramps-and-boosters.md rule 6): off at first, and off the editor is as it
+  // was. On, one finger paints the chosen piece, or with ERASE removes pieces, along its path
+  // (src/swipe.ts). A stroke is saved once, when it ends, as one step of a strokes-only history.
+  let swipe = $state(false),
+    canUndo = $state(false),
+    canRedo = $state(false);
+  let stroke: {
+    id: number;
+    last: Point;
+    before: Piece[];
+    group: number[];
+    placed: number;
+    changed: boolean;
+    stopped: boolean;
+    said: Set<string>;
+    visited: Set<string>;
+  } | null = null;
+  const strokes = new StrokeHistory();
   let portrait = $state(false),
     paused = false,
     testing = $state(false), // a run over the editor grid, palette still up (TRY)
@@ -344,6 +363,7 @@
     current = COURSE_ORDER.find((i) => save.best[i] !== 100) ?? COURSE_ORDER[0];
   }
   function setMode(next: Screen) {
+    endStroke();
     mode = next;
     testing = false;
     document.body.dataset.mode = next;
@@ -379,6 +399,7 @@
     closable = true,
     extra?: Sheet["extra"],
   ) {
+    endStroke(); // a sheet ends a stroke (rule 6d)
     const next = { title, text, actions, closable, extra };
     panel = next;
     await tick();
@@ -435,6 +456,7 @@
       );
     save = importLevel(localStorage, save, level, LEVELS.length);
     draft = structuredClone(save.draft);
+    forget();
     library();
     toast("Level added. Find it in My Levels.");
   }
@@ -471,6 +493,7 @@
         true,
       );
       draft = structuredClone(save.draft);
+      forget();
       select(-1);
       pan = panY = 0;
       openEditor();
@@ -534,6 +557,7 @@
       pause();
   }
   function interrupt() {
+    endStroke(); // the window lost focus or the page went away: the stroke ends (rule 6d)
     pause();
     run.interrupt();
     music.stop();
@@ -593,8 +617,11 @@
     if (mode === "editor" && !testing) {
       fingers.set(e.pointerId, [e.clientX, e.clientY]);
       capture(e.pointerId);
-      if (fingers.size === 1) editAt(e);
-      else if (fingers.size === 2 && selected >= 0 && !rotate && !panel) {
+      if (stroke) endStroke(false); // a second finger ends the stroke before a pinch (rule 6d)
+      if (fingers.size === 1) {
+        if (painting()) startStroke(e);
+        else editAt(e);
+      } else if (fingers.size === 2 && selected >= 0 && !rotate && !panel) {
         sweep = null;
         const [a, b] = [...fingers.values()],
           piece = draft.objects[selected];
@@ -756,7 +783,12 @@
     if (live()) snapshot();
     raf = requestAnimationFrame(frame);
   }
-  function saveDraft() {
+  // Every edit saves through here. Any edit but a stroke, an undo or a redo clears the strokes
+  // history, so an older stroke can never undo it (rule 6e).
+  function saveDraft(stroked = false) {
+    if (!stroked) strokes.clear();
+    canUndo = strokes.done.length > 0;
+    canRedo = strokes.undone.length > 0;
     try {
       storeDraft(save, draft);
       persist();
@@ -768,6 +800,131 @@
     draft = { ...draft, objects: [...draft.objects] };
     if (testing) run = new Run(draft); // an edit mid-run starts the run over on the new trail
   }
+  // another level in the editor: the strokes history was for the old one
+  function forget() {
+    endStroke();
+    strokes.clear();
+    canUndo = canRedo = false;
+  }
+  const painting = () => swipe && tool !== "select" && tool !== "multi";
+  function toggleSwipe() {
+    endStroke();
+    swipe = !swipe;
+    if (!swipe && tool === "erase") tool = choices[tab][0][0];
+  }
+  // a stroke says each thing it has to say once
+  function say(text: string) {
+    if (stroke && !stroke.said.has(text)) {
+      stroke.said.add(text);
+      toast(text);
+    }
+  }
+  function startStroke(e: PointerEvent) {
+    if (rotate || panel) return;
+    const view = draw(),
+      at: Point = [view.x(e.clientX), view.y(e.clientY)];
+    if (tool === "erase") group = []; // indices move as pieces go
+    stroke = {
+      id: e.pointerId,
+      last: at,
+      before: structuredClone(draft.objects),
+      group: [...group],
+      placed: -1,
+      changed: false,
+      stopped: false,
+      said: new Set(),
+      visited: new Set(),
+    };
+    strokeTo(at);
+  }
+  // the stretch of the stroke from its last sample to this one, every cell on the way (rule 6b)
+  function strokeTo(at: Point) {
+    const st = stroke!,
+      from = st.last,
+      activeLayer = layer === "background" ? "background" : undefined;
+    st.last = at;
+    if (tool === "erase") {
+      if (eraseAlong(draft, from, at, activeLayer)) st.changed = true;
+      return;
+    }
+    for (const [ox, oy] of cellsAlong(from, at, stepSize)) {
+      if (st.stopped) return;
+      const key = `${ox},${oy}`;
+      if (oy < 0 || oy >= levelHeight(draft) || st.visited.has(key)) continue;
+      st.visited.add(key);
+      const piece: Piece = { ...object(typeOf(tool), ox, oy), ...presets[tool] };
+      if (activeLayer) piece.layer = activeLayer;
+      const done = paintCell(draft, piece);
+      if (done === "placed") {
+        st.changed = true;
+        st.placed = draft.objects.length - 1;
+      } else if (done === "outside") say("Leave three blocks at the start and two at the finish.");
+      else if (done === "invalid")
+        say("That piece extends above the ceiling. Increase the height or place it lower.");
+      else if (done === "full" || done === "coins") {
+        // a cap: stop placing, keep what was placed (rule 6c)
+        st.stopped = true;
+        say(
+          done === "full"
+            ? "This trail has reached 600 objects."
+            : `This trail already has ${MAX_COINS} coins. That is the most a level can hold.`,
+        );
+      }
+    }
+  }
+  function endStroke(drop = true) {
+    const st = stroke;
+    if (!st) return;
+    stroke = null;
+    // ended by something other than its finger (blur, a hidden page, a sheet, leaving the editor):
+    // the finger stops counting, so a lift that never reaches the canvas leaves nothing behind
+    if (drop) {
+      fingers.delete(st.id);
+      try {
+        canvas.releasePointerCapture(st.id);
+      } catch {
+        /* already gone */
+      }
+    }
+    if (!st.changed) return; // nothing changed: nothing saved, no history step
+    try {
+      validateLevel(draft);
+    } catch {
+      // every cell was checked as it went, so this only guards: never save an invalid level
+      draft = { ...draft, objects: st.before };
+      return;
+    }
+    group = tool === "erase" || st.placed < 0 ? [] : [st.placed];
+    strokes.push({
+      before: st.before,
+      after: structuredClone(draft.objects),
+      groupBefore: st.group,
+      groupAfter: [...group],
+    });
+    saveDraft(true);
+  }
+  function stepTo(step: Step | null, side: "before" | "after") {
+    if (step) {
+      const next = { ...draft, objects: structuredClone(step[side]) };
+      try {
+        validateLevel(next);
+        draft = next;
+        group = [...(side === "before" ? step.groupBefore : step.groupAfter)];
+      } catch {
+        strokes.clear();
+      }
+    } else if (!strokes.done.length && !strokes.undone.length)
+      toast("Something else changed since that swipe, so it cannot be undone.");
+    saveDraft(true);
+  }
+  function undo() {
+    endStroke();
+    stepTo(strokes.undo(draft.objects), "before");
+  }
+  function redo() {
+    endStroke();
+    stepTo(strokes.redo(draft.objects), "after");
+  }
   function openEditor() {
     closeSheet();
     paused = false;
@@ -775,6 +932,7 @@
   }
   function loadCustom(id: number) {
     draft = selectLevel(save, id);
+    forget();
     select(-1);
     pan = 0;
     panY = 0;
@@ -783,6 +941,7 @@
   function createLevel() {
     try {
       draft = newLevel(save);
+      forget();
       select(-1);
       pan = 0;
       panY = 0;
@@ -802,6 +961,7 @@
           "DELETE LEVEL",
           () => {
             draft = deleteLevel(save, id);
+            forget();
             select(-1);
             pan = 0;
             panY = 0;
@@ -1142,6 +1302,15 @@
     saveDraft();
   }
   function pointermove(e: PointerEvent) {
+    if (stroke && e.pointerId === stroke.id) {
+      // where the finger is now, so a pinch that ends the stroke starts from here
+      fingers.set(e.pointerId, [e.clientX, e.clientY]);
+      if (fingers.size === 1) {
+        const view = draw();
+        strokeTo([view.x(e.clientX), view.y(e.clientY)]);
+      }
+      return;
+    }
     if (sweep && fingers.has(e.pointerId) && fingers.size === 1) {
       const view = draw();
       sweep = { ...sweep, to: [view.x(e.clientX), view.y(e.clientY)] };
@@ -1176,6 +1345,8 @@
   }
   function pointerup(e: PointerEvent) {
     run.release();
+    // a lift, a cancel or a lost capture of the stroke's finger ends the stroke (rule 6d)
+    if (stroke?.id === e.pointerId) endStroke(false);
     if (!fingers.delete(e.pointerId)) return;
     if (!fingers.size) endSweep();
     if (pinch && fingers.size < 2) {
@@ -1682,7 +1853,18 @@
         id="multi-tool"
         aria-pressed={tool === "multi"}
         onclick={() => (tool = "multi")}>MULTI</button
-      ><button id="duplicate-object" disabled={!selection} onclick={duplicate}
+      ><button
+        id="swipe-tool"
+        aria-pressed={swipe}
+        aria-label="Swipe to place or erase"
+        onclick={toggleSwipe}>SWIPE</button
+      >{#if swipe}<button
+          id="erase-tool"
+          aria-pressed={tool === "erase"}
+          onclick={() => (tool = "erase")}>ERASE</button
+        ><button id="undo" disabled={!canUndo} onclick={undo}>UNDO</button
+        ><button id="redo" disabled={!canRedo} onclick={redo}>REDO</button
+        >{/if}<button id="duplicate-object" disabled={!selection} onclick={duplicate}
         >COPY + PASTE</button
       ><button id="edit-object" disabled={!selection} onclick={editObject}
         >EDIT OBJECT</button
@@ -1814,7 +1996,9 @@
             ? "Tap an object to select it."
             : tool === "multi"
               ? "Tap pieces to add them, or swipe a box over a lot of them."
-            : `Tap the grid to place ${tool === "half" ? "a half spike" : article(tool in presets ? tool.replace("-", " ") : tool.startsWith("speed-") ? labelOf(tool).toLowerCase() + " portal" : PADS.includes(tool) ? labelOf(tool).toLowerCase() : tool)}.`}{layer ===
+            : tool === "erase"
+              ? "Swipe over pieces to take them away."
+            : `${swipe ? "Tap or swipe across" : "Tap"} the grid to place ${tool === "half" ? "a half spike" : article(tool in presets ? tool.replace("-", " ") : tool.startsWith("speed-") ? labelOf(tool).toLowerCase() + " portal" : PADS.includes(tool) ? labelOf(tool).toLowerCase() : tool)}.`}{layer ===
         "background"
           ? " · BACKGROUND: no collision"
           : ""}</output
