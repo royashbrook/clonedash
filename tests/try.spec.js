@@ -26,7 +26,8 @@ test('TRY plays the draft over the editor, restarts on death, jumps on Space, an
   await expect(page.locator('#palette')).toBeVisible(); await expect(page.locator('#hud')).toBeHidden();
   // no input: the spike at 6 kills, the run restarts by itself
   // with the clock paused the restart always comes 1960ms in, so one step covers most of the way and
-  // 20ms steps find it: each step is a round trip, and 98 of them ran past 60s on a slow host (#111)
+  // 20ms steps find it: each step is a round trip, and the 98 it took alone needed more than 60s at
+  // the pace one slow run measured (#111)
   await page.clock.runFor(1900);
   await expect(page.locator('#selection')).toContainText('TRY 1');
   const attempt = () => page.evaluate(() => document.querySelector('#selection').textContent.includes('TRY 2'));
