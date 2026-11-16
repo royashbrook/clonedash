@@ -3,20 +3,35 @@ import { test, expect } from '@playwright/test';
 // TRY runs the trail over the editor grid with the palette still up. Space or a canvas tap
 // jumps, a death restarts the run, and Esc or STOP drops back to editing where the run was.
 test('TRY plays the draft over the editor, restarts on death, jumps on Space, and Esc returns at the spot', async ({ page }) => {
-  await page.clock.install();
+  await page.clock.install({ time: 0 });
   await page.addInitScript(() => {
     const piece = (type, x, y = 0) => ({ type, x, y, rotation: 0, flipX: false, flipY: false });
     localStorage.setItem('clonedash.v1', JSON.stringify({ version: 1, best: {}, sound: false, draft: { name: 'Try loop', length: 40, objects: [piece('spike', 6)] } }));
   });
-  await page.goto('/'); await page.locator('#editor-open').click();
+  await page.goto('/');
+  // paused once loaded, so only runFor moves game time: a running clock keeps ticking between
+  // steps, so a Space held back 600ms misses the spike (#111). until the pause the
+  // page clock only runs in real time from 0, so it cannot have reached this test's own timeout
+  // without the test failing first: "now plus a little" was already past when the pause arrived
+  await page.clock.pauseAt(test.info().timeout);
+  await page.locator('#editor-open').click();
+  // real time passing does not move the page's clock
+  const frozen = await page.evaluate(() => Date.now());
+  await page.waitForTimeout(300);
+  expect(await page.evaluate(() => Date.now())).toBe(frozen);
   await expect(page.locator('#try-level')).toHaveText('▶ TRY');
   await page.locator('#try-level').click();
   await expect(page.locator('#try-level')).toHaveText('■ STOP');
   await expect(page.locator('#selection')).toContainText('TRY 1 · TAP TO JUMP');
   await expect(page.locator('#palette')).toBeVisible(); await expect(page.locator('#hud')).toBeHidden();
   // no input: the spike at 6 kills, the run restarts by itself
+  // with the clock paused the restart always comes 1960ms in, so one step covers most of the way and
+  // 20ms steps find it: each step is a round trip, and the 98 it took alone needed more than 60s at
+  // the pace one slow run measured (#111)
+  await page.clock.runFor(1900);
+  await expect(page.locator('#selection')).toContainText('TRY 1');
   const attempt = () => page.evaluate(() => document.querySelector('#selection').textContent.includes('TRY 2'));
-  for (let t = 0; t < 3000 && !(await attempt()); t += 20) await page.clock.runFor(20);
+  for (let t = 1900; t < 3000 && !(await attempt()); t += 20) await page.clock.runFor(20);
   await expect(page.locator('#selection')).toContainText('TRY 2');
   // a jump at the right moment clears it: 0.4s ready, then five blocks a second, so at 1.0s
   // the square is at x = 4 and the jump carries it over the spike

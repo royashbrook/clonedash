@@ -100,6 +100,105 @@ test("disposing the update control aborts an in-flight probe and clears its dead
   }
 });
 
+// A service worker registration whose script check never answers until told to (#115).
+function stalledWorker() {
+  const navigator = Object.getOwnPropertyDescriptor(globalThis, "navigator");
+  const location = Object.getOwnPropertyDescriptor(globalThis, "location");
+  const timers = new Map();
+  const state = { cleared: [], posted: [], reloads: 0, listening: 0, timers };
+  let next = 1, answer;
+  globalThis.setTimeout = (callback, ms) => (timers.set(next, { callback, ms }), next++);
+  globalThis.clearTimeout = (id) => (state.cleared.push(id), timers.delete(id));
+  const waiting = { postMessage: (message) => state.posted.push(message.type) };
+  const reg = {
+    waiting: null,
+    installing: null,
+    update: () => new Promise((resolve) => (answer = resolve)),
+    addEventListener: () => state.listening++,
+    removeEventListener: () => state.listening--,
+  };
+  Object.defineProperty(globalThis, "navigator", {
+    configurable: true,
+    value: {
+      serviceWorker: {
+        controller: null,
+        register: async () => reg,
+        addEventListener() {},
+        removeEventListener() {},
+      },
+    },
+  });
+  Object.defineProperty(globalThis, "location", {
+    configurable: true,
+    value: { reload: () => state.reloads++ },
+  });
+  return {
+    state,
+    // the held script finally answers with a complete new worker
+    late: () => ((reg.waiting = waiting), answer()),
+    restore() {
+      for (const [key, descriptor] of [["navigator", navigator], ["location", location]])
+        if (descriptor) Object.defineProperty(globalThis, key, descriptor);
+        else delete globalThis[key];
+    },
+  };
+}
+const settle = () => new Promise((r) => setImmediate(r));
+
+test("an update whose script check never answers fails at the 10s download deadline, clears it, and a late answer installs nothing without a fresh tap", async () => {
+  const restore = browserless();
+  const worker = stalledWorker();
+  let control;
+  try {
+    control = updateControl(() => {});
+    await settle();
+    const applying = control.apply();
+    let outcome = "pending";
+    applying.then(() => (outcome = "applied"), (cause) => (outcome = cause.message));
+    await settle();
+    assert.equal(outcome, "pending");
+    const deadline = [...worker.state.timers].find(([, t]) => t.ms > 9000 && t.ms <= 10000);
+    assert.ok(deadline, "a deadline of at most 10s is running on the script check");
+    deadline[1].callback();
+    await settle();
+    assert.equal(outcome, "Update download timed out.");
+    assert.ok(worker.state.cleared.includes(deadline[0]));
+    worker.late();
+    await settle();
+    assert.deepEqual(worker.state.posted.filter((type) => type === "ACTIVATE"), []);
+    assert.equal(worker.state.reloads, 0);
+  } finally {
+    control?.dispose();
+    worker.restore();
+    restore();
+  }
+});
+
+test("disposing during a script check that never answers cancels the update and clears its deadline", async () => {
+  const restore = browserless();
+  const worker = stalledWorker();
+  let control;
+  try {
+    control = updateControl(() => {});
+    await settle();
+    const applying = control.apply();
+    let outcome = "pending";
+    applying.then(() => (outcome = "applied"), (cause) => (outcome = cause.message));
+    await settle();
+    const deadline = [...worker.state.timers].find(([, t]) => t.ms > 9000 && t.ms <= 10000);
+    assert.ok(deadline);
+    control.dispose();
+    await settle();
+    assert.equal(outcome, "Update cancelled.");
+    assert.ok(worker.state.cleared.includes(deadline[0]));
+    assert.equal(worker.state.reloads, 0);
+  } finally {
+    control?.dispose();
+    worker.restore();
+    restore();
+  }
+});
+
 test("a check says what it found: newer once per answer, current, or unreachable", async () => {
   const restore = browserless();
   const parser = Object.getOwnPropertyDescriptor(globalThis, "DOMParser");

@@ -353,17 +353,20 @@ test("confirmation preserves a newer save from another tab and does not switch i
   expect(after.best).toEqual(latest.best);
 });
 
-test("share and import sheets fit phone widths with owned touch targets and no horizontal overflow", async ({
+// one test per phone size, each with its own time budget: the four sizes in one test spent a single
+// 60s budget between them and ran out partway through under a full local run (#64)
+for (const [width, height] of [
+  [360, 640],
+  [360, 740],
+  [430, 932],
+  [932, 430],
+])
+test(`share and import sheets fit ${width}x${height} with owned touch targets and no horizontal overflow`, async ({
   page,
 }) => {
   await seed(page);
   await page.locator("#my-levels").click();
-  for (const [width, height] of [
-    [360, 640],
-    [360, 740],
-    [430, 932],
-    [932, 430],
-  ]) {
+  {
     await page.setViewportSize({ width, height });
     await page.getByRole("button", { name: "Share Sky workshop" }).click();
     await expect(page.locator(".level-qr")).toBeVisible();
@@ -374,6 +377,9 @@ test("share and import sheets fit phone widths with owned touch targets and no h
         body: document.body.scrollWidth,
         sheet: dialog.scrollWidth,
         client: dialog.clientWidth,
+        // the dialog clips and its content scrolls, so a too-wide piece shows up here, not on the dialog
+        content: dialog.querySelector("#sheet-content").scrollWidth,
+        contentClient: dialog.querySelector("#sheet-content").clientWidth,
         heights: [
           ...dialog.querySelectorAll("button, a.download-level, summary"),
         ]
@@ -384,6 +390,7 @@ test("share and import sheets fit phone widths with owned touch targets and no h
     expect(bounds.doc).toBe(width);
     expect(bounds.body).toBe(width);
     expect(bounds.sheet).toBeLessThanOrEqual(bounds.client);
+    expect(bounds.content).toBeLessThanOrEqual(bounds.contentClient);
     expect(bounds.heights.every((height) => height >= 44)).toBe(true);
     const close = await page.locator("#sheet-close").boundingBox();
     expect(close.y + close.height).toBeLessThanOrEqual(height);
@@ -433,6 +440,14 @@ test("share and import sheets fit phone widths with owned touch targets and no h
           document.querySelector("#sheet").clientWidth,
       ),
     ).toBe(0);
+    // and the scrolling content, which the clipping dialog hides (as on the share side)
+    expect(
+      await page.evaluate(
+        () =>
+          document.querySelector("#sheet-content").scrollWidth -
+          document.querySelector("#sheet-content").clientWidth,
+      ),
+    ).toBeLessThanOrEqual(0);
     await page.locator("#sheet-close").click();
   }
 });

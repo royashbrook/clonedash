@@ -23,8 +23,15 @@ test('the SPEED tab offers slow, normal, fast and faster', async ({ page }) => {
 });
 
 test('a FASTER portal carries the run further in the same time', async ({ browser }) => {
+  // Both runs are left playing on a running clock, so the pages are closed when the test ends: two
+  // open pages kept running the game and slowed every later test in the same browser (#64)
   const plain = await browser.newPage(), fast = await browser.newPage();
-  const a = await distance(plain, []), b = await distance(fast, [piece('speed-faster', 3)]);
-  expect(b - a).toBeGreaterThan(4);
-  expect(b / a).toBeGreaterThan(1.3);
+  try {
+    const a = await distance(plain, []), b = await distance(fast, [piece('speed-faster', 3)]);
+    expect(b - a).toBeGreaterThan(4);
+    expect(b / a).toBeGreaterThan(1.3);
+  } finally {
+    await plain.close();
+    await fast.close();
+  }
 });

@@ -49,11 +49,13 @@ test('new editor objects place, transform, persist and black blocks paint black'
     await page.mouse.click(point.x, point.y);
     await expect(page.locator('#selection')).toContainText(labelOf(type)); // shown name, not the stored id
     if (type === 'black') {
-      const pixel = await page.locator('#world').evaluate((canvas, p) => {
+      // the canvas paints on its next frame, after the label above has already changed, so the
+      // pixel is read until that paint lands rather than once (#116)
+      const pixel = () => page.locator('#world').evaluate((canvas, p) => {
         const ratio = canvas.width / innerWidth;
         return [...canvas.getContext('2d').getImageData(Math.round((5.5 * p.unit) * ratio), Math.round((p.floor - .5 * p.unit) * ratio), 1, 1).data];
       }, point);
-      expect(pixel).toEqual([0, 0, 0, 255]);
+      await expect.poll(pixel).toEqual([0, 0, 0, 255]);
     }
     await page.getByRole('button', { name: 'Rotate clockwise', exact: true }).click();
     await page.getByRole('button', { name: 'FLIP ↕', exact: true }).click();

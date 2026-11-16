@@ -23,7 +23,8 @@ jobs:
       - run: npx playwright install --with-deps chromium webkit
       - run: npm run test:browser
       - uses: actions/upload-artifact@v7
-        if: failure()
+        # every run, so a failure the retry hid still leaves its first attempt
+        if: always()
         with:
           name: browser-test-results-check-${{ github.run_id }}
           path: test-results/

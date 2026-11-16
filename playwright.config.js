@@ -9,6 +9,9 @@ export default defineConfig({
   testMatch: "**/*.spec.js",
   timeout: 60000,
   workers: 1,
+  // On CI a test that only passes on retry fails the run: the retry still runs and its first
+  // attempt's trace is kept, but it no longer turns a failure green (#105).
+  failOnFlakyTests: !!process.env.CI,
   use: {
     baseURL: url,
     viewport: { width: 932, height: 430 },
@@ -21,7 +24,8 @@ export default defineConfig({
       use: { browserName: "webkit" },
       // Linux WebKit on CI intermittently fails page.goto/page.reload with
       // "WebKit encountered an internal error" before any assertion runs (#20).
-      // One retry on CI covers that class only; chromium keeps zero. Traces are
+      // One retry on CI, chromium keeps zero. A pass that needed it still fails the
+      // run (failOnFlakyTests above), so it is for diagnosis, not a pass. Traces are
       // retained on failure and uploaded by the workflows. Root cause is open.
       retries: process.env.CI ? 1 : 0,
     },

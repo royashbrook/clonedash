@@ -21,6 +21,8 @@ async function origin(root, redirectCredits = true) {
     unavailable = false,
     variant = false,
     deny = "",
+    hold = "",
+    held = [],
     probes = 0;
   const server = http.createServer(async (req, res) => {
     const url = new URL(req.url, "http://local");
@@ -28,6 +30,8 @@ async function origin(root, redirectCredits = true) {
     if (url.searchParams.has("update-probe")) probes++;
     if (unavailable) return req.socket.destroy();
     if (deny && path === deny) return res.writeHead(503).end();
+    // a held path does not answer until released, like a request stalled on a bad connection
+    if (hold && path === hold) await new Promise((go) => held.push(go));
     // The production asset host canonicalizes index.html. Cache.addAll follows it,
     // but that redirected response cannot answer a manual-redirect navigation.
     if (path === "/index.html")
@@ -69,6 +73,11 @@ async function origin(root, redirectCredits = true) {
     switchTo: (next) => (folder = next),
     nextBuild: () => (variant = true),
     deny: (path) => (deny = path),
+    hold: (path) => (hold = path),
+    release: () => {
+      hold = "";
+      for (const go of held.splice(0)) go();
+    },
     probes: () => probes,
     offline: () => (unavailable = true),
     close: () =>
@@ -474,6 +483,67 @@ test("candidate download failure keeps the current build; consent installs a ful
     await expect(page.locator("meta[name=build]")).toHaveAttribute(
       "content",
       "fedcba987654",
+    );
+  } finally {
+    await context.close();
+    await server.close();
+  }
+});
+
+test("an update whose service worker script never answers says it could not download and keeps the current build (#115)", async ({
+  browser,
+}) => {
+  const server = await origin(resolve("dist"));
+  const context = await browser.newContext({
+    viewport: { width: 932, height: 430 },
+  });
+  try {
+    const page = await context.newPage();
+    await page.goto(server.url);
+    await page.evaluate(() => navigator.serviceWorker.ready);
+    await page.reload();
+    await page.waitForFunction(() => !!navigator.serviceWorker.controller);
+    const oldBuild = await page
+      .locator("meta[name=build]")
+      .getAttribute("content");
+    server.nextBuild();
+    await page.evaluate(() =>
+      document.dispatchEvent(new Event("visibilitychange")),
+    );
+    await expect(page.locator("#update")).toBeVisible();
+    server.hold("/sw.js");
+    await page.locator("#update").click();
+    // apply() has a 10s download deadline; a stalled script request must end inside it
+    await expect(page.locator("#notice")).toContainText("could not download", {
+      timeout: 15000,
+    });
+    await expect(page.locator("meta[name=build]")).toHaveAttribute(
+      "content",
+      oldBuild,
+    );
+    // the current game still plays
+    await page.locator("#play").click();
+    await expect(page.locator("#hud")).toBeVisible();
+    await page.locator("#pause").click();
+    // the stalled script answers after the deadline: nothing installs or reloads without a new tap
+    let navigations = 0;
+    page.on("framenavigated", (frame) => {
+      if (frame === page.mainFrame()) navigations++;
+    });
+    server.release();
+    await page.waitForTimeout(3000);
+    expect(navigations).toBe(0);
+    await expect(page.locator("meta[name=build]")).toHaveAttribute(
+      "content",
+      oldBuild,
+    );
+    // a fresh tap installs the new build
+    await page.locator("#update").click();
+    await expect(page.locator("meta[name=build]")).toHaveAttribute(
+      "content",
+      "fedcba987654",
+      // the same 10s download and 8s activation deadlines as the test above
+      { timeout: 20000 },
     );
   } finally {
     await context.close();

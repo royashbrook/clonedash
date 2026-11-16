@@ -74,17 +74,53 @@ export function updateControl(ready: () => void) {
       lifetime.signal.removeEventListener("abort", cancel);
     }
   }
+  // Settles with the work, or rejects at the deadline or on disposal, and always
+  // drops its timer and listener. The work itself is not cancelled (update() has no
+  // abort): a late result just lands on a promise nobody is waiting for any more.
+  function within<T>(work: Promise<T>, ms: number): Promise<T> {
+    return new Promise<T>((resolve, reject) => {
+      const done = () => {
+        clearTimeout(timer);
+        lifetime.signal.removeEventListener("abort", cancelled);
+      };
+      const cancelled = () => {
+        done();
+        reject(Error("Update cancelled."));
+      };
+      const timer = window.setTimeout(() => {
+        done();
+        reject(Error("Update download timed out."));
+      }, Math.max(0, ms));
+      if (lifetime.signal.aborted) return cancelled();
+      lifetime.signal.addEventListener("abort", cancelled, { once: true });
+      work.then(
+        (value) => {
+          done();
+          resolve(value);
+        },
+        (cause) => {
+          done();
+          reject(cause);
+        },
+      );
+    });
+  }
   async function apply() {
-    const candidate = await registration;
+    // One 10s download budget from the tap: the registration, the script check and
+    // the new worker's install all spend it. A script request that never answered
+    // used to hang in update() before any timer started, with no message (#115).
+    const downloadBy = Date.now() + 10000;
+    const left = () => downloadBy - Date.now();
+    const candidate = await within(registration, left());
     if (!candidate) throw Error("Update requires a service worker.");
     const reg: ServiceWorkerRegistration = candidate;
-    await reg.update();
+    await within(reg.update(), left());
     if (disposed) return;
     const waiting = await new Promise<ServiceWorker>((resolve, reject) => {
       const timer = window.setTimeout(() => {
         cleanup();
         reject(Error("Update download timed out."));
-      }, 10000);
+      }, Math.max(0, left()));
       let installing: ServiceWorker | null = null;
       const cleanup = () => {
         clearTimeout(timer);
