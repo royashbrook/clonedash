@@ -9,8 +9,8 @@ test('TRY plays the draft over the editor, restarts on death, jumps on Space, an
     localStorage.setItem('clonedash.v1', JSON.stringify({ version: 1, best: {}, sound: false, draft: { name: 'Try loop', length: 40, objects: [piece('spike', 6)] } }));
   });
   await page.goto('/');
-  // paused once loaded, so only runFor moves game time: a running clock kept ticking between
-  // steps, and on a busy machine the Space below came late and missed (#111). until the pause the
+  // paused once loaded, so only runFor moves game time: a running clock keeps ticking between
+  // steps, so a Space held back 600ms misses the spike (#111). until the pause the
   // page clock only runs in real time from 0, so it cannot have reached this test's own timeout
   // without the test failing first: "now plus a little" was already past when the pause arrived
   await page.clock.pauseAt(test.info().timeout);
