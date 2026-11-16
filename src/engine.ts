@@ -580,6 +580,34 @@ function contact(
       }
       continue;
     }
+    // The angle (#106): solid-object contact is deadly; world floor and ceiling remain safe (the
+    // clamps above). Its whole body is the contact box and this runs before any support snap, so a
+    // landing, an underside, a side, a turned block, a ramp or a curve all kill, in both gravities.
+    // The explicit overrides keep their meaning: while a W (zone or wall pass) applies to a piece,
+    // that piece is met with the hazard box every mode uses at a wall, and a side hit stops at the
+    // same face as in every other mode; an R (zone or roof pass) turns a head hit on a block into a
+    // bump, the head being the side gravity points away from (the top face when upside down), as
+    // the R works in every mode. Any other contact kills. Spikes take the path below, as before.
+    if (s.mode === "angle" && (BLOCKS.includes(o.type) || SLOPES.includes(o.type))) {
+      const w = inW || o.wallPass;
+      if (!parts(o).some((part) => intersects(playerPolygon(s, w ? DEATH_INSET : 0), part)))
+        continue;
+      const b = bounds(o);
+      if (w && oldX + SIZE - DEATH_INSET <= b.left + 0.001) {
+        s.x = b.left - SIZE + DEATH_INSET;
+        s.wall = b.left;
+      } else if (
+        (inR || o.roofPass) &&
+        BLOCKS.includes(o.type) &&
+        (s.gravity < 0
+          ? oldY + SIZE <= b.bottom + 0.015 && s.vy > 0
+          : oldY >= b.top - 0.015 && s.vy < 0)
+      ) {
+        s.y = s.gravity < 0 ? b.bottom - SIZE : b.top;
+        s.vy = 0;
+      } else s.status = "dead";
+      continue;
+    }
     const p = polygon(o),
       b = bounds(o),
       // a block at a non-quarter angle is supported like a ramp: along its real edges.
