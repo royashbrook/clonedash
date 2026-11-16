@@ -3,12 +3,21 @@ import { test, expect } from '@playwright/test';
 // TRY runs the trail over the editor grid with the palette still up. Space or a canvas tap
 // jumps, a death restarts the run, and Esc or STOP drops back to editing where the run was.
 test('TRY plays the draft over the editor, restarts on death, jumps on Space, and Esc returns at the spot', async ({ page }) => {
-  await page.clock.install();
+  await page.clock.install({ time: 0 });
   await page.addInitScript(() => {
     const piece = (type, x, y = 0) => ({ type, x, y, rotation: 0, flipX: false, flipY: false });
     localStorage.setItem('clonedash.v1', JSON.stringify({ version: 1, best: {}, sound: false, draft: { name: 'Try loop', length: 40, objects: [piece('spike', 6)] } }));
   });
-  await page.goto('/'); await page.locator('#editor-open').click();
+  await page.goto('/');
+  // paused once loaded, so only runFor moves game time: a running clock kept ticking between
+  // steps, and on a busy machine the Space below came late and missed (#111). a fixed point ahead
+  // of install, since "now plus a little" can already be past by the time the pause arrives
+  await page.clock.pauseAt(10_000);
+  await page.locator('#editor-open').click();
+  // real time passing does not move the page's clock
+  const frozen = await page.evaluate(() => Date.now());
+  await page.waitForTimeout(300);
+  expect(await page.evaluate(() => Date.now())).toBe(frozen);
   await expect(page.locator('#try-level')).toHaveText('▶ TRY');
   await page.locator('#try-level').click();
   await expect(page.locator('#try-level')).toHaveText('■ STOP');
