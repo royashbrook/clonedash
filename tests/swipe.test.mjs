@@ -80,8 +80,9 @@ test('one stroke that changed something is one undo step; an empty stroke is non
   assert.deepEqual([again.after, again.groupAfter], [pieces(5, 6, 7), [2]]);
   // a new stroke after an undo drops what could have been redone
   h.push({ before: pieces(5, 6, 7), after: pieces(5, 6, 7, 9), groupBefore: [], groupAfter: [] });
+  assert.equal(h.undone.length, 0, 'the redo is dropped by the new stroke itself');
   assert.equal(h.redo(pieces(5, 6, 7, 9)), null);
-  assert.equal(h.undone.length, 0);
+  assert.equal(h.done.length, 2, 'and the new stroke is the step to undo');
 });
 
 test('an edit the history did not make invalidates it; it never undoes over that edit; it keeps at most 30 strokes', () => {

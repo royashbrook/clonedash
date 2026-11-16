@@ -58,6 +58,8 @@ const CASES = {
   'a scoop from the floor': [[object('scoop', 7, 0)], { x: 5, y: 0 }, false],
   'a hill from the floor': [[object('hill', 7, 0)], { x: 5, y: 0 }, false],
   'landing on a ramp': [[object('ramp-grid', 6, 2)], { x: 6.2, y: 3.6 }, false],
+  // the whole body is the contact box: clipping a corner by less than the hazard box's inset kills
+  'grazing a block corner': [[object('block', 6, 2)], { x: 6.9, y: 3.04 }, false],
 };
 for (const [name, [objects, start, held]] of Object.entries(CASES))
   test(`angle dies on solid contact: ${name}, both gravities, before any support snap`, () => {
