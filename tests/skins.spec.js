@@ -45,6 +45,17 @@ async function open(page, { skins, level = LEVEL_SAVE, url = "/" } = {}) {
   );
   await page.goto(url);
 }
+// counts images drawn onto the game canvas, which only a worn skin does
+const countWorldImages = (page) =>
+  page.addInitScript(() => {
+    window.worldImages = 0;
+    const draw = CanvasRenderingContext2D.prototype.drawImage;
+    CanvasRenderingContext2D.prototype.drawImage = function (...args) {
+      if (this.canvas.id === "world") window.worldImages++;
+      return draw.apply(this, args);
+    };
+  });
+const worldImages = (page) => page.evaluate(() => window.worldImages);
 async function newSkin(page) {
   await page.locator("#skins-open").click();
   await page.locator("#new-skin").click();
@@ -158,8 +169,13 @@ test("resize, save, reload, use, blank drafts, delete back to the green cube; th
   const context = await browser.newContext({ baseURL, viewport: { width: 932, height: 430 }, hasTouch: true });
   try {
     const page = await context.newPage();
+    const errors = [];
+    page.on("pageerror", (e) => errors.push(e.message));
+    await countWorldImages(page);
     await open(page);
     const levelBefore = await stored(page, "clonedash.v1");
+    await page.waitForTimeout(300);
+    expect(await worldImages(page), "the default cube draws no image").toBe(0);
     expect(await stored(page)).toBeNull();
     await newSkin(page);
     for (let i = 0; i < 8; i++) await page.locator("#width-more").tap();
@@ -188,6 +204,13 @@ test("resize, save, reload, use, blank drafts, delete back to the green cube; th
     s = await skinsOf(page);
     expect(s.selected).toBe(s.skins[0].id);
     await page.reload();
+    // the worn skin draws on the home screen's cube and in play
+    await expect.poll(() => worldImages(page)).toBeGreaterThan(0);
+    await page.locator("#play").click();
+    const inPlay = await worldImages(page);
+    await expect.poll(() => worldImages(page)).toBeGreaterThan(inPlay + 10);
+    await page.locator("#menu").click();
+    await page.getByRole("button", { name: "MAIN MENU", exact: true }).click();
     await page.locator("#skins-open").click();
     await expect(page.getByRole("button", { name: "Use Wide one", exact: true })).toHaveText("WEARING");
     // a blank skin saves as a draft but can't be worn
@@ -218,20 +241,26 @@ test("resize, save, reload, use, blank drafts, delete back to the green cube; th
     expect(s.selected).toBeUndefined();
     await expect(page.getByRole("button", { name: "Use Green cube" })).toHaveText("WEARING");
     await page.reload();
+    await page.waitForTimeout(300);
+    expect(await worldImages(page), "back to the procedural cube").toBe(0);
     await page.locator("#skins-open").click();
     await expect(page.getByRole("button", { name: "Use Green cube" })).toHaveText("WEARING");
     expect(await stored(page, "clonedash.v1")).toBe(levelBefore);
+    expect(errors).toEqual([]);
   } finally {
     await context.close();
   }
 });
 
-test("two tabs adding skins both keep theirs, and a level write in either tab never erases a skin", async ({ browser, baseURL }) => {
+// stale-tab preservation (docs/skins.md storage): sequential writes from tabs opened earlier, not
+// overlapping ones, which web storage cannot make safe
+test("stale-tab journey: both tabs open, A adds, B adds and changes the selection, both reloaded keep both; level save unchanged", async ({ browser, baseURL }) => {
   const context = await browser.newContext({ baseURL, viewport: { width: 932, height: 430 } });
   try {
     const [a, b] = [await context.newPage(), await context.newPage()];
     await open(a);
     await open(b);
+    const levelBefore = await stored(a, "clonedash.v1");
     await newSkin(a);
     await newSkin(b); // tab b opened its editor before tab a saved anything
     await a.locator("#skin-name").fill("From A");
@@ -241,8 +270,18 @@ test("two tabs adding skins both keep theirs, and a level write in either tab ne
     await b.locator("#use-skin").click();
     await expect(b.locator("#skin-message")).toHaveText("Saved. You are wearing it now.");
     const both = await skinsOf(a);
-    expect(both.skins.map((e) => e.skin.name)).toEqual(["From A", "From B"]);
+    expect(both.skins.map((e) => [e.id, e.skin.name])).toEqual([[1, "From A"], [2, "From B"]]);
     expect(both.selected).toBe(2);
+    expect(await stored(a, "clonedash.v1")).toBe(levelBefore);
+    for (const tab of [a, b]) {
+      await tab.reload();
+      await tab.locator("#skins-open").click();
+      await expect(tab.locator(".skin-card h2")).toHaveText(["Green cube", "From A", "From B"]);
+      await expect(tab.getByRole("button", { name: "Use From B", exact: true })).toHaveText("WEARING");
+    }
+    expect(await stored(b, "clonedash.v1")).toBe(levelBefore);
+    await a.getByRole("button", { name: "Edit From A", exact: true }).click();
+    await b.getByRole("button", { name: "Edit From B", exact: true }).click();
     // tab a renames its skin from a stale view; tab b's skin and choice survive
     await a.locator("#skin-name").fill("A renamed");
     await a.locator("#save-skin").click();

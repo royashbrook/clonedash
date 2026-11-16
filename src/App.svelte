@@ -439,8 +439,8 @@
     transfer = next;
     void sheet(next.skin ? "Share skin" : "Import", "", [], true, "transfer");
   }
-  // every skin write re-reads the skins key (skin.ts commitSkins); a refused write throws and
-  // leaves the last confirmed skins showing
+  // every skin write re-reads the skins key (skin.ts commitSkins, stale-tab preservation); a
+  // refused write throws and leaves the last confirmed skins showing
   function commitSkin(change: (latest: SkinStore) => void) {
     skins = commitSkins(localStorage, change);
     skinsBroken = false;

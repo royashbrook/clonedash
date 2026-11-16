@@ -32,10 +32,10 @@ a skin is pure data, the same shape in storage and in a share code:
   from these five fields, so extra fields are dropped. NaN, Infinity, fractions and unknown colour
   forms are refused. an invalid skin is refused whole, never half-loaded.
 
-## storage
+## storage (the contract)
 
 skins live under their own localStorage key, `clonedash.skins.v1`, never inside the level save
-(`clonedash.v1`):
+(`clonedash.v1`). that is the storage contract:
 
 ```json
 { "version": 1, "next": 3, "skins": [{ "id": 1, "skin": { … } }, { "id": 2, "skin": { … } }], "selected": 2 }
@@ -49,11 +49,18 @@ skins live under their own localStorage key, `clonedash.skins.v1`, never inside 
   does not grow and the level save is never touched by a skin write. level and progress writes
   never touch the skins key, so they can never erase a skin.
 - every skin write (save, rename, copy, delete, use, import) re-reads the key, applies its one
-  change to what is stored now (merged by id), writes, and reads the write back. two tabs adding
-  skins both keep theirs. a refused or unconfirmed write reports the failure and the app keeps
-  the last confirmed state. stored skin data that does not validate is never replaced by
-  fallback data: the app shows the default cube, says the skins could not be read, and refuses
-  every skin write rather than overwrite the raw value.
+  change to what is stored now (by id), writes, and reads the write back. a new skin's id comes
+  from that fresh read (`next`), never from what the editor or the tab saw when it opened.
+- that gives **stale-tab preservation**: a tab that has been open a while, and still shows an
+  old list, cannot erase skins another tab saved earlier, because it never writes its own old
+  copy. it is not simultaneous-write safety. web storage has no locking, so two tabs whose
+  read-change-write steps overlap can still lose one change, and unique ids do not prevent
+  that. the readback only confirms this tab's own write landed. there is no lock or
+  compare-and-swap layer, by choice.
+- a refused or unconfirmed write reports the failure and the app keeps the last confirmed
+  state. stored skin data that does not validate is never replaced by fallback data: the app
+  shows the default cube, says the skins could not be read, and refuses every skin write rather
+  than overwrite the raw value.
 
 ## the rules
 
@@ -107,14 +114,15 @@ IMPORT, from Skins or from My Levels, takes any of them.
 
 ## how it is pinned
 
-- `tests/skin.test.mjs`: the schema and every bound at every reader, storage merge by id across
-  two tabs, refused and unconfirmed writes, invalid stored data left alone, the codec (compressed
+- `tests/skin.test.mjs`: the schema and every bound at every reader, stale-tab preservation,
+  refused and unconfirmed writes, invalid stored data left alone, the codec (compressed
   and raw), bounded inflation, deadline, ambiguous links, prefix dispatch, the QR measurement,
   the editor's pure helpers (resize, fill, contiguous strokes), the drawn rectangle and its
   anchoring, square-only drawing, and that the body never changes.
 - `tests/parity.test.mjs` and `tests/migration.test.mjs` (unchanged): the default drawing and
   physics, old saves and old level codes.
-- `tests/skins.spec.js`: touch drawing, resize, save, reload, use, delete, two tabs, every share
+- `tests/skins.spec.js`: touch drawing, resize, save, reload, use, delete, the stale-tab journey
+  (both tabs open, A adds, B adds and changes the selection, both reloaded), every share
   path, and 320-wide and phone-landscape layouts, in both engines.
 - `npm run test:mutations` breaks a bound, the re-read before a write, the anchoring, the
   square-only guard and the body size in turn and expects these tests to fail.

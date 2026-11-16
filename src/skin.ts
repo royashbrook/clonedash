@@ -165,10 +165,13 @@ export function wearSkin(store: SkinStore, id: number | null) {
   store.selected = id;
 }
 
-// Every skin write: re-read the key, apply one change to what is stored NOW (so another tab's
-// skins survive), write, and read the write back. Throws, writing nothing, when the stored data is
-// invalid or the change is refused; throws when the write is not confirmed. Never touches the
-// level save.
+// Every skin write: re-read the key, apply one change to what is stored NOW, write, and read
+// the write back. This is stale-tab preservation: a tab never writes its own old copy, so it
+// cannot erase skins another tab saved earlier, and a new id comes from this fresh read. It is
+// not simultaneous-write safety (web storage has no locking; overlapping read-change-write steps
+// in two tabs can still lose one change), and the readback only confirms this write. Throws,
+// writing nothing, when the stored data is invalid or the change is refused; throws when the
+// write is not confirmed. Never touches the level save.
 export function commitSkins(
   storage: Pick<Storage, "getItem" | "setItem">,
   change: (latest: SkinStore) => void,

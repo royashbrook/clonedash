@@ -1,7 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { deflateRawSync } from "node:zlib";
-import QRCode from "qrcode";
 import {
   SKINS,
   MAX_SKIN_BYTES,
@@ -136,14 +135,16 @@ test("the store: 100 skins, ids never reused, the worn skin must exist and have 
     assert.throws(() => readSkins(broken), undefined, broken.slice(0, 80));
 });
 
-test("every skin write re-reads its own key: two tabs adding skins both keep theirs, and the level save is never touched", () => {
+test("stale-tab preservation: every skin write re-reads its own key and takes the new id from it, and the level save is never touched", () => {
   const levelSave = '{"version":1,"untouched":true}';
   const storage = memory({ [SAVE]: levelSave });
-  // two tabs opened before either saved: both hold an empty store in memory
+  // two tabs opened before either saved, both holding an empty store in memory, then saving one
+  // after the other (sequential, not overlapping: web storage has no lock)
   const tabA = commitSkins(storage, (s) => addSkin(s, skin({ name: "From A" })));
   const tabB = commitSkins(storage, (s) => addSkin(s, skin({ name: "From B" })));
   assert.deepEqual(tabA.skins.map((e) => e.skin.name), ["From A"]);
   assert.deepEqual(tabB.skins.map((e) => e.skin.name), ["From A", "From B"]);
+  assert.deepEqual(tabB.skins.map((e) => e.id), [1, 2], "B's new id comes from the latest stored record");
   assert.deepEqual(readSkins(storage.getItem(SKINS)), tabB);
   // tab A, still showing only its own skin, renames it: B's skin survives
   commitSkins(storage, (s) => saveSkin(s, 1, skin({ name: "Renamed in A" })));
@@ -321,6 +322,8 @@ test("skin inflation is bounded while reading, cancelled, has the deadline, and 
 test("QR density: the level policy measured on a worst-case 32x32 noise skin", async () => {
   // the share sheet's policy (LevelTransfer.svelte): link at most 2000 characters and a QR of at
   // most version 15 at medium correction, else the complete code and file instead
+  // loaded here, not at the top: the mutation runner copies this file outside node_modules
+  const { default: QRCode } = await import("qrcode");
   const fits = (link) => {
     if (link.length > 2000) return { fits: false, version: null };
     const version = QRCode.create(link, { errorCorrectionLevel: "M" }).version;
