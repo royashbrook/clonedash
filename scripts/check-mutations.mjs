@@ -20,6 +20,7 @@ try {
     "coins.test.mjs",
     "triggers.test.mjs",
     "parity.test.mjs",
+    "skin.test.mjs",
   ]) {
     const testSource = (await readFile(join("tests", testFile), "utf8"))
       .replaceAll("../src/", "./src/")
@@ -72,8 +73,8 @@ try {
     ],
     [
       "transfer.ts",
-      "size > MAX_LEVEL_BYTES",
-      "size > MAX_LEVEL_BYTES * 100",
+      "size > limit",
+      "size > limit * 100",
       "inflation stops and cancels",
       "transfer.test.mjs",
     ],
@@ -124,6 +125,22 @@ try {
     ["engine.ts", "  contact(s, oldX, oldY, wasGrounded, height, forward, dt);\n}\nfunction contact(", "  contact(s, oldX, oldY, wasGrounded, height, forward, dt);\n  runTriggers(s, fx);\n}\nfunction contact(", "a cascade waits a step", "triggers.test.mjs"],
     ["transfer.ts", "...(group === undefined ? {} : { group }),", "group,", "old share codes captured on main", "parity.test.mjs"],
     ["library.ts", "s.coins !== undefined &&", "true &&", "old saves captured on main", "parity.test.mjs"],
+    // Skins (#107, docs/skins.md): a dropped bound, an overwritten save, a skin in the wrong mode,
+    // shifted anchoring and a changed body must each fail their own test.
+    ["skin.ts", "(v as number) <= MAX_SIDE", "true", "the schema: every bound", "skin.test.mjs"],
+    ["skin.ts", "if (store.skins.length >= MAX_SKINS)", "if (false)", "the store: 100 skins", "skin.test.mjs"],
+    ["skin.ts", "new DecompressionStream(\"deflate-raw\")),\n      MAX_SKIN_BYTES,", "new DecompressionStream(\"deflate-raw\")),\n      MAX_SKIN_BYTES * 100,", "skin inflation is bounded", "skin.test.mjs"],
+    ["skin.ts", "const portable = (skin: Skin) => validateSkin(skin);", "const portable = (skin: Skin) => skin;", "the export carries", "skin.test.mjs"],
+    ["skin.ts", "latest = readSkins(storage.getItem(SKINS));", "latest = emptyStore();", "stale-tab preservation", "skin.test.mjs"],
+    ["skin.ts", "    throw Error(\"Your saved skins could not be read, so nothing was changed.\");", "    latest = emptyStore();", "refused, unconfirmed and invalid writes", "skin.test.mjs"],
+    ["skin.ts", "if (storage.getItem(SKINS) !== raw)", "if (false)", "refused, unconfirmed and invalid writes", "skin.test.mjs"],
+    ["transfer.ts", "if (params.getAll(\"level\").length !== 1 || params.has(\"skin\"))", "if (params.getAll(\"level\").length !== 1)", "wrong-kind skin codes", "skin.test.mjs"],
+    ["transfer.ts", "if (levels + skins !== 1)", "if (levels + skins < 1)", "import dispatches by prefix", "skin.test.mjs"],
+    ["render.ts", "if (state.mode === \"square\" && skin) {", "if (skin) {", "a skin draws in square mode only", "skin.test.mjs"],
+    ["skin.ts", "bottom = s.gravity > 0 ? s.y + SIZE - h : s.y;", "bottom = s.gravity > 0 ? s.y + SIZE - h : s.y + (1 - h) / 2;", "anchors feet", "skin.test.mjs"],
+    ["skin.ts", "bottom = s.gravity > 0 ? s.y + SIZE - h : s.y;", "bottom = s.gravity > 0 ? s.y + SIZE - 1 + (1 - h) / 2 : s.y;", "anchors feet", "skin.test.mjs"],
+    ["skin.ts", "Math.min(center, s.wall - w / 2)", "Math.min(center, s.wall - 0.5)", "anchors feet", "skin.test.mjs"],
+    ["engine.ts", "SIZE = 0.64,", "SIZE = 0.7,", "a skin never changes the body", "skin.test.mjs"],
     // Release identity guards: each rejection must fail against its broken control.
     [
       "scripts/version.mjs",

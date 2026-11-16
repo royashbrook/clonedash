@@ -13,6 +13,7 @@ import {
   COIN_RADIUS,
 } from "./engine.ts";
 import type { GameState, Level } from "./types.ts";
+import { skinBox, type SkinArt } from "./skin.ts";
 // A colour trigger's colour laid over a piece's own colour (#rrggbb), for the pieces drawn in one
 // colour: rings, portals and coins.
 const hex = (v: number) => Math.round(v).toString(16).padStart(2, "0");
@@ -58,6 +59,8 @@ export interface RenderOptions {
   areaBottom?: number;
   areaTop?: number;
   avatar?: number;
+  skin?: SkinArt | null; // a chosen skin, drawn in square mode only (docs/skins.md)
+  view?: { width: number; height: number }; // a smaller canvas than the window (the skin preview)
 }
 export function render(
   canvas: HTMLCanvasElement,
@@ -76,10 +79,12 @@ export function render(
     areaBottom,
     areaTop = 0,
     avatar = AVATAR,
+    skin = null,
+    view,
   }: RenderOptions,
 ) {
-  const w = innerWidth,
-    h = innerHeight,
+  const w = view?.width ?? innerWidth,
+    h = view?.height ?? innerHeight,
     dpr = Math.min(devicePixelRatio || 1, 2);
   if (
     canvas.width !== Math.round(w * dpr) ||
@@ -520,7 +525,22 @@ export function render(
             unit * 0.3,
           );
       }
-      if (state.mode === "square" || state.mode === "pogo") {
+      if (state.mode === "square" && skin) {
+        // A skin (docs/skins.md) replaces the square only: pogo shares the branch below and keeps
+        // it. Its own fitted rectangle keeps the cube's anchoring (skinBox), drawn pixel for pixel.
+        const box = skinBox(state, skin.width, skin.height, avatar),
+          flip = state.gravity > 0 ? -1 : 1,
+          sw = ((box.right - box.left) * unit) / k,
+          sh = ((box.top - box.bottom) * unit) / k;
+        if (state.gravity > 0) ctx.scale(1, -1);
+        ctx.translate(
+          (X((box.left + box.right) / 2) - x) / k,
+          ((Y((box.bottom + box.top) / 2) - y) / k) * flip,
+        );
+        if (!state.grounded && !reduced) ctx.rotate(-state.time * Math.PI * 2);
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(skin.image, -sw / 2, -sh / 2, sw, sh);
+      } else if (state.mode === "square" || state.mode === "pogo") {
         if (state.gravity > 0) ctx.scale(1, -1);
         if (!state.grounded && !reduced) ctx.rotate(-state.time * Math.PI * 2);
         const a = SIZE * unit;
