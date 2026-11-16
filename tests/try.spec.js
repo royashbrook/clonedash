@@ -25,8 +25,12 @@ test('TRY plays the draft over the editor, restarts on death, jumps on Space, an
   await expect(page.locator('#selection')).toContainText('TRY 1 · TAP TO JUMP');
   await expect(page.locator('#palette')).toBeVisible(); await expect(page.locator('#hud')).toBeHidden();
   // no input: the spike at 6 kills, the run restarts by itself
+  // with the clock paused the restart always comes 1960ms in, so one step covers most of the way and
+  // 20ms steps find it: each step is a round trip, and 98 of them ran past 60s on a slow host (#111)
+  await page.clock.runFor(1900);
+  await expect(page.locator('#selection')).toContainText('TRY 1');
   const attempt = () => page.evaluate(() => document.querySelector('#selection').textContent.includes('TRY 2'));
-  for (let t = 0; t < 3000 && !(await attempt()); t += 20) await page.clock.runFor(20);
+  for (let t = 1900; t < 3000 && !(await attempt()); t += 20) await page.clock.runFor(20);
   await expect(page.locator('#selection')).toContainText('TRY 2');
   // a jump at the right moment clears it: 0.4s ready, then five blocks a second, so at 1.0s
   // the square is at x = 4 and the jump carries it over the spike
