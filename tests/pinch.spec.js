@@ -31,7 +31,8 @@ test('a pinch on the selected block sizes and turns it with snap, freely without
   await expect(page.locator('#selection')).toContainText('45° · ×2.00');
   await finger(page, 'pointerup', 2, 0, 0);
   await finger(page, 'pointerup', 1, 0, 0);
-  await expect.poll(async () => (await stored(page)).draft.objects[0]).toMatchObject({ scale: 2, rotation: 45 });
+  // a pinch sizes width and height by one factor and turns the piece about its middle (#117)
+  await expect.poll(async () => (await stored(page)).draft.objects[0]).toMatchObject({ x: 8, y: 1, scaleX: 2, scaleY: 2, rotation: 45 });
   // snap off: the same gesture from the new state lands on whole degrees and 0.05 sizes
   await page.locator('#snap').uncheck();
   await finger(page, 'pointerdown', 1, bx, by);
@@ -42,7 +43,7 @@ test('a pinch on the selected block sizes and turns it with snap, freely without
   await finger(page, 'pointerup', 1, 0, 0);
   await finger(page, 'pointerup', 2, 0, 0);
   await page.reload(); await page.locator('#editor-open').click();
-  expect((await stored(page)).draft.objects[0]).toMatchObject({ scale: 1.3, rotation: 55 });
+  expect((await stored(page)).draft.objects[0]).toMatchObject({ x: 8, y: 1, scaleX: 1.3, scaleY: 1.3, rotation: 55 });
   // a ring only quarter-turns, and since #106 it takes a size like every piece with a body
   await page.locator('#select-tool').click();
   const rx = 14.5 * point.unit, ry = point.floor - 2.5 * point.unit;
@@ -54,5 +55,6 @@ test('a pinch on the selected block sizes and turns it with snap, freely without
   await finger(page, 'pointerup', 1, 0, 0);
   await finger(page, 'pointerup', 2, 0, 0);
   const ring = (await stored(page)).draft.objects[1];
-  expect(ring.rotation).toBe(270); expect(ring.scale).toBe(3);
+  expect(ring).toMatchObject({ rotation: 270, scaleX: 3, scaleY: 3 });
+  expect('scale' in ring).toBe(false);
 });
