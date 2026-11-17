@@ -119,6 +119,9 @@
     }
   });
   const used = $derived(new Set(cells.filter(Boolean)));
+  // colours from the + picker: any this skin uses that is not a swatch, and the one being drawn with
+  const FIXED = new Set(COLOURS.map(([hex]) => hex));
+  const customs = $derived([...new Set([...cells, colour].filter((c) => c && !FIXED.has(c)))]);
 
   function say(text: string, bad = false) {
     message = text;
@@ -533,7 +536,26 @@
                 colour = hex;
                 if (tool === "eraser") tool = "pencil";
               }}
-            ></button>{/each}<button
+            ></button>{/each}{#each customs as hex (hex)}<button
+              class="swatch"
+              aria-label={`CUSTOM ${hex.toUpperCase()}`}
+              aria-pressed={colour === hex && tool !== "eraser"}
+              style:background={hex}
+              onclick={() => {
+                colour = hex;
+                if (tool === "eraser") tool = "pencil";
+              }}
+            ></button>{/each}<label class="swatch add" aria-label="ANY COLOUR"
+            >＋<input
+              id="custom-colour"
+              type="color"
+              value={customs.at(-1) ?? "#ffffff"}
+              oninput={(e) => {
+                colour = e.currentTarget.value.toLowerCase();
+                if (tool === "eraser") tool = "pencil";
+              }}
+            /></label
+          ><button
             class="swatch empty"
             aria-label="EMPTY"
             aria-pressed={colour === "" || tool === "eraser"}
@@ -719,6 +741,24 @@
     box-shadow:
       inset 0 0 0 3px var(--surface),
       0 0 0 3px var(--accent);
+  }
+  .swatch.add {
+    position: relative;
+    display: grid;
+    place-items: center;
+    border: 2px dashed var(--ink-dim);
+    font: 700 22px var(--font-mono);
+    color: var(--ink);
+    cursor: pointer;
+  }
+  /* the native picker opens from a tap anywhere on the + swatch */
+  .swatch.add input {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+    cursor: pointer;
   }
   .swatch.empty {
     background: repeating-conic-gradient(#26364a 0 25%, #1b2939 0 50%) 0 0 / 14px 14px;

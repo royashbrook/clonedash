@@ -166,6 +166,45 @@ test("touch paints whole strokes at DPR 3 while scrolled, each cell once; a seco
   }
 });
 
+test("the + swatch paints any colour: it joins the palette as its own swatch, saves, and comes back when the skin is edited again (#117)", async ({ page }) => {
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await open(page);
+  await newSkin(page);
+  await clearGrid(page);
+  await page.locator("#tool-eraser").click();
+  // the picker sets the ink and leaves the eraser, like any swatch
+  await page.locator("#custom-colour").fill("#12ab9f");
+  await expect(page.locator("#tool-pencil")).toHaveAttribute("aria-pressed", "true");
+  const custom = page.getByRole("button", { name: "CUSTOM #12AB9F", exact: true });
+  await expect(custom).toHaveAttribute("aria-pressed", "true");
+  const at = await cellPoint(page, 2, 3);
+  await page.mouse.click(at.x, at.y);
+  await expect(page.locator("#skin-grid")).toHaveAttribute("data-changed", "1");
+  // a fixed swatch takes over the ink; the custom one stays in the row because a cell uses it
+  await page.getByRole("button", { name: "RED", exact: true }).click();
+  await expect(custom).toHaveAttribute("aria-pressed", "false");
+  const red = await cellPoint(page, 4, 4);
+  await page.mouse.click(red.x, red.y);
+  await custom.click();
+  const back = await cellPoint(page, 5, 5);
+  await page.mouse.click(back.x, back.y);
+  await page.locator("#skin-name").fill("Teal");
+  await page.locator("#save-skin").click();
+  await expect(page.locator("#skin-message")).toHaveText("Saved.");
+  const saved = (await skinsOf(page)).skins[0].skin;
+  const expected = Array(64).fill("");
+  expected[3 * 8 + 2] = expected[5 * 8 + 5] = "#12ab9f";
+  expected[4 * 8 + 4] = "#ff5c7a";
+  expect(colours(saved)).toEqual(expected);
+  // a fresh visit to the editor shows the skin's own custom colour as a swatch
+  await page.reload();
+  await page.locator("#skins-open").click();
+  await page.getByRole("button", { name: "Edit Teal", exact: true }).click();
+  await expect(page.getByRole("button", { name: "CUSTOM #12AB9F", exact: true })).toBeVisible();
+  expect(errors).toEqual([]);
+});
+
 test("resize, save, reload, use, blank drafts, delete back to the green cube; the level save is never written", async ({ browser, baseURL }) => {
   const context = await browser.newContext({ baseURL, viewport: { width: 932, height: 430 }, hasTouch: true });
   try {
@@ -419,7 +458,7 @@ test("a worst-case 32x32 noise skin gets no QR but its complete code and file", 
   await page.locator("#copy-level").click();
   expect(await decodeSkin(await page.evaluate(() => window.copied))).toEqual(noise);
   // the QR policy itself (LevelTransfer.svelte: version 15 at medium correction), not a link length,
-  // which follows the zlib build (1042 on node 26, 993 on node 22)
+  // which follows the zlib build (1029 on node 26, 993 on node 22)
   const link = skinLink(await encodeSkin(noise), "https://clonedash.royashbrook.com/");
   expect(QRCode.create(link, { errorCorrectionLevel: "M" }).version).toBeGreaterThan(15);
 });
