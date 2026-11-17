@@ -344,6 +344,18 @@ footer button {
   width: 110px;
   font-size: 16px; /* 16px keeps phones from zooming into the field */
 }
+/* TOUCH and MULTI (#117): the box first, the words beside it, a 44px row to tap */
+.object-settings label.check {
+  justify-content: flex-start;
+  gap: 10px;
+  min-height: 44px;
+}
+.object-settings label.check input {
+  width: 44px;
+  height: 44px;
+  margin: 0;
+  flex: none;
+}
 .run-label {
   max-width: 400px;
   flex: 1;

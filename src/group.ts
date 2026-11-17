@@ -1,4 +1,4 @@
-import { scaleOf, bounds, intersects, pieceSize, polygon, transform, validateLevel } from "./engine.ts";
+import { scaleOf, centred, bounds, intersects, pieceSize, polygon, transform, validateLevel } from "./engine.ts";
 import type { Level, Piece, Transform } from "./types.ts";
 
 // Multi-select (#87): the editor acts on several pieces at once. These are the pure parts, so
@@ -59,9 +59,10 @@ export function transformGroup(pieces: Piece[], action: Transform, step = 1) {
       if (action === "flipX") o.flipX = !o.flipX;
       else o.flipY = !o.flipY;
     } else transform(o, action);
-    // a scaled piece grows from its own base, which a flip top to bottom moves to the other side
+    // a single-scale piece grows from its own base, which a flip top to bottom moves to the other
+    // side; a width and height piece (#117) sits on its middle, so nothing moves
     const k = scaleOf(o),
-      lift = action === "flipY" ? (k - 1) * h : 0,
+      lift = action === "flipY" && !centred(o) ? (k - 1) * h : 0,
       a = (o.rotation * Math.PI) / 180;
     o.x = nx + lift * Math.sin(a) - w / 2;
     o.y = ny - lift * Math.cos(a) - h / 2;

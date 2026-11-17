@@ -1,10 +1,14 @@
-import { validateLevel } from "./engine.ts";
+import { usesNew, validateLevel } from "./engine.ts";
 import { SAVE, readSave, selectLevel } from "./library.ts";
 import type { Level, SaveData } from "./types.ts";
 
 export const MAX_CODE = 192 * 1024;
 export const MAX_LEVEL_BYTES = 128 * 1024;
-const PREFIX = "cdl1.";
+// A level that uses width and height, touch triggers or multi touch (#117) travels as cdl2, which a
+// copy of the game from before them refuses instead of playing a different level. Every other
+// level is the same cdl1 code it always was.
+const PREFIX = "cdl1.",
+  PREFIX2 = "cdl2.";
 const DECODE_MS = 5000;
 
 // A level, never a save. Whitelist fields even when a valid level carries extras.
@@ -26,7 +30,7 @@ function portableLevel(input: unknown): Level {
     ...(level.note === undefined ? {} : { note: level.note }),
     ...(level.color === undefined ? {} : { color: level.color }),
     objects: level.objects.map(
-      ({ type, x, y, rotation, flipX, flipY, layer, scale, color, bounce, flipsGravity, boost, dash, noTouch, hidden, wallPass, roofPass, edges, group, target, moveX, moveY, duration }) => ({
+      ({ type, x, y, rotation, flipX, flipY, layer, scale, scaleX, scaleY, color, bounce, flipsGravity, boost, dash, noTouch, hidden, wallPass, roofPass, edges, group, target, moveX, moveY, duration, touch, multi }) => ({
         type,
         x,
         y,
@@ -52,6 +56,10 @@ function portableLevel(input: unknown): Level {
         ...(moveX === undefined ? {} : { moveX }),
         ...(moveY === undefined ? {} : { moveY }),
         ...(duration === undefined ? {} : { duration }),
+        // cdl2 only (#117), see PREFIX2
+        ...(scaleX === undefined ? {} : { scaleX, scaleY }),
+        ...(touch === undefined ? {} : { touch }),
+        ...(multi === undefined ? {} : { multi }),
       }),
     ),
   };
@@ -109,7 +117,8 @@ export async function boundedBytes(
 }
 
 export async function encodeLevel(input: Level): Promise<string> {
-  const raw = new TextEncoder().encode(JSON.stringify(portableLevel(input)));
+  const level = portableLevel(input),
+    raw = new TextEncoder().encode(JSON.stringify(level));
   if (raw.byteLength > MAX_LEVEL_BYTES) throw Error("This level is too large.");
   let payload = raw,
     flag = "0";
@@ -131,7 +140,7 @@ export async function encodeLevel(input: Level): Promise<string> {
       flag = "1";
     }
   }
-  return PREFIX + flag + base64(payload);
+  return (level.objects.some(usesNew) ? PREFIX2 : PREFIX) + flag + base64(payload);
 }
 
 export async function decodeLevel(text: string): Promise<Level> {
@@ -144,8 +153,9 @@ export async function decodeLevel(text: string): Promise<Level> {
       throw Error("This link does not contain one level.");
     code = params.get("level")!;
   }
-  if (!code.startsWith(PREFIX))
-    throw Error("Use a Cube Dash level code or link (cdl1).");
+  const second = code.startsWith(PREFIX2);
+  if (!code.startsWith(PREFIX) && !second)
+    throw Error("Use a Cube Dash level code or link (cdl1 or cdl2).");
   const flag = code[PREFIX.length],
     encoded = code.slice(PREFIX.length + 1);
   if (!/[01]/.test(flag ?? "") || !/^[\w-]+$/.test(encoded))
@@ -166,9 +176,12 @@ export async function decodeLevel(text: string): Promise<Level> {
         .pipeThrough(new DecompressionStream("deflate-raw")),
     );
   }
-  return portableLevel(
+  const level = portableLevel(
     JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(decoded)),
   );
+  // each prefix means one thing: a cdl1 never carries the #117 fields, a cdl2 always does
+  if (level.objects.some(usesNew) !== second) throw Error("Invalid level code.");
+  return level;
 }
 
 // Import takes one text and hands it to one domain decoder: a cds1 code or a #skin= link is a

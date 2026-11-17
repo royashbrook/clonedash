@@ -124,6 +124,41 @@ test('the TRIGGERS tab places a move and a colour trigger, and EDIT OBJECT sets 
   await expect(page.locator('#selection')).toContainText('MOVE -2, 2 · INSTANT');
 });
 
+test('a trigger takes TOUCH, MULTI shows only with it and goes when TOUCH does; a ring takes MULTI TOUCH, a booster never (#117)', async ({ page }) => {
+  await seed(page, [piece('move-trigger', 5, 0, { target: 1, moveY: 2 }), piece('ring', 7, 2), piece('yellow-pad', 9, 0)]);
+  await page.goto('/'); await page.locator('#editor-open').click();
+  await page.locator('#select-tool').click();
+  const cell = await grid(page);
+  await cell(5, 0);
+  await page.locator('#edit-object').click();
+  const sheet = page.locator('dialog');
+  await expect(sheet.locator('#trigger-multi')).toHaveCount(0);
+  await sheet.getByLabel('TOUCH: fires when you touch it, not when you pass it').check();
+  await expect.poll(async () => (await stored(page)).draft.objects[0]).toEqual(piece('move-trigger', 5, 0, { target: 1, moveY: 2, touch: true }));
+  await sheet.getByLabel('MULTI: fires every time you touch it again').check();
+  await expect.poll(async () => (await stored(page)).draft.objects[0].multi).toBe(true);
+  await expect(page.locator('#selection')).toContainText('TOUCH · MULTI');
+  // TOUCH off takes MULTI with it
+  await sheet.locator('#trigger-touch').uncheck();
+  await expect(sheet.locator('#trigger-multi')).toHaveCount(0);
+  await expect.poll(async () => (await stored(page)).draft.objects[0]).toEqual(piece('move-trigger', 5, 0, { target: 1, moveY: 2 }));
+  await sheet.getByRole('button', { name: 'DONE' }).click();
+  // a ring: MULTI TOUCH on EDIT OBJECT
+  await cell(7, 2);
+  await expect(page.locator('#selection')).toContainText('RING');
+  await page.locator('#edit-object').click();
+  await sheet.getByRole('button', { name: 'MULTI TOUCH: TURN ON', exact: true }).click();
+  await expect.poll(async () => (await stored(page)).draft.objects[1].multi).toBe(true);
+  await expect(sheet.getByRole('button', { name: 'MULTI TOUCH: TURN OFF', exact: true })).toBeVisible();
+  await sheet.getByRole('button', { name: 'DONE' }).click();
+  await expect(page.locator('#selection')).toContainText('MULTI TOUCH');
+  // a booster already fires on every landing, so it has no MULTI TOUCH
+  await cell(9, -0.35);
+  await expect(page.locator('#selection')).toContainText('YELLOW BOOSTER');
+  await page.locator('#edit-object').click();
+  await expect(sheet.getByRole('button', { name: /MULTI TOUCH/ })).toHaveCount(0);
+});
+
 test('EDIT OBJECT gives a piece a group id, and blank takes it away', async ({ page }) => {
   await page.goto('/'); await page.locator('#editor-open').click();
   const cell = await grid(page);

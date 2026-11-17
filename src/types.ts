@@ -73,7 +73,11 @@ export interface Piece {
   flipX: boolean;
   flipY: boolean;
   layer?: "background";
-  scale?: number; // 0.25..4 on any piece with a body (not triggers); absent means 1 (kept absent so old levels stay byte-identical)
+  scale?: number; // 0.25..4 on any piece with a body (not triggers); absent means 1 (kept absent so old levels stay byte-identical); grows from its base
+  scaleX?: number; // width and height (#117), always together, never with scale: 0.25..4 each, grows from its middle
+  scaleY?: number;
+  touch?: true; // triggers only (#117): fires when the player touches its cell, not when the run passes it
+  multi?: true; // a touch trigger fires on every new touch; a ring works again once you have left it (#117)
   color?: string; // rings and colour triggers, #rrggbb; absent means the original yellow
   bounce?: number; // rings only, peak height in blocks; absent means the original 2.25
   flipsGravity?: true; // rings only, the dark blue orb: a tap flips gravity instead of bouncing
@@ -132,6 +136,7 @@ export interface RunEffects {
   picked: number[]; // coins picked up by this step's contact pass, undone if contact runs again
   triggers: number[]; // trigger indices, in authored order (the order ties fire in)
   fired: Uint8Array; // 1 once that trigger has fired this run
+  inside: Uint8Array; // touch triggers: 1 while the body overlapped its cell at the last trigger pass
   groups: Map<number, number[]>; // group id -> member indices, built once per run
   // a move command per object, 6 slots: from x, from y, offset x, offset y, start, length
   move: Float64Array;

@@ -15,6 +15,9 @@ import {
   pointOf,
   reach,
   scaleOf,
+  sized,
+  centred,
+  axes,
   RINGS,
 } from "./engine.ts";
 import type { GameState, Level } from "./types.ts";
@@ -218,19 +221,30 @@ export function render(
       if ((ZONES.includes(o.type) || TRIGGERS.includes(o.type)) && state && !editing) return; // invisible in play
       if (o.hidden && !editing) return; // HIDDEN: still solid, never drawn outside the editor (#96)
       if (o.type === "coin" && state?.fx?.got[index]) return; // picked up this run
-      const k = o.scale ?? 1; // a scaled piece reaches further than its anchor cell
       // o is the run's own moved piece in play, so a piece a trigger moves into view is drawn
       // where it collides. An unsized piece keeps the cull it always had; a sized one is culled by
       // how far its shape reaches (#106), the same reach the contact pass uses.
       if (
-        o.scale === undefined
+        !sized(o)
           ? X(o.x) < -unit * 2 || X(o.x) > w + unit
           : X(o.x + reach(o)) < 0 || X(o.x - reach(o)) > w
       )
         return;
-      // where a round piece's middle is, and how many times its drawing is grown (rule 5b)
-      const s = scaleOf(o),
-        [mx, my] = pointOf(o, 0.5, 0.5);
+      // where a round piece's middle is, and how many times its drawing is grown (rule 5b). A width
+      // and height piece (#117) is drawn at size 1 inside a stretch about its middle, along its own
+      // turned axes, the same stretch polygon() and inReach() use.
+      const wide = centred(o),
+        s = wide ? 1 : scaleOf(o),
+        [mx, my] = pointOf(o, 0.5, 0.5),
+        stretch = (cx: number, cy: number) => {
+          if (!wide) return;
+          const a = (-o.rotation * Math.PI) / 180;
+          ctx.translate(X(cx), Y(cy));
+          ctx.rotate(a);
+          ctx.scale(o.scaleX!, o.scaleY!);
+          ctx.rotate(-a);
+          ctx.translate(-X(cx), -Y(cy));
+        };
       // a colour trigger's colour, read on the run's clock (null for an untouched piece)
       const tint = state?.fx ? tintOf(state.fx, index, state.time) : null;
       ctx.save();
@@ -247,6 +261,7 @@ export function render(
           used = state?.usedRings.includes(index),
           c = over(o.color ?? "#ffd166", tint);
         ctx.save();
+        stretch(mx, my);
         ctx.globalAlpha *= used ? 0.25 : 1;
         ctx.strokeStyle = active ? "#ffffff" : c;
         ctx.lineWidth = active ? 4 : 3;
@@ -319,6 +334,7 @@ export function render(
           [look, label, icon] = portalLook[o.type],
           c = over(look, tint);
         ctx.save();
+        stretch(px, py);
         ctx.strokeStyle = c;
         ctx.lineWidth = 3;
         ctx.fillStyle = `${c}18`;
@@ -351,6 +367,7 @@ export function render(
       } else if (o.type === "coin") {
         const c = over(COIN, tint),
           r = unit * COIN_RADIUS * s;
+        stretch(mx, my);
         ctx.fillStyle = c;
         ctx.strokeStyle = "#ffffff";
         ctx.lineWidth = 2;
@@ -405,7 +422,7 @@ export function render(
         ctx.closePath();
         // Unscaled pieces keep the literal cell maths so the pre-migration parity pin holds;
         // a scaled piece shades and grids across its real bounds.
-        const b = o.scale === undefined ? null : bounds(o);
+        const b = sized(o) ? bounds(o) : null;
         const cellTop = b ? b.top : o.y + 1,
           cellBottom = b ? b.bottom : o.y,
           cellLeft = b ? b.left : o.x,
@@ -433,7 +450,7 @@ export function render(
           ctx.setLineDash([]);
           const c = bounds(o);
           ctx.fillStyle = zoneColor;
-          ctx.font = `bold ${unit * 0.5 * k}px system-ui`;
+          ctx.font = `bold ${unit * 0.5 * Math.min(...axes(o))}px system-ui`;
           ctx.textAlign = "center";
           ctx.textBaseline = "middle";
           ctx.fillText(

@@ -79,18 +79,20 @@ test('the BOOSTERS tab places all seven, the RINGS tab the black and gray rings,
   expect(objects.slice(1, 8).map(o => o.type)).toEqual(['yellow-pad', 'pink-pad', 'red-pad', 'blue-pad', 'green-pad', 'black-pad', 'gray-pad']);
   expect(objects.slice(8)).toEqual([piece('drop-ring', 12, 2, { color: '#000000' }), piece('stop-ring', 14, 2, { color: '#9a9a9a' })]);
   // the selected gray ring takes a size
-  await expect(page.locator('#scale')).toBeEnabled();
-  await page.locator('#scale').fill('2');
-  await expect.poll(async () => (await stored(page)).draft.objects[9].scale).toBe(2);
+  await expect(page.locator('#scale-x')).toBeEnabled();
+  await page.locator('#scale-x').fill('2');
+  await expect.poll(async () => (await stored(page)).draft.objects[9]).toMatchObject({ scaleX: 2, scaleY: 1 });
   await expect(page.locator('#angle')).toBeDisabled();
   // a booster does too (picked by its strip, the shape it fires from), a trigger never
   await page.locator('#select-tool').click();
   await page.mouse.click(...at(6, -0.35));
   await expect(page.locator('#selection')).toContainText('RED BOOSTER');
-  await expect(page.locator('#scale')).toBeEnabled();
+  await expect(page.locator('#scale-x')).toBeEnabled();
+  await expect(page.locator('#scale-y')).toBeEnabled();
   await page.mouse.click(...at(16, 1));
   await expect(page.locator('#selection')).toContainText('MOVE TRIGGER');
-  await expect(page.locator('#scale')).toBeDisabled();
+  await expect(page.locator('#scale-x')).toBeDisabled();
+  await expect(page.locator('#scale-y')).toBeDisabled();
 });
 
 test('SWIPE off: a drag with a piece places one piece where it starts, and does not scroll', async ({ page }) => {
@@ -256,7 +258,8 @@ test.describe('a second finger', () => {
     await touch('touchMove', [[bx, by], [bx + 200, by]]);
     await touch('touchEnd', []);
     await expect.poll(() => cells(page)).toEqual([['block', 4, 0], ['block', 5, 0], ['block', 6, 0], ['block', 7, 0]]);
-    expect((await stored(page)).draft.objects[3].scale).toBe(2);
+    // a pinch sizes both axes by one factor (#117)
+    expect((await stored(page)).draft.objects[3]).toMatchObject({ scaleX: 2, scaleY: 2 });
   });
   test('ends the stroke before a pinch (native first pointer, dispatched second, in every engine)', async ({ page }) => {
     await seed(page, []);
@@ -271,6 +274,6 @@ test.describe('a second finger', () => {
     await finger('pointerup', 0, 0);
     await page.mouse.move(...at(12, 0)); await page.mouse.up();
     expect(await cells(page)).toEqual([['block', 4, 0], ['block', 5, 0], ['block', 6, 0], ['block', 7, 0]]);
-    expect((await stored(page)).draft.objects[3].scale).toBe(2);
+    expect((await stored(page)).draft.objects[3]).toMatchObject({ scaleX: 2, scaleY: 2 });
   });
 });

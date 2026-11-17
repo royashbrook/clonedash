@@ -549,7 +549,7 @@
             >＋<input
               id="custom-colour"
               type="color"
-              value={customs.at(-1) ?? "#ffffff"}
+              value={colour && !FIXED.has(colour) ? colour : (customs.at(-1) ?? "#ffffff")}
               oninput={(e) => {
                 colour = e.currentTarget.value.toLowerCase();
                 if (tool === "eraser") tool = "pencil";

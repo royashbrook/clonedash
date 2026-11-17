@@ -23,6 +23,9 @@
     MAX_GROUP,
     MAX_TRIGGER_TIME,
     coinCount,
+    axes,
+    toCentred,
+    resized,
   } from "./engine.ts";
   import { LEVELS, COLLECTIONS, COURSE_ORDER, courseSong } from "./levels.ts";
   import { render } from "./render.ts";
@@ -212,7 +215,8 @@
         (o.type === "move-trigger"
           ? ` · MOVE ${o.moveX ?? 0}, ${o.moveY ?? 0}`
           : ` · ${RING_COLORS.find(([hex]) => hex === (o.color ?? RING_COLORS[0][0]))?.[1] ?? o.color}`) +
-        ` · ${o.duration ? `${o.duration}S` : "INSTANT"}`;
+        ` · ${o.duration ? `${o.duration}S` : "INSTANT"}` +
+        (o.touch ? (o.multi ? " · TOUCH · MULTI" : " · TOUCH") : "");
   const typeOf = (t: string): ObjectType =>
     presets[t]?.type ?? (t as ObjectType);
   type Tab = keyof typeof choices;
@@ -685,7 +689,7 @@
         sweep = null;
         const [a, b] = [...fingers.values()],
           piece = draft.objects[selected];
-        pinch = pinchStart(a, b, piece.scale ?? 1, piece.rotation);
+        pinch = pinchStart(a, b, axes(piece), piece.rotation);
       }
       return;
     }
@@ -1192,7 +1196,16 @@
     const moved =
       group.length > 1
         ? transformGroup(group.map((i) => draft.objects[i]), action, stepSize)
-        : [transform(structuredClone(selection), action, stepSize)];
+        : [
+            // one piece turns or flips about its middle (#117); a move keeps its own anchor
+            transform(
+              ["left", "right", "up", "down"].includes(action)
+                ? structuredClone(selection)
+                : toCentred(structuredClone(selection)),
+              action,
+              stepSize,
+            ),
+          ];
     const next = {
       ...draft,
       objects: draft.objects.map((o, i) =>
@@ -1208,15 +1221,21 @@
     draft = next;
     saveDraft();
   }
-  // The Size slider. 1 is stored as "no field" so an unscaled piece stays byte-identical to
-  // one saved before scaling existed (and to the pre-migration parity baseline).
-  function setScale(value: number) {
+  // The WIDTH and HEIGHT sliders (#117): each changes its own axis. A single-scale piece is
+  // converted (resized) only when its value really changes, and 1 by 1 is stored as no field.
+  function setAxis(axis: 0 | 1, value: number) {
     if (selected < 0) return;
-    const scale = Math.round(value * 20) / 20;
-    const next = changed((piece) => {
-      if (scale === 1) delete piece.scale;
-      else piece.scale = scale;
-    }, (o) => SCALABLE.includes(o.type));
+    const k = Math.round(value * 20) / 20;
+    const next = {
+      ...draft,
+      objects: draft.objects.map((o, i) => {
+        if (!group.includes(i) || !SCALABLE.includes(o.type)) return o;
+        const now = axes(o);
+        if (now[axis] === k) return o;
+        now[axis] = k;
+        return resized(o, now[0], now[1]);
+      }),
+    };
     try {
       validateLevel(next);
     } catch {
@@ -1230,9 +1249,16 @@
   // keep working on top of it (they add 90 to whatever angle is set).
   function setAngle(value: number) {
     if (selected < 0) return;
-    const next = changed((piece) => {
-      piece.rotation = ((Math.round(value) % 360) + 360) % 360;
-    }, (o) => TURNABLE.includes(o.type) || !!o.dash);
+    const rotation = ((Math.round(value) % 360) + 360) % 360;
+    // a single-scale piece turns about its middle too: converted first, only if the angle changes
+    const next = {
+      ...draft,
+      objects: draft.objects.map((o, i) =>
+        !group.includes(i) || !(TURNABLE.includes(o.type) || o.dash) || o.rotation === rotation
+          ? o
+          : { ...toCentred(structuredClone(o)), rotation },
+      ),
+    };
     try {
       validateLevel(next);
     } catch {
@@ -1262,7 +1288,7 @@
   // EDIT OBJECT (#90): switches on the selected piece, or every piece in the group that can take
   // one. Off is stored as "no field". The sheet reopens after each switch to show where it stands.
   const OPTIONS: [
-    "noTouch" | "hidden" | "wallPass" | "roofPass",
+    "noTouch" | "hidden" | "wallPass" | "roofPass" | "multi",
     string,
     string,
     (o: Piece) => boolean,
@@ -1271,6 +1297,7 @@
     ["hidden", "HIDDEN", "it is invisible in play but still there", (o) => !ZONES.includes(o.type) && !TRIGGERS.includes(o.type)],
     ["wallPass", "WALL PASS", "its sides stop you instead of killing you", (o) => BLOCKS.includes(o.type) || SLOPES.includes(o.type)],
     ["roofPass", "ROOF PASS", "you bump your head on it instead of dying", (o) => BLOCKS.includes(o.type)],
+    ["multi", "MULTI TOUCH", "it works again every time you come back to it, not just once", (o) => RINGS.includes(o.type)],
   ];
   function editObject() {
     if (selected < 0) return;
@@ -1279,7 +1306,7 @@
     void sheet(
       "Edit object",
       trigger
-        ? "A trigger fires once when you run past it. It works on every piece with its group id."
+        ? "A trigger fires once when you run past it, or with TOUCH, when you touch it. MULTI makes a touch trigger fire every time you touch it again. It works on every piece with its group id."
         : (fits.length
             ? (group.length > 1 ? `${group.length} pieces. ` : "") +
               fits.map(([key, name, text]) => `${name} ${selection[key] ? "ON" : "OFF"}: ${text}.`).join(" ") +
@@ -1355,6 +1382,18 @@
     draft = next;
     saveDraft();
   }
+  // TOUCH and MULTI on the selected triggers (#117). Off is no field; turning TOUCH off clears MULTI,
+  // which only means something on a touch trigger.
+  function setTouch(key: "touch" | "multi", on: boolean) {
+    const next = changed((piece) => {
+      if (on) piece[key] = true;
+      else delete piece[key];
+      if (!piece.touch) delete piece.multi;
+    }, (o) => TRIGGERS.includes(o.type) && (key === "touch" || !!o.touch));
+    validateLevel(next);
+    draft = next;
+    saveDraft();
+  }
   // The Edges control: which sides of an outlined block are drawn. FULL is stored as "no field".
   function setEdges(value: Edges | "") {
     if (selected < 0) return;
@@ -1385,17 +1424,19 @@
     fingers.set(e.pointerId, [e.clientX, e.clientY]);
     if (fingers.size < 2) return;
     const [a, b] = [...fingers.values()],
-      piece = structuredClone(draft.objects[selected]),
+      before = draft.objects[selected],
       next = pinchTransform(
         pinch,
         a,
         b,
         snap,
-        SCALABLE.includes(piece.type),
-        TURNABLE.includes(piece.type),
-      );
-    if (next.scale === 1) delete piece.scale;
-    else piece.scale = next.scale;
+        SCALABLE.includes(before.type),
+        TURNABLE.includes(before.type),
+      ),
+      [kx, ky] = axes(before);
+    // a pinch that changes nothing converts nothing (#117)
+    if (next.scaleX === kx && next.scaleY === ky && next.rotation === before.rotation) return;
+    const piece = resized(before, next.scaleX, next.scaleY);
     piece.rotation = next.rotation;
     const level = {
       ...draft,
@@ -1459,7 +1500,7 @@
   function how() {
     void sheet(
       "One button. Find your flow.",
-      "Square: tap or press Space to jump onto two-block ledges. Hold for another jump when you land. Pogo: same as square, but every fresh tap lets you jump again in midair. Jump before a wall to clear it. Try Air Steps! Plane: hold to fly against gravity; release to fall. Landings and ceiling contact are safe while flying, but wall impacts kill. Angle: hold to climb at 45 degrees, release to dive at 45 degrees. The floor and the ceiling are safe to slide along; touching any block, ramp or curve is a crash, unless a W stops you at its side or an R bumps your head. Wheel: land on a block, floor or ceiling, then tap or press Space to flip gravity. Midair taps are ignored; holding does not flip again when you land. Croissant: land, then tap to teleport straight across to the floor, ceiling or block on the other side, with gravity flipped. UP and DOWN portals set gravity without changing your shape. Speed portals change how fast you move forward: SLOW, 1X, FAST and FASTER. Shape and gravity stay the same. Under upside-down gravity, land and jump on ceilings. All spikes kill, including the tiny quarter-size ones. Outline blocks are transparent but solid. Hitting a wall kills in ALL modes, including the vertical face of a ramp. Your smaller hazard hitbox still forgives edge grazes. Background blocks never collide. Rings: tap or press Space while reaching a glowing ring for a midair jump, once per ring per run. Purple and red rings bounce one and five blocks; a white ring takes any colour and height. A dark blue gravity ring flips your gravity and you drop the new way at once; a green one flips it and bounces you away from the new gravity. UP and DOWN portals drop you the new way at once too. Hold on a pink dash orb and you dash the way it points, with no gravity, until you let go: turn it with the angle slider to aim it. A yellow dash orb flips your gravity as well. A black ring sends you down fast, as if you had been falling for a while; a gray ring stops your rise or fall. Boosters are flat pads with no tap: touch one and it does what its ring does, once each time you land on it. Turn one upside down for a ceiling. The Size slider (or a pinch) sizes any piece but a trigger.EDIT OBJECT switches a piece to NO TOUCH (seen, never touched), HIDDEN (touched, never seen in play; faint in the editor), WALL PASS (its sides stop you, like a W) or ROOF PASS (you bump your head, like an R). Wall pass (W) and roof pass (R) are invisible in play: lay them over blocks, or right where you hit them. While you touch a W, a wall stops you instead of crashing you, and a jump over it carries on; while you touch an R, you bump your head and fall back instead of crashing. Spikes still kill. Ramps: walk up or down the white diagonal slope. Curves are rounded ramps: a scoop bends up like a skate ramp, a hill bulges out: run into its side and you ride up it. Find RINGS and RAMP tabs in the editor. In the editor, pinch a selected piece with two fingers to size it and turn it, like cropping a photo; Snap holds 15 degrees and quarter sizes. MULTI selects a group: tap pieces to add them, or swipe a box over a lot of them, then move, turn, flip, copy or delete them together. Edge, parallel, outer corner, inner corner and no outline blocks are solid blocks with the white line on only some sides (or none, for the middle of a shape), so a big shape reads as one piece: turn them to face the outside, and pick EDGES on any selected block. Coins: touch one to pick it up; a level holds up to 10, and your best is the most you picked up in one finished run. Triggers are invisible in play and fire once when you run past them. Give pieces a GROUP ID in EDIT OBJECT, then a MOVE trigger slides every piece in that group some blocks over a time you choose, and a COLOR trigger paints them a colour. Find them on the COINS and TRIGGERS tabs.",
+      "Square: tap or press Space to jump onto two-block ledges. Hold for another jump when you land. Pogo: same as square, but every fresh tap lets you jump again in midair. Jump before a wall to clear it. Try Air Steps! Plane: hold to fly against gravity; release to fall. Landings and ceiling contact are safe while flying, but wall impacts kill. Angle: hold to climb at 45 degrees, release to dive at 45 degrees. The floor and the ceiling are safe to slide along; touching any block, ramp or curve is a crash, unless a W stops you at its side or an R bumps your head. Wheel: land on a block, floor or ceiling, then tap or press Space to flip gravity. Midair taps are ignored; holding does not flip again when you land. Croissant: land, then tap to teleport straight across to the floor, ceiling or block on the other side, with gravity flipped. UP and DOWN portals set gravity without changing your shape. Speed portals change how fast you move forward: SLOW, 1X, FAST and FASTER. Shape and gravity stay the same. Under upside-down gravity, land and jump on ceilings. All spikes kill, including the tiny quarter-size ones. Outline blocks are transparent but solid. Hitting a wall kills in ALL modes, including the vertical face of a ramp. Your smaller hazard hitbox still forgives edge grazes. Background blocks never collide. Rings: tap or press Space while reaching a glowing ring for a midair jump, once per ring per run. Purple and red rings bounce one and five blocks; a white ring takes any colour and height. A dark blue gravity ring flips your gravity and you drop the new way at once; a green one flips it and bounces you away from the new gravity. UP and DOWN portals drop you the new way at once too. Hold on a pink dash orb and you dash the way it points, with no gravity, until you let go: turn it with the angle slider to aim it. A yellow dash orb flips your gravity as well. A black ring sends you down fast, as if you had been falling for a while; a gray ring stops your rise or fall. Boosters are flat pads with no tap: touch one and it does what its ring does, once each time you land on it. Turn one upside down for a ceiling. The Width and Height sliders size any piece but a trigger: it stretches out both ways from its middle, and turning it keeps it in place. A pinch sizes both at once and keeps its shape.EDIT OBJECT switches a piece to NO TOUCH (seen, never touched), HIDDEN (touched, never seen in play; faint in the editor), WALL PASS (its sides stop you, like a W) or ROOF PASS (you bump your head, like an R). Wall pass (W) and roof pass (R) are invisible in play: lay them over blocks, or right where you hit them. While you touch a W, a wall stops you instead of crashing you, and a jump over it carries on; while you touch an R, you bump your head and fall back instead of crashing. Spikes still kill. Ramps: walk up or down the white diagonal slope. Curves are rounded ramps: a scoop bends up like a skate ramp, a hill bulges out: run into its side and you ride up it. Find RINGS and RAMP tabs in the editor. In the editor, pinch a selected piece with two fingers to size it and turn it, like cropping a photo; Snap holds 15 degrees and quarter sizes. MULTI selects a group: tap pieces to add them, or swipe a box over a lot of them, then move, turn, flip, copy or delete them together. Edge, parallel, outer corner, inner corner and no outline blocks are solid blocks with the white line on only some sides (or none, for the middle of a shape), so a big shape reads as one piece: turn them to face the outside, and pick EDGES on any selected block. Coins: touch one to pick it up; a level holds up to 10, and your best is the most you picked up in one finished run. Triggers are invisible in play and fire once when you run past them. Tick TOUCH to fire one when you touch it instead, and MULTI to fire it every time you touch it again. MULTI TOUCH in EDIT OBJECT lets a ring work again every time you come back to it. Give pieces a GROUP ID in EDIT OBJECT, then a MOVE trigger slides every piece in that group some blocks over a time you choose, and a COLOR trigger paints them a colour. Find them on the COINS and TRIGGERS tabs.",
     );
   }
   // Every check says what it found, so a tap never looks like nothing happened. A pull is
@@ -1999,16 +2040,28 @@
           bind:checked={snap}
         /></label
       ><label
-        >Size <input
-          id="scale"
+        >Width <input
+          id="scale-x"
           type="range"
           min="0.25"
           max="4"
           step="0.05"
-          aria-label="Size"
-          value={selection?.scale ?? 1}
+          aria-label="Width"
+          value={selection ? axes(selection)[0] : 1}
           disabled={!selection || !SCALABLE.includes(selection.type)}
-          oninput={(e) => setScale(+e.currentTarget.value)}
+          oninput={(e) => setAxis(0, +e.currentTarget.value)}
+        /></label
+      ><label
+        >Height <input
+          id="scale-y"
+          type="range"
+          min="0.25"
+          max="4"
+          step="0.05"
+          aria-label="Height"
+          value={selection ? axes(selection)[1] : 1}
+          disabled={!selection || !SCALABLE.includes(selection.type)}
+          oninput={(e) => setAxis(1, +e.currentTarget.value)}
         /></label
       ><label
         >Angle <input
@@ -2087,7 +2140,7 @@
           : group.length > 1
           ? `${group.length} PIECES · MOVE, TURN, FLIP, COPY OR DELETE THEM TOGETHER`
           : selection
-          ? `${labelOf(selection.type)} · x ${selection.x.toFixed(2)} / y ${selection.y.toFixed(2)} · ${selection.rotation}° · ×${(selection.scale ?? 1).toFixed(2)}${selection.type === "ring" ? (selection.dash ? (selection.flipsGravity ? " · ➤ DASH + GRAVITY" : " · ➤ DASH") : selection.flipsGravity ? (selection.boost ? " · ⇈ GRAVITY + BOUNCE" : " · ⇅ GRAVITY") : ` · ↑${selection.bounce ?? RING_BOUNCE}`) : selection.type === "drop-ring" ? " · ↓ DROP" : selection.type === "stop-ring" ? " · − STOP" : ""}${selection.edges ? ` · ${EDGE_NAMES.find(([v]) => v === selection.edges)?.[1]}` : ""}${OPTIONS.filter(([key]) => selection[key]).map(([, name]) => ` · ${name}`).join("")}${selection.group ? ` · GROUP ${selection.group}` : ""}${triggerText(selection)}`
+          ? `${labelOf(selection.type)} · x ${selection.x.toFixed(2)} / y ${selection.y.toFixed(2)} · ${selection.rotation}° · ${axes(selection)[0] === axes(selection)[1] ? `×${axes(selection)[0].toFixed(2)}` : `${axes(selection)[0].toFixed(2)} × ${axes(selection)[1].toFixed(2)}`}${selection.type === "ring" ? (selection.dash ? (selection.flipsGravity ? " · ➤ DASH + GRAVITY" : " · ➤ DASH") : selection.flipsGravity ? (selection.boost ? " · ⇈ GRAVITY + BOUNCE" : " · ⇅ GRAVITY") : ` · ↑${selection.bounce ?? RING_BOUNCE}`) : selection.type === "drop-ring" ? " · ↓ DROP" : selection.type === "stop-ring" ? " · − STOP" : ""}${selection.edges ? ` · ${EDGE_NAMES.find(([v]) => v === selection.edges)?.[1]}` : ""}${OPTIONS.filter(([key, , , fit]) => selection[key] && fit(selection)).map(([, name]) => ` · ${name}`).join("")}${selection.group ? ` · GROUP ${selection.group}` : ""}${triggerText(selection)}`
           : tool === "select"
             ? "Tap an object to select it."
             : tool === "multi"
@@ -2182,7 +2235,21 @@
                 value={selection.duration ?? 0}
                 onchange={(e) => setTrigger("duration", e.currentTarget)}
               /></label
-            >{:else}<label
+            ><label class="check"
+              ><input
+                id="trigger-touch"
+                type="checkbox"
+                checked={!!selection.touch}
+                onchange={(e) => setTouch("touch", e.currentTarget.checked)}
+              />TOUCH: fires when you touch it, not when you pass it</label
+            >{#if selection.touch}<label class="check"
+                ><input
+                  id="trigger-multi"
+                  type="checkbox"
+                  checked={!!selection.multi}
+                  onchange={(e) => setTouch("multi", e.currentTarget.checked)}
+                />MULTI: fires every time you touch it again</label
+              >{/if}{:else}<label
               >Group id (1–{MAX_GROUP}, blank for none)<input
                 id="group-id"
                 type="number"
