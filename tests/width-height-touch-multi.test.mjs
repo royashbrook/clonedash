@@ -52,6 +52,15 @@ test('rule 2: a single-scale piece converts exactly, with its shape where it was
   assert.deepEqual(resized(piece('grid', 5, 1, { scaleX: 2, scaleY: 1 }), 1, 1), plain);
   assert.deepEqual(round(resized(piece('grid', 5, 1, { scale: 2 }), 2, 3)), round(piece('grid', 5, 1.5, { scaleX: 2, scaleY: 3 })));
   assert.deepEqual(axes(piece('grid', 5, 1, { scale: 2 })), [2, 2]);
+  // a stored scale of 1 (valid since #106) converts to no size field where it stood, and the
+  // turn or flip that converted it is a valid level (a scaleX and scaleY of 1 would be refused)
+  for (const type of ['block', 'small', 'plane', 'ring']) {
+    const one = piece(type, 8, 1, { scale: 1, hidden: true, rotation: 90 });
+    validateLevel(level([one]));
+    assert.deepEqual(toCentred(one), piece(type, 8, 1, { hidden: true, rotation: 90 }), type);
+    for (const action of ['cw', 'ccw', 'flipX', 'flipY'])
+      validateLevel(level([transform(toCentred(structuredClone(one)), action)]));
+  }
 });
 
 test('rule 2b: the anchor bound is the same numbers for both modes, so a conversion out of it is refused, not clamped', () => {

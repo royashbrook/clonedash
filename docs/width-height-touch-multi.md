@@ -26,7 +26,8 @@ again on every touch, and rings that work again once you have left them.
    size or turn (a Width or Height slider, the Angle slider, a quarter turn, a flip, a pinch)
    converts it first: its middle is `pointOf(piece, w/2, h/2)`, its anchor becomes that middle
    minus half its unsized box, exactly, with no rounding, and both axes take the old scale. its
-   shape does not move. then the edit applies.
+   shape does not move. then the edit applies. a stored scale of exactly 1 (valid since #106) is
+   the unsized shape in both modes, so it converts to no size field at the same anchor.
    2a. a slider set to the value it already has, opening a sheet, or a pinch that ends unchanged
        converts nothing.
    2b. the anchor bounds are the same numbers for both modes: x from 3 to length minus 2, y from

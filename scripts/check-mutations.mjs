@@ -205,6 +205,7 @@ try {
     ["engine.ts", "lift = centred(o) ? 0 : ((ky - 1) * h) / 2;", "lift = ((ky - 1) * h) / 2;", "rule 1:", "width-height-touch-multi.test.mjs"],
     ["engine.ts", "x: cx - w / 2, y: cy - h / 2,", "x: Math.round((cx - w / 2) * 20) / 20, y: Math.round((cy - h / 2) * 20) / 20,", "rule 2:", "width-height-touch-multi.test.mjs"],
     ["engine.ts", 'if (["left", "right", "up", "down"].includes(action)) {\n    o.x', "if (true) {\n    o.x", "rule 2:", "width-height-touch-multi.test.mjs"],
+    ["engine.ts", "if (scale === 1) return rest;", "", "rule 2:", "width-height-touch-multi.test.mjs"],
     ["engine.ts", "(o.scaleX === 1 && o.scaleY === 1))", "false)", "rule 1b", "width-height-touch-multi.test.mjs"],
     ["engine.ts", "(TRIGGERS.includes(o.type) && o.touch)", "TRIGGERS.includes(o.type)", "rule 1b", "width-height-touch-multi.test.mjs"],
     ["engine.ts", "c = Math.cos(a),\n    n = Math.sin(a),", "c = 1,\n    n = 0,", "rule 1d", "width-height-touch-multi.test.mjs"],

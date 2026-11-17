@@ -1044,6 +1044,8 @@ export function toCentred(o: Piece): Piece {
   const { w, h } = pieceSize(o),
     [cx, cy] = pointOf(o, w / 2, h / 2),
     { scale, ...rest } = o;
+  // a stored scale of 1 is the unsized shape in both modes: it becomes no size field, in place
+  if (scale === 1) return rest;
   return { ...rest, x: cx - w / 2, y: cy - h / 2, scaleX: scale, scaleY: scale };
 }
 // A piece at a new width and height, converted first if it was single-scale; 1 by 1 is no field.
