@@ -26,6 +26,7 @@ try {
     "swipe.test.mjs",
     "gesture.test.mjs",
     "skin.test.mjs",
+    "width-height-touch-multi.test.mjs",
   ]) {
     const testSource = (await readFile(join("tests", testFile), "utf8"))
       .replaceAll("../src/", "./src/")
@@ -113,7 +114,7 @@ try {
     // Coins and triggers (#101, docs/coins-and-triggers.md): each rule fails its own test.
     ["engine.ts", "coinCount(level) > MAX_COINS", "coinCount(level) > MAX_COINS + 1", "coin cap", "coins.test.mjs"],
     ["library.ts", "entry.coins = got;", "entry.coins = (entry.coins ?? 0) + got;", "best coins", "coins.test.mjs"],
-    ["engine.ts", "if (fx.fired[t]) continue;", "if (false) continue;", "instant move by the offset", "triggers.test.mjs"],
+    ["engine.ts", "else if (fx.fired[t] || s.x < o.x) continue;", "else if (s.x < o.x) continue;", "instant move by the offset", "triggers.test.mjs"],
     ["engine.ts", "fx.groups.get(o.target);", "[...fx.groups.values()].flat();", "its group only", "triggers.test.mjs"],
     ["engine.ts", "fx.move[m + 2] = o.moveX ?? 0;", "fx.move[m + 2] = o.moveY ?? 0;", "instant move by the offset", "triggers.test.mjs"],
     ["engine.ts", "if (!fx.tinted[i]) return null;", "if (!fx.tinted.some(Boolean)) return null;", "its group only", "triggers.test.mjs"],
@@ -165,11 +166,11 @@ try {
     ["engine.ts", "!triggers.length && !boosters.length) return null;", "!triggers.length) return null;", "a level with no booster, coin or trigger", "boosters.test.mjs"],
     // 5. size
     ["engine.ts", "export const SCALABLE = TYPES.filter((t) => !TRIGGERS.includes(t));", "export const SCALABLE = TYPES.filter((t) => TURNABLE.includes(t));", "the ceiling covers sized rings", "size.test.mjs"],
-    ["engine.ts", "const [cx, cy] = pointOf(o, 0.5, 0.5),", "const [cx, cy] = [o.x + 0.5, o.y + 0.5],", "a sized ring is reached at its drawn centre", "size.test.mjs"],
+    ["engine.ts", "const [cx, cy] = pointOf(o, 0.5, 0.5);", "const [cx, cy] = [o.x + 0.5, o.y + 0.5];", "a sized ring is reached at its drawn centre", "size.test.mjs"],
     ["engine.ts", "r = 0.6 * scaleOf(o);", "r = 0.6;", "a sized ring is reached at its drawn centre", "size.test.mjs"],
     ["engine.ts", "if (o.x - r > s.x + SIZE + 1 || o.x + r < s.x - 1) continue;", "if (o.x > s.x + 2 * scaleOf(o) || o.x < s.x - 2 * scaleOf(o)) continue;", "a sized portal, coin and booster are touched by their real shape", "size.test.mjs"],
     ["engine.ts", "if ((raw.height !== undefined || sizedNew) && bounds", "if ((raw.height !== undefined) && bounds", "the ceiling covers sized rings", "size.test.mjs"],
-    ["render.ts", "[mx, my] = pointOf(o, 0.5, 0.5);", "[mx, my] = [o.x + 0.5, o.y + 0.5];", "drawn at the centre and size they are touched at", "size.test.mjs"],
+    ["render.ts", "[mx, my] = pointOf(o, 0.5, 0.5),", "[mx, my] = [o.x + 0.5, o.y + 0.5],", "drawn at the centre and size they are touched at", "size.test.mjs"],
     ["render.ts", "ctx.arc(X(mx), Y(my), unit * 0.45 * s, 0, Math.PI * 2);", "ctx.arc(X(mx), Y(my), unit * 0.45, 0, Math.PI * 2);", "drawn at the centre and size they are touched at", "size.test.mjs"],
     ["gesture.ts", "angleStep = turnable ?", "angleStep = scalable ?", "the pinch starts from the piece as it is", "gesture.test.mjs"],
     // 6. swipe
@@ -199,6 +200,21 @@ try {
     ["skin.ts", "bottom = s.gravity > 0 ? s.y + SIZE - h : s.y;", "bottom = s.gravity > 0 ? s.y + SIZE - 1 + (1 - h) / 2 : s.y;", "anchors feet", "skin.test.mjs"],
     ["skin.ts", "Math.min(center, s.wall - w / 2)", "Math.min(center, s.wall - 0.5)", "anchors feet", "skin.test.mjs"],
     ["engine.ts", "SIZE = 0.64,", "SIZE = 0.7,", "a skin never changes the body", "skin.test.mjs"],
+    // Width and height, touch triggers, multi touch rings and cdl2 (#117,
+    // docs/width-height-touch-multi.md): each rule's own test catches its broken control.
+    ["engine.ts", "lift = centred(o) ? 0 : ((ky - 1) * h) / 2;", "lift = ((ky - 1) * h) / 2;", "rule 1:", "width-height-touch-multi.test.mjs"],
+    ["engine.ts", "x: cx - w / 2, y: cy - h / 2,", "x: Math.round((cx - w / 2) * 20) / 20, y: Math.round((cy - h / 2) * 20) / 20,", "rule 2:", "width-height-touch-multi.test.mjs"],
+    ["engine.ts", 'if (["left", "right", "up", "down"].includes(action)) {\n    o.x', "if (true) {\n    o.x", "rule 2:", "width-height-touch-multi.test.mjs"],
+    ["engine.ts", "(o.scaleX === 1 && o.scaleY === 1))", "false)", "rule 1b", "width-height-touch-multi.test.mjs"],
+    ["engine.ts", "(TRIGGERS.includes(o.type) && o.touch)", "TRIGGERS.includes(o.type)", "rule 1b", "width-height-touch-multi.test.mjs"],
+    ["engine.ts", "c = Math.cos(a),\n    n = Math.sin(a),", "c = 1,\n    n = 0,", "rule 1d", "width-height-touch-multi.test.mjs"],
+    ["engine.ts", "rx = 0.6 * o.scaleX!,", "rx = 0.6 * o.scaleY!,", "rule 1d", "width-height-touch-multi.test.mjs"],
+    ["engine.ts", "!s.level.objects[i].multi || inReach(s, s.level.objects[i])", "!s.level.objects[i].multi || false", "rule 5", "width-height-touch-multi.test.mjs"],
+    ["engine.ts", "entered = touching && !fx.inside[t];", "entered = touching;", "rule 4:", "width-height-touch-multi.test.mjs"],
+    ["engine.ts", "if (!entered || (fx.fired[t] && !o.multi)) continue;", "if (!entered) continue;", "rule 4:", "width-height-touch-multi.test.mjs"],
+    ["transfer.ts", "(level.objects.some(usesNew) ? PREFIX2 : PREFIX)", "PREFIX", "rule 6", "width-height-touch-multi.test.mjs"],
+    ["transfer.ts", "if (level.objects.some(usesNew) !== second)", "if (false)", "rule 6", "width-height-touch-multi.test.mjs"],
+    ["gesture.ts", "scaleY: axis(p.ky0)", "scaleY: axis(p.kx0)", "one factor", "gesture.test.mjs"],
     // Release identity guards: each rejection must fail against its broken control.
     [
       "scripts/version.mjs",
