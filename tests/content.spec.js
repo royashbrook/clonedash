@@ -7,6 +7,7 @@ import { REMIX_INPUTS } from './remix-inputs.mjs';
 import { RECORDINGS } from '../src/recordings.ts';
 import { courseInput } from './course-input.mjs';
 import { AVATAR } from '../src/render.ts';
+import { pauseClock } from './paused-clock.mjs';
 
 const save = () => ({ version: 1, best: {0:100,8:52}, sound:false,
   draft: {name:'Keep my draft',length:40,objects:[],song:31},
@@ -129,7 +130,12 @@ for (const index of [0,8]) test(`full course through actual keyboard input: ${CO
     CanvasRenderingContext2D.prototype.translate=function(x,y){window.playerPaint={x,y};return translate.call(this,x,y);};
     CanvasRenderingContext2D.prototype.rotate=function(angle){window.playerTilt=angle;return rotate.call(this,angle);};
   });
-  await page.clock.install();await page.goto('/');await page.clock.runFor(32);
+  // The game only moves when the loop below steps the clock (#113): a clock left running also
+  // moved it between samples, by however long each sample took, and a slow sample let the run
+  // reach an obstacle before the loop saw it (reproduced with 40ms added per sample; a paused
+  // clock passed the same lag every time). Paused at the test's own timeout, so it never runs.
+  await page.clock.install({time:0});await page.goto('/');await pauseClock(page,test.info());
+  await page.clock.runFor(32);
   await page.getByRole('button',{name:`Play ${level.name}`,exact:true}).click();
   await page.clock.runFor(32);
   for(let tick=0;tick<1600;tick++) {
