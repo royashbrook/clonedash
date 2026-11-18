@@ -1,58 +1,22 @@
 name: webkit diagnostic
-# DIAGNOSTIC ONLY, never merged (#122). The same webkit cases on the current runner setup
-# (ubuntu-latest, Playwright 1.62.1 installed per run) and in the official 1.64.1 image, a fixed
-# repeat count, retries 0, every result kept. A clean sample cannot prove a rare fault gone.
+# DIAGNOSTIC ONLY, never merged (#122). Second run: in the official 1.64.1 image only, where the
+# offline song render crashed 20 of 20, the same render under three compose variants (src/music.ts
+# on this branch): a unchanged (must still crash here, or the run is inconclusive), b without the
+# LFO depth -> filter frequency edge, c with the LFO never stopped. One job per variant, so one
+# failing cannot stop another; 20 repeats, retries 0, every result kept.
 on:
   push:
     branches: [webkit-diag]
 permissions:
   contents: read
-env:
-  CASES: tests/zz-diag-webkit.spec.js tests/transfer.spec.js:112 tests/library.spec.js:103
-  # platform, Playwright, the WebKit revision, and every libsoup file in the browser bundle with
-  # the version string inside it. ON DISK only: which one the network process maps is not measured.
-  RECORD: |
-    uname -a; grep -E '^(PRETTY_NAME|VERSION_ID)=' /etc/os-release
-    npx playwright --version
-    node -p "'webkit revision ' + JSON.parse(require('fs').readFileSync('node_modules/playwright-core/browsers.json', 'utf8')).browsers.find(b => b.name === 'webkit').revision"
-    find "$1" -name 'libsoup*' -type f | while read -r f; do
-      echo "on disk: $f $(grep -a -o -m1 -E 'libsoup/[0-9]+\.[0-9]+\.[0-9]+' "$f" | head -1)"
-    done
-  REPEATS: "20"
 jobs:
-  old:
+  audio:
     runs-on: ubuntu-latest
     timeout-minutes: 40
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 22
-          cache: npm
-      - run: npm ci
-      - run: npx playwright install --with-deps webkit
-      - name: Record versions (libsoup on disk in the bundle, not proven loaded)
-        run: bash -c "$RECORD" record ~/.cache/ms-playwright
-      - run: npm run build
-      - name: Cases
-        # bounded, with room left in the job for the upload
-        timeout-minutes: 25
-        run: npx playwright test $CASES --project webkit --repeat-each $REPEATS --retries 0 --output diag-results --reporter=line,json
-        env:
-          PLAYWRIGHT_JSON_OUTPUT_NAME: diag-report/report.json
-      - uses: actions/upload-artifact@v7
-        if: always()
-        with:
-          name: webkit-diag-old-${{ github.run_id }}
-          path: |
-            diag-results/
-            diag-report/
-          retention-days: 14
-  new:
-    runs-on: ubuntu-latest
-    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [a, b, c]
     container:
       image: mcr.microsoft.com/playwright:v1.64.1-noble
       options: --user 1001
@@ -67,19 +31,22 @@ jobs:
       - run: npm ci
       # the image's browsers belong to 1.64.1, so the runner package must match them
       - run: npm install --no-save --save-exact @playwright/test@1.64.1
-      - name: Record versions (libsoup on disk in the bundle, not proven loaded)
-        run: bash -c "$RECORD" record "$PLAYWRIGHT_BROWSERS_PATH"
+      - name: Record versions
+        run: |
+          uname -a; grep -E '^(PRETTY_NAME|VERSION_ID)=' /etc/os-release
+          npx playwright --version
+          node -p "'webkit revision ' + JSON.parse(require('fs').readFileSync('node_modules/playwright-core/browsers.json', 'utf8')).browsers.find(b => b.name === 'webkit').revision"
       - run: npm run build
       - name: Cases
-        # bounded, with room left in the job for the upload
         timeout-minutes: 25
-        run: npx playwright test $CASES --project webkit --repeat-each $REPEATS --retries 0 --output diag-results --reporter=line,json
+        run: npx playwright test tests/zz-diag-audio.spec.js --project webkit --repeat-each 20 --retries 0 --output diag-results --reporter=line,json
         env:
+          COMPOSE_VARIANT: ${{ matrix.variant }}
           PLAYWRIGHT_JSON_OUTPUT_NAME: diag-report/report.json
       - uses: actions/upload-artifact@v7
         if: always()
         with:
-          name: webkit-diag-new-${{ github.run_id }}
+          name: webkit-diag-audio-${{ matrix.variant }}-${{ github.run_id }}
           path: |
             diag-results/
             diag-report/

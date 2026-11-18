@@ -203,9 +203,14 @@ export async function compose(
         depth = c.createGain();
       lfo.frequency.value = song.wobble / BEAT;
       depth.gain.value = drop ? 160 : 40;
-      lfo.connect(depth).connect(f.frequency);
+      // DIAGNOSTIC ONLY, never merged (#122): a page global picks one change to this wobble path.
+      // "b" omits only the depth -> filter frequency edge; "c" never stops the LFO (this changes
+      // the modulation after each beat, so it is not the same sound). anything else: unchanged.
+      const variant = (globalThis as { __composeVariant?: string }).__composeVariant;
+      lfo.connect(depth);
+      if (variant !== "b") depth.connect(f.frequency);
       lfo.start(at);
-      lfo.stop(at + BEAT);
+      if (variant !== "c") lfo.stop(at + BEAT);
       f.connect(master);
       note(
         hz(song.root + chord),
