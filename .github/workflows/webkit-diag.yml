@@ -1,9 +1,9 @@
 name: webkit diagnostic
-# DIAGNOSTIC ONLY, never merged (#122). Second run: in the official 1.64.1 image only, where the
-# offline song render crashed 20 of 20, the same render under three compose variants (src/music.ts
-# on this branch): a unchanged (must still crash here, or the run is inconclusive), b without the
-# LFO depth -> filter frequency edge, c with the LFO never stopped. One job per variant, so one
-# failing cannot stop another; 20 repeats, retries 0, every result kept.
+# DIAGNOSTIC ONLY, never merged (#122). Third run: crash control for the candidate repair, in the
+# official 1.64.1 image. Compose variants (src/music.ts on this branch): a unchanged (must still
+# crash here, or the run is inconclusive) and d the repair (LFO never stopped, depth to 0 at the
+# beat's end). Two jobs per variant, 20 repeats each, so 40 per variant; one failing cannot stop
+# another; retries 0, every result kept.
 on:
   push:
     branches: [webkit-diag]
@@ -16,7 +16,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        variant: [a, b, c]
+        variant: [a, d]
+        part: [1, 2]
     container:
       image: mcr.microsoft.com/playwright:v1.64.1-noble
       options: --user 1001
@@ -46,7 +47,7 @@ jobs:
       - uses: actions/upload-artifact@v7
         if: always()
         with:
-          name: webkit-diag-audio-${{ matrix.variant }}-${{ github.run_id }}
+          name: webkit-diag-audio-${{ matrix.variant }}-${{ matrix.part }}-${{ github.run_id }}
           path: |
             diag-results/
             diag-report/

@@ -3,7 +3,8 @@ import { test, expect } from '@playwright/test';
 // DIAGNOSTIC ONLY, never merged (#122). library.spec.js:103's own instrumentation and its four
 // offline song renders, copied exactly, with one page global choosing a compose variant
 // (src/music.ts on this branch): a unchanged, b without the LFO depth -> filter frequency edge,
-// c with the LFO never stopped. COMPOSE_VARIANT comes from the workflow's matrix.
+// c with the LFO never stopped, d the candidate repair (never stopped, depth to 0 at the beat's
+// end). COMPOSE_VARIANT comes from the workflow's matrix.
 const VARIANT = process.env.COMPOSE_VARIANT ?? 'a';
 
 test(`offline song renders, compose variant ${VARIANT}`, async ({ page }) => {
