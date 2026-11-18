@@ -5,6 +5,12 @@ permissions:
 jobs:
   check:
     runs-on: ubuntu-latest
+    # the browsers and the libraries they load come in the official image, whose tag is the
+    # Playwright version in package.json (tests/deployment.test.mjs holds the two together).
+    # 1.64 ships the bundled networking fix for microsoft/playwright#42803 (#122).
+    container:
+      image: mcr.microsoft.com/playwright:v1.64.1-noble
+      options: --user 1001
     steps:
       - uses: actions/checkout@v7
         with:
@@ -15,12 +21,18 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - name: Record the browser bundle
+        # what the run really loads, not what a tag implies: the Playwright version and the
+        # WebKit bundle's own libsoup
+        run: |
+          npx playwright --version
+          ls "$PLAYWRIGHT_BROWSERS_PATH"
+          find "$PLAYWRIGHT_BROWSERS_PATH" -name 'libsoup*' -exec ls -l {} +
       - run: npm run check
       - run: npm test
       - run: npm run test:mutations
       - run: npm run build
       - run: npm run test:release
-      - run: npx playwright install --with-deps chromium webkit
       - run: npm run test:browser
       - uses: actions/upload-artifact@v7
         # every run, so a failure the retry hid still leaves its first attempt

@@ -123,3 +123,14 @@ test("on CI a retried pass fails the run and every run keeps its browser results
     assert.ok(workflow.indexOf("- run: npm run test:browser") < workflow.indexOf("actions/upload-artifact"), name);
   }
 });
+
+test("both workflows run in the official Playwright image whose tag is the exact package version, with no second browser install (#122)", () => {
+  const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")),
+    version = pkg.devDependencies["@playwright/test"];
+  assert.match(version, /^\d+\.\d+\.\d+$/, "an exact version, so the image tag can match it");
+  for (const name of ["check.yml", "deploy.yml"]) {
+    const workflow = readFileSync(new URL(`../.github/workflows/${name}`, import.meta.url), "utf8");
+    assert.match(workflow, new RegExp(`container:\\n\\s+image: mcr\\.microsoft\\.com/playwright:v${version.replaceAll(".", "\\.")}-noble\\n`), name);
+    assert.doesNotMatch(workflow, /playwright install/, name);
+  }
+});

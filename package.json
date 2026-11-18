@@ -19,7 +19,7 @@
     "deploy": "npm run check && RELEASE_BUILD=1 npm run build && wrangler deploy"
   },
   "devDependencies": {
-    "@playwright/test": "1.62.1",
+    "@playwright/test": "1.64.1",
     "@sveltejs/vite-plugin-svelte": "7.2.0",
     "@types/node": "22.19.19",
     "@types/qrcode": "1.5.6",
