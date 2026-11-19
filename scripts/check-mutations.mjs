@@ -31,6 +31,7 @@ try {
     "compose-graph.test.mjs",
     "audio-graph.mjs",
     "loop.test.mjs",
+    "loop-player.test.mjs",
   ]) {
     const testSource = (await readFile(join("tests", testFile), "utf8"))
       .replaceAll("../src/", "./src/")
@@ -220,6 +221,11 @@ try {
     ["loop.ts", "if (!int(s.next, 1, MAX_ID)) throw Error(\"Invalid loops\");", "", "refuses rather than drop", "loop.test.mjs"],
     ["loop.ts", "if (storage.getItem(LOOPS) !== raw) throw Error", "if (false) throw Error", "refuses rather than drop", "loop.test.mjs"],
     ["loop.ts", "await unpackCode(code, PREFIX, MAX_LOOP_BYTES, \"loop\")", "await unpackCode(code, PREFIX, MAX_LOOP_BYTES * 100, \"loop\")", "bounded and refuse", "loop.test.mjs"],
+    // the live loop player's races (#121)
+    ["loop-player.ts", "    while (this.next < c.currentTime) this.advance();\n", "", "long gap", "loop-player.test.mjs"],
+    ["loop-player.ts", "for (const s of [this.session, this.preview]) if (s)", "for (const s of [this.session]) if (s)", "tapped cell is cut", "loop-player.test.mjs"],
+    ["loop-player.ts", "if (token !== this.token) return; // a STOP or a new PLAY", "if (false) return; // a STOP or a new PLAY", "wakes after a STOP", "loop-player.test.mjs"],
+    ["loop-player.ts", "if (token !== this.token) return; // stopped while waking", "if (false) return; // stopped while waking", "while sound is waking", "loop-player.test.mjs"],
     // the shared song voices (#121): each kind of change must move the frozen graph
     ["voices.ts", "seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;", "seed = (Math.imul(seed, 1664525) + 1013904225) >>> 0;", "frozen graph, schedule and noise", "compose-graph.test.mjs"],
     ["voices.ts", "g.gain.exponentialRampToValueAtTime(amplitude, t + 0.008);", "g.gain.exponentialRampToValueAtTime(amplitude, t + 0.009);", "frozen graph, schedule and noise", "compose-graph.test.mjs"],

@@ -31,11 +31,18 @@ export class LoopPlayer {
   private marks: [number, number][] = [];
   playing = false;
 
+  private loop: () => Loop;
+  private onStep: (step: number) => void;
+  private make: () => AudioContext;
   constructor(
-    private loop: () => Loop,
-    private onStep: (step: number) => void = () => {},
-    private make: () => AudioContext = () => new AudioContext(),
-  ) {}
+    loop: () => Loop,
+    onStep: (step: number) => void = () => {},
+    make: () => AudioContext = () => new AudioContext(),
+  ) {
+    this.loop = loop;
+    this.onStep = onStep;
+    this.make = make;
+  }
 
   // a fresh output chain, the same as a rendered song's: compressor, volume, echo
   private chain(c: AudioContext): Session {
@@ -72,28 +79,27 @@ export class LoopPlayer {
     this.step = this.bar = 0;
     this.marks = [];
     this.next = c.currentTime + 0.06;
-    this.timer = window.setInterval(() => this.tick(), TICK);
+    this.timer = globalThis.setInterval(() => this.tick(), TICK) as unknown as number;
     this.tick();
   }
+  // Silence, everywhere this player makes sound: the playing chain and the tapped-cell chain are
+  // both cut at once, every modulator retired, and any wake still pending is voided.
   stop() {
     this.token++;
-    window.clearInterval(this.timer);
+    globalThis.clearInterval(this.timer);
     this.timer = 0;
-    if (this.session) this.retire(this.session, true);
-    this.session = undefined;
+    for (const s of [this.session, this.preview]) if (s) this.retire(s, true);
+    this.session = this.preview = undefined;
     if (this.playing) this.onStep(-1);
     this.playing = false;
   }
-  // leaving the screen: stop, drop the preview chain and let the context sleep
+  // leaving the screen: silence, then let the context sleep
   async leave() {
     this.stop();
-    if (this.preview) this.retire(this.preview, true);
-    this.preview = undefined;
     if (this.context?.state === "running") await this.context.suspend();
   }
   async close() {
     this.stop();
-    this.preview = undefined;
     const c = this.context;
     this.context = undefined;
     await c?.close();
@@ -107,7 +113,7 @@ export class LoopPlayer {
   async hear(kind: "note" | "kick" | "snare" | "hat", value: number) {
     const token = this.token;
     const c = await this.wake();
-    if (token !== this.token && !this.playing) return;
+    if (token !== this.token) return; // a STOP or a new PLAY came while waking
     const s = this.session ?? (this.preview ??= this.chain(c)),
       loop = this.loop(),
       t = c.currentTime + 0.01;
@@ -132,19 +138,29 @@ export class LoopPlayer {
     const s = this.session,
       c = this.context;
     if (!s || !c) return;
+    // a stalled tab or a late timer never catches up: steps whose time has passed are skipped,
+    // their place in the bar and the chord kept, and none of their voices is built
+    while (this.next < c.currentTime) this.advance();
     while (this.next < c.currentTime + AHEAD) {
       this.playStep(s, this.step, this.next);
       this.marks.push([this.next, this.step]);
-      this.next += STEP;
-      if (++this.step === 8) {
-        this.step = 0;
-        this.bar++;
-      }
+      this.advance();
     }
     this.retire(s, false);
     let shown = -2;
     while (this.marks.length && this.marks[0][0] <= c.currentTime) shown = this.marks.shift()![1];
     if (shown > -2) this.onStep(shown);
+  }
+  private advance() {
+    this.next += STEP;
+    if (++this.step === 8) {
+      this.step = 0;
+      this.bar++;
+    }
+  }
+  // where the loop is: step in the bar and bar count (the chord follows the bar)
+  get phase() {
+    return { step: this.step, bar: this.bar, next: this.next };
   }
   // disconnect, then stop: a modulator never sits stopped while still feeding a filter (#122)
   private retire(s: Session, all: boolean) {

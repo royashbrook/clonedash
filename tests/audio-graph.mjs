@@ -16,7 +16,10 @@ const PARAMS = {
 const PROPS = { oscillator: ["type"], filter: ["type"], source: ["buffer", "loop"] };
 const PARAM_CALLS = ["setValueAtTime", "linearRampToValueAtTime", "exponentialRampToValueAtTime", "setTargetAtTime", "setValueCurveAtTime", "cancelScheduledValues"];
 
-export function recorder() {
+// recorder({ live }) adds what a live AudioContext has: `live.now()` is its clock, `live.resume`
+// may replace resume (to hold it pending or reject it), and each source start is logged with the
+// clock at the call, so a start in the past shows. The offline log is unchanged without it.
+export function recorder({ live } = {}) {
   const log = [], buffers = [];
   let next = 0;
   const ref = (v) => (v && typeof v === "object" && "__id" in v ? v.__id : v);
@@ -25,6 +28,7 @@ export function recorder() {
     new Proxy(target, {
       get(t, k) {
         if (k in t || typeof k === "symbol") return t[k];
+        if (k === "then") return undefined; // a promise checking whether this is a thenable
         throw Error(`audio-graph: ${what} has no ${String(k)} in the recorder`);
       },
       set(t, k, v) {
@@ -50,7 +54,7 @@ export function recorder() {
     n.connect = (target, ...rest) => (log.push(["connect", id, ref(target), ...rest]), target);
     n.disconnect = (...a) => (log.push(["disconnect", id, ...a.map(ref)]), undefined);
     if (kind === "oscillator" || kind === "source") {
-      n.start = (...a) => (log.push(["start", id, ...a]), undefined);
+      n.start = (...a) => (log.push(live ? ["start", id, ...a, "@", live.now()] : ["start", id, ...a]), undefined);
       n.stop = (...a) => (log.push(["stop", id, ...a]), undefined);
     }
     return strict(n, id);
@@ -65,6 +69,17 @@ export function recorder() {
       this.sampleRate = rate;
       this.length = length;
       this.__id = "context";
+      if (live) {
+        Object.defineProperty(this, "currentTime", { get: live.now });
+        this.state = "suspended";
+        this.resume = async () => {
+          log.push(["resume"]);
+          await (live.resume?.() ?? undefined);
+          this.state = "running";
+        };
+        this.suspend = async () => (log.push(["suspend"]), (this.state = "suspended"));
+        this.close = async () => (log.push(["close"]), (this.state = "closed"));
+      }
       return strict(this, "context");
     }
     createDynamicsCompressor() { return node("compressor"); }
