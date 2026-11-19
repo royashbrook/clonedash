@@ -587,6 +587,36 @@
     openSkins();
     toast("Skin added. Find it in My skins.");
   }
+  // the bottom bar: a tab per menu screen, and MORE for the rest
+  const DOCK = [
+    ["home", "dock-play", "PLAY", "M8 5 19 12 8 19Z"],
+    ["library", "my-levels", "BUILD", "M3 14h6v6H3Z M9 14h6v6H9Z M15 14h6v6h-6Z M9 8h6v6H9Z"],
+    ["skins", "skins-open", "LOOKS", "M5 5h14v14H5Z M9 10h.01 M15 10h.01 M9 15h6"],
+    ["loops", "loops-open", "MUSIC", "M9 18V6l10-2v12 M9 18a3 3 0 1 1-6 0a3 3 0 1 1 6 0 M19 16a3 3 0 1 1-6 0a3 3 0 1 1 6 0"],
+  ] as const;
+  function goTab(tab: (typeof DOCK)[number][0]) {
+    if (tab === "home") home();
+    else if (tab === "library") library();
+    else if (tab === "skins") openSkins();
+    else openLoops();
+  }
+  function about() {
+    sheet(
+      "Cube Dash",
+      `${LEVELS.length} one-button trails, from warmups to hard, and a place to build your own. An original geometric platformer inspired by Geometry Dash, made from a kid’s game idea.`,
+      [],
+      true,
+      "about",
+    );
+  }
+  function more() {
+    sheet("More", "", [
+      ["＋ LEVEL EDITOR", openEditor],
+      ["HOW TO PLAY", how],
+      ...(installVisible ? [["INSTALL", () => installer?.prompt()] as Action] : []),
+      ["ABOUT, UPDATES AND YOUR SAVE", about],
+    ]);
+  }
   // the LOOPS screen (#121, docs/loops.md); its writes follow the skin store's rules
   function openLoops() {
     closeSheet();
@@ -1929,37 +1959,24 @@
       </div>
     </div>
   </section>
-  <footer>
-    <button id="my-levels" onclick={library}
-      ><svg viewBox="0 0 32 32" width="28" height="28" aria-hidden="true"
-        ><path
-          d="M5 17H27V29H5Z M9 17 16 3 23 17"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linejoin="round"
-        /></svg
-      > MY LEVELS</button
-    ><button id="editor-open" onclick={openEditor}>＋ LEVEL EDITOR</button
-    ><button id="skins-open" onclick={openSkins}>SKINS</button
-    ><button id="loops-open" onclick={openLoops}>LOOPS</button
-    ><button id="how" onclick={how}>HOW TO PLAY</button><button
-      id="install"
-      hidden={!installVisible}
-      onclick={() => installer?.prompt()}>INSTALL</button
-    ><button
-      id="about"
-      onclick={() =>
-        sheet(
-          "Cube Dash",
-          `${LEVELS.length} one-button trails, from warmups to hard, and a place to build your own. An original geometric platformer inspired by Geometry Dash, made from a kid’s game idea.`,
-          [],
-          true,
-          "about",
-        )}>ABOUT</button
-    >
-  </footer>
 </main>
+<!-- the house bottom bar (kidgames STANDARD: menus only; play and the editor keep the whole screen) -->
+{#if mode === "home" || mode === "library" || mode === "skins" || mode === "loops"}
+  <nav id="dock" aria-label="Cube Dash">
+    {#each DOCK as [tab, id, label, icon]}
+      <button
+        {id}
+        aria-current={mode === tab ? "page" : undefined}
+        onclick={() => goTab(tab)}
+        ><svg viewBox="0 0 24 24" aria-hidden="true"><path d={icon} /></svg>{label}</button
+      >
+    {/each}
+    <button id="more" onclick={more}
+      ><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h.01M12 12h.01M19 12h.01" /></svg
+      >MORE</button
+    >
+  </nav>
+{/if}
 <section
   id="library"
   class="screen"
