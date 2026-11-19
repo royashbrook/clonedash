@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./quiet.mjs";
 import { build } from "vite";
 import { svelte } from "@sveltejs/vite-plugin-svelte";
 import http from "node:http";

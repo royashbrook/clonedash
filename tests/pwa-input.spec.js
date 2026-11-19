@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./quiet.mjs";
 
 // PWA input guard (issue: fast taps double-tap-zoom, a hold raises the iOS callout/copy menu).
 // The native iOS gestures cannot be synthesized headless, so we pin the MECHANISM that stops

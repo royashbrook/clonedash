@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from "./quiet.mjs";
 
 test('return and pause stay reachable with a maximum-length title on a narrow landscape screen', async ({ page }) => {
   await page.setViewportSize({ width: 640, height: 360 }); await page.goto('/');

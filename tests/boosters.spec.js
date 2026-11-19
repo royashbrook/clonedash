@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from "./quiet.mjs";
 
 // #106 from the player's side, docs/ramps-and-boosters.md: the angle crashes on a block, boosters,
 // the black and gray rings, a size for every body, and SWIPE with its undo. Drags here are real

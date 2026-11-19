@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from "./quiet.mjs";
 
 // Two fingers on the editor canvas size and turn the selected piece. Pointer events are
 // synthesised with two pointer ids, which drives the same handler real fingers do.

@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from "./quiet.mjs";
 
 // The angle mode from the player's side: a palette entry, the HUD label and cue, and a run
 // that climbs to the ceiling while held and dives to the floor when released without dying.

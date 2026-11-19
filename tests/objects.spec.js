@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from "./quiet.mjs";
 
 // EDIT OBJECT (#90) and the new RINGS presets: green (#89), pink dash (#91), yellow dash (#92).
 const stored = page => page.evaluate(() => JSON.parse(localStorage.getItem('clonedash.v1')));

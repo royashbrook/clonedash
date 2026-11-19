@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from "./quiet.mjs";
 import { labelOf } from '../src/types.ts';
 import { pauseClock } from './paused-clock.mjs';
 

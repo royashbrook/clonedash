@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./quiet.mjs";
 
 test("version stays top-right without covering phone controls", async ({
   page,

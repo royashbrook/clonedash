@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from "./quiet.mjs";
 
 // TRY runs the trail over the editor grid with the palette still up. Space or a canvas tap
 // jumps, a death restarts the run, and Esc or STOP drops back to editing where the run was.

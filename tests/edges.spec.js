@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from "./quiet.mjs";
 
 // Outline variants: five presets on the BLOCKS tab (solid blocks) and the Edges control for any
 // outlined block. FULL is stored as no field.

@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./quiet.mjs";
 import { encodeBackup } from "../src/backup.ts";
 import { LEVELS } from "../src/levels.ts";
 import { emptyLoops, addLoop, blankLoop, encodeLoop, loopLink } from "../src/loop.ts";
@@ -35,10 +35,11 @@ const instrument = () => {
     outs.delete(this);
     return disconnect.apply(this, a);
   };
-  // every node of a live context wired straight to the speakers and not yet cut
+  // every node of a live context wired straight to its destination and not yet cut (the
+  // destination the game is handed, which in tests is the silent one, tests/quiet.mjs)
   const outs = new Set(), toDestination = AudioNode.prototype.connect;
   AudioNode.prototype.connect = function (target, ...rest) {
-    if (target instanceof AudioDestinationNode && this.context instanceof AudioContext) outs.add(this);
+    if (this.context instanceof AudioContext && target === this.context.destination) outs.add(this);
     return toDestination.call(this, target, ...rest);
   };
   window.liveOutputs = () => outs.size;

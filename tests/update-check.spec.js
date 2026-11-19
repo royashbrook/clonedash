@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from "./quiet.mjs";
 
 // CHECK FOR UPDATE says what it found (#66), and pulling the home screen down checks too, and
 // installs when there is something to install (#67). The service worker is blocked so the probe's
