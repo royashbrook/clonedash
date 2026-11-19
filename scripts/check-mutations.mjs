@@ -32,6 +32,8 @@ try {
     "audio-graph.mjs",
     "loop.test.mjs",
     "loop-player.test.mjs",
+    "loop-level.test.mjs",
+    "loop-song.test.mjs",
   ]) {
     const testSource = (await readFile(join("tests", testFile), "utf8"))
       .replaceAll("../src/", "./src/")
@@ -221,6 +223,19 @@ try {
     ["loop.ts", "if (!int(s.next, 1, MAX_ID)) throw Error(\"Invalid loops\");", "", "refuses rather than drop", "loop.test.mjs"],
     ["loop.ts", "if (storage.getItem(LOOPS) !== raw) throw Error", "if (false) throw Error", "refuses rather than drop", "loop.test.mjs"],
     ["loop.ts", "await unpackCode(code, PREFIX, MAX_LOOP_BYTES, \"loop\")", "await unpackCode(code, PREFIX, MAX_LOOP_BYTES * 100, \"loop\")", "bounded and refuse", "loop.test.mjs"],
+    // a loop as a custom level's song (#121 slice B)
+    ["transfer.ts", "if ((raw !== null && typeof raw === \"object\" && \"loop\" in raw) !== third) throw Error(\"Invalid level code.\");", "", "refused before anything could drop it", "loop-level.test.mjs"],
+    ["transfer.ts", "(level.loop ? PREFIX3 : level.objects.some(usesNew) ? PREFIX2 : PREFIX)", "(level.objects.some(usesNew) ? PREFIX2 : PREFIX)", "travels as cdl3", "loop-level.test.mjs"],
+    ["transfer.ts", "...(level.loop ? { loop: level.loop } : { song: level.song ?? 9 }),", "song: level.song ?? 9,", "one song source", "loop-level.test.mjs"],
+    ["engine.ts", "    if (raw.song !== undefined) throw Error(\"Invalid level settings\");\n    // the loop's own bound", "    // the loop's own bound", "one song source", "loop-level.test.mjs"],
+    ["engine.ts", "if (new TextEncoder().encode(JSON.stringify(raw.loop)).byteLength > MAX_LOOP_BYTES) throw", "if (false) throw", "bounded on what arrived", "loop-song.test.mjs"],
+    ["backup.ts", "    if (plain(level) && \"loop\" in level) fields(level.loop, LOOP_FIELDS, LOOP_FIELDS);", "    ;", "field by field", "loop-song.test.mjs"],
+    ["music.ts", "if (keyOf(i.music) !== key) this.sync(i.music, i.running, i.offset);\n            else this.enabled = false;", "this.enabled = false;", "no longer wanted", "loop-song.test.mjs"],
+    ["music.ts", "    this.intent = { ...this.intent, running: false };\n", "", "hiding the page", "loop-song.test.mjs"],
+    // (no mutant for the snapshot itself: composeLoop builds its whole graph before its first await,
+    // so dropping the snapshot is equivalent today; it guards a future await before that point)
+    ["music.ts", "(typeof music === \"number\" ? music : `l${JSON.stringify(music)}`)", "(typeof music === \"number\" ? music : \"loop\")", "renders as it was", "loop-song.test.mjs"],
+    ["loop-player.ts", "  const root = loop.root + chordAt(bar);", "  const root = loop.root;", "1.0.96 player and this one", "loop-song.test.mjs"],
     // the live loop player's races (#121)
     ["loop-player.ts", "    while (this.next < c.currentTime) this.advance();\n", "", "long gap", "loop-player.test.mjs"],
     ["loop-player.ts", "for (const s of [this.session, this.preview]) if (s)", "for (const s of [this.session]) if (s)", "tapped cell is cut", "loop-player.test.mjs"],
@@ -251,7 +266,7 @@ try {
     ["engine.ts", "!s.level.objects[i].multi || inReach(s, s.level.objects[i])", "!s.level.objects[i].multi || false", "rule 5", "width-height-touch-multi.test.mjs"],
     ["engine.ts", "entered = touching && !fx.inside[t];", "entered = touching;", "rule 4:", "width-height-touch-multi.test.mjs"],
     ["engine.ts", "if (!entered || (fx.fired[t] && !o.multi)) continue;", "if (!entered) continue;", "rule 4:", "width-height-touch-multi.test.mjs"],
-    ["transfer.ts", "(level.objects.some(usesNew) ? PREFIX2 : PREFIX)", "PREFIX", "rule 6", "width-height-touch-multi.test.mjs"],
+    ["transfer.ts", ": level.objects.some(usesNew) ? PREFIX2 : PREFIX)", ": PREFIX)", "rule 6", "width-height-touch-multi.test.mjs"],
     ["transfer.ts", "if (level.objects.some(usesNew) !== second)", "if (false)", "rule 6", "width-height-touch-multi.test.mjs"],
     ["gesture.ts", "scaleY: axis(p.ky0)", "scaleY: axis(p.kx0)", "one factor", "gesture.test.mjs"],
     // Release identity guards: each rejection must fail against its broken control.
