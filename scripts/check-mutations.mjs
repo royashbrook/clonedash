@@ -28,6 +28,8 @@ try {
     "skin.test.mjs",
     "width-height-touch-multi.test.mjs",
     "backup.test.mjs",
+    "compose-graph.test.mjs",
+    "audio-graph.mjs",
   ]) {
     const testSource = (await readFile(join("tests", testFile), "utf8"))
       .replaceAll("../src/", "./src/")
@@ -208,6 +210,13 @@ try {
     ["backup.ts", "  } catch (cause) {\n    throw Error(\n      \"The save was copied in", "  } catch (cause) {\n    if (cause) return;\n    throw Error(\n      \"The save was copied in", "done marker failing", "backup.test.mjs"],
     ["transfer.ts", "if (text.length > MAX_SAVE_TEXT) throw Error(\"This code is too large.\");", "", "past the whole-save ceiling", "backup.test.mjs"],
     ["transfer.ts", "if (kind !== \"save\" && text.length > MAX_CODE)", "if (false)", "past the whole-save ceiling", "backup.test.mjs"],
+    // the shared song voices (#121): each kind of change must move the frozen graph
+    ["voices.ts", "seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;", "seed = (Math.imul(seed, 1664525) + 1013904225) >>> 0;", "frozen graph, schedule and noise", "compose-graph.test.mjs"],
+    ["voices.ts", "g.gain.exponentialRampToValueAtTime(amplitude, t + 0.008);", "g.gain.exponentialRampToValueAtTime(amplitude, t + 0.009);", "frozen graph, schedule and noise", "compose-graph.test.mjs"],
+    ["voices.ts", "depth.gain.value = drop ? 160 : 40;", "depth.gain.value = drop ? 161 : 40;", "frozen graph, schedule and noise", "compose-graph.test.mjs"],
+    ["voices.ts", "    out.connect(echo);\n", "", "frozen graph, schedule and noise", "compose-graph.test.mjs"],
+    ["voices.ts", "depth.gain.setValueAtTime(0, at + BEAT);", "lfo.stop(at + BEAT);", "frozen graph, schedule and noise", "compose-graph.test.mjs"],
+    ["music.ts", "kick(t + 2.75 * BEAT, !drop);", "kick(t + 2.75 * BEAT, drop);", "frozen graph, schedule and noise", "compose-graph.test.mjs"],
     ["render.ts", "if (state.mode === \"square\" && skin) {", "if (skin) {", "a skin draws in square mode only", "skin.test.mjs"],
     ["skin.ts", "bottom = s.gravity > 0 ? s.y + SIZE - h : s.y;", "bottom = s.gravity > 0 ? s.y + SIZE - h : s.y + (1 - h) / 2;", "anchors feet", "skin.test.mjs"],
     ["skin.ts", "bottom = s.gravity > 0 ? s.y + SIZE - h : s.y;", "bottom = s.gravity > 0 ? s.y + SIZE - 1 + (1 - h) / 2 : s.y;", "anchors feet", "skin.test.mjs"],
