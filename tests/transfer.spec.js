@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./quiet.mjs";
 import jsQR from "jsqr";
 import http from "node:http";
 import { readFile } from "node:fs/promises";

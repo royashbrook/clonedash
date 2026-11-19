@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from "./quiet.mjs";
 
 // Wall pass and roof pass from the player's side: on the RINGS tab, placed over blocks that are
 // already there, invisible in play. A W on a wall stops the run there instead of crashing it, a

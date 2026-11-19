@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from "./quiet.mjs";
 
 // A phone's notch, status bar and home indicator (safe-area insets): the home screen keeps its
 // header below the top inset and, scrolled to the end, its last line above the bottom one, upright

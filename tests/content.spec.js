@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from "./quiet.mjs";
 import { COURSES } from '../src/courses.ts';
 import { REMIX } from '../src/remix.ts';
 import { Run } from '../src/run.ts';

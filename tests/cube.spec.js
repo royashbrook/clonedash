@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from "./quiet.mjs";
 
 // Coins, group ids, move and colour triggers, and the Cube Dash name (#101).
 const stored = page => page.evaluate(() => JSON.parse(localStorage.getItem('clonedash.v1')));

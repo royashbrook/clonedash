@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from "./quiet.mjs";
 
 const stored = page => page.evaluate(() => JSON.parse(localStorage.getItem('clonedash.v1')));
 async function place(page, x, y) {

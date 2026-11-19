@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from "./quiet.mjs";
 
 // Width and height from the editor (#117): two sliders on the transform row, each its own axis.
 // 1 by 1 is stored as "no field" so an unsized piece stays byte-identical; a piece sized with the

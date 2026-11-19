@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from "./quiet.mjs";
 
 // Multi-select (#87): MULTI taps add pieces to the group, a swipe adds a box of them, and the
 // move, turn, copy and delete buttons act on the whole group.

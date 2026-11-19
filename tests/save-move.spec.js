@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./quiet.mjs";
 import jsQR from "jsqr";
 import { encodeBackup } from "../src/backup.ts";
 import { LEVELS } from "../src/levels.ts";

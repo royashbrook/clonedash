@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from "./quiet.mjs";
 
 // A completed trail keeps its song playing through the complete screen (#72); leaving for the
 // menu still switches to the menu song.

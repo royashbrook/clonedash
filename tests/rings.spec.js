@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from "./quiet.mjs";
 
 // Three ring presets on the RINGS tab plus the colour and bounce controls on the transform row.
 const stored = page => page.evaluate(() => JSON.parse(localStorage.getItem('clonedash.v1')));

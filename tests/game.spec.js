@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from "./quiet.mjs";
 import { pauseClock } from './paused-clock.mjs';
 import http from 'node:http';
 import { readFile } from 'node:fs/promises';

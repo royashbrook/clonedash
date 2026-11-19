@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from "./quiet.mjs";
 import { labelOf } from '../src/types.ts';
 
 test('new tabs place and persist every new object; black blocks and ramps paint the requested edges', async ({ page }) => {

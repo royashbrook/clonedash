@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from "./quiet.mjs";
 
 // Speed portals from the player's side: a SPEED tab with all four, and a run through FASTER that
 // covers more trail in the same time than the same run without it.

@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from "./quiet.mjs";
 
 // Free rotation from the editor: an Angle slider beside Size. The quarter-turn buttons still
 // work on top of it. Rings and portals stay quarter-only, so the slider is disabled for them.

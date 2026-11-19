@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from "./quiet.mjs";
 
 // The home screen fits on an ipad held either way: every footer button is on screen without
 // sliding the page, and the trail list scrolls inside its own panel instead (#65).
