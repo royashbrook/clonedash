@@ -4,6 +4,9 @@
   import { codeKind, decodeLevel, encodeLevel, levelLink, MAX_CODE } from "./transfer.ts";
   import { decodeSkin, encodeSkin, paintThumb, skinLink, skinName, type Skin } from "./skin.ts";
   import { trackFor } from "./music.ts";
+  import { blankLoop, decodeLoop, encodeLoop, loopLink, loopName, type Loop } from "./loop.ts";
+  import { LoopPlayer } from "./loop-player.ts";
+  import LoopGrid from "./LoopGrid.svelte";
   import type { Level } from "./types.ts";
 
   // One sheet shares a level or a skin, and imports either: a pasted code, link or file goes to
@@ -11,21 +14,26 @@
   let {
     level,
     skin,
+    loop,
     initial = "",
     add,
     addSkin,
+    addLoop,
   }: {
     level?: Level;
     skin?: Skin;
+    loop?: Loop;
     initial?: string;
     add: (level: Level) => void;
     addSkin: (skin: Skin) => void;
+    addLoop: (loop: Loop) => void;
   } = $props();
   let input = $state(""),
     code = $state(""),
     link = $state("");
   let preview = $state.raw<Level | null>(null),
     skinPreview = $state.raw<Skin | null>(null),
+    loopPreview = $state.raw<Loop | null>(null),
     qr = $state("");
   let busy = $state(true),
     message = $state(""),
@@ -35,6 +43,24 @@
   let file = $state.raw<File | undefined>(),
     download = $state("");
   let alive = false;
+  // an incoming loop is heard only on a tap, and every change of what is shown silences it
+  let auditing = $state(false),
+    auditStep = $state(-1);
+  const auditor = new LoopPlayer(() => loopPreview ?? blankLoop(), (s) => (auditStep = s));
+  function hush() {
+    auditor.stop();
+    auditing = false;
+    auditStep = -1;
+  }
+  async function audition() {
+    if (auditing) return hush();
+    auditing = true;
+    try {
+      await auditor.start();
+    } catch {
+      auditing = false;
+    }
+  }
 
   function error(cause: unknown) {
     failed = true;
@@ -43,12 +69,12 @@
   }
   async function prepare() {
     try {
-      const encoded = skin ? await encodeSkin(skin) : await encodeLevel(level!);
+      const encoded = skin ? await encodeSkin(skin) : loop ? await encodeLoop(loop) : await encodeLevel(level!);
       if (!alive) return;
       code = encoded;
-      link = skin ? skinLink(code, location.href) : levelLink(code, location.href);
+      link = skin ? skinLink(code, location.href) : loop ? loopLink(code, location.href) : levelLink(code, location.href);
       // the .clonedash.txt ending stays: the import picker and older copies of the game look for it
-      file = new File([code], skin ? "cube-dash-skin.clonedash.txt" : "cube-dash-level.clonedash.txt", {
+      file = new File([code], skin ? "cube-dash-skin.clonedash.txt" : loop ? "cube-dash-loop.clonedash.txt" : "cube-dash-level.clonedash.txt", {
         type: "text/plain",
       });
       download = URL.createObjectURL(file);
@@ -75,12 +101,19 @@
     busy = true;
     message = "";
     failed = false;
+    hush();
     preview = null;
     skinPreview = null;
+    loopPreview = null;
     try {
       const kind = codeKind(text);
       if (kind === "save")
-        throw Error("This is a whole save, not a level or skin. Load it from ABOUT → MOVE YOUR SAVE.");
+        throw Error("This is a whole save, not a level, skin or loop. Load it from ABOUT → MOVE YOUR SAVE.");
+      if (kind === "loop") {
+        const decoded = await decodeLoop(text);
+        if (alive) loopPreview = decoded;
+        return;
+      }
       if (kind === "skin") {
         const decoded = await decodeSkin(text);
         if (alive) skinPreview = decoded;
@@ -97,8 +130,10 @@
   async function readFile(event: Event) {
     const picked = (event.currentTarget as HTMLInputElement).files?.[0];
     if (!picked) return;
+    hush();
     preview = null;
     skinPreview = null;
+    loopPreview = null;
     message = "";
     busy = true;
     try {
@@ -118,10 +153,10 @@
     message = "";
     failed = false;
     // Everything was prepared before this fresh tap, preserving native share activation.
-    const title = skin ? skinName(skin) : level!.name;
+    const title = skin ? skinName(skin) : loop ? loopName(loop) : level!.name;
     const data: ShareData =
       link.length <= 4096
-        ? { title, text: skin ? "Wear my Cube Dash skin" : "Play my Cube Dash level", url: link }
+        ? { title, text: skin ? "Wear my Cube Dash skin" : loop ? "Hear my Cube Dash loop" : "Play my Cube Dash level", url: link }
         : { title, files: [file!] };
     try {
       if (navigator.canShare && !navigator.canShare(data))
@@ -146,7 +181,9 @@
   }
   function confirm() {
     try {
-      if (skinPreview) addSkin(skinPreview);
+      hush();
+      if (loopPreview) addLoop(loopPreview);
+      else if (skinPreview) addSkin(skinPreview);
       else if (preview) add(preview);
     } catch (cause) {
       error(cause);
@@ -160,36 +197,43 @@
     alive = true;
     input = initial;
     nativeShare = typeof navigator.share === "function";
-    if (level || skin) void prepare();
+    if (level || skin || loop) void prepare();
     else if (initial) void inspect();
     else busy = false;
+    const hide = () => document.hidden && hush();
+    document.addEventListener("visibilitychange", hide);
     return () => {
       alive = false;
+      document.removeEventListener("visibilitychange", hide);
       if (download) URL.revokeObjectURL(download);
+      void auditor.close();
     };
   });
 </script>
 
 <div class="transfer" aria-busy={busy}>
-  {#if skin}
+  {#if loop}
+    <h3>{loopName(loop)}</h3>
+    <p>Send this loop. Your levels, progress, skins and other loops stay private.</p>
+  {:else if skin}
     <h3>{skinName(skin)}</h3>
     <p>Send this skin. Your levels, progress and other skins stay private.</p>
   {:else if level}
     <h3>{level.name || "Untitled trail"}</h3>
     <p>Send this level. Your other levels and progress stay private.</p>
   {/if}
-  {#if level || skin}
+  {#if level || skin || loop}
     {#if busy}<p role="status">Preparing…</p>
     {:else if code}
       {#if nativeShare}<button id="send-level" class="primary" onclick={share}
-          >{skin ? "SHARE SKIN" : "SHARE LEVEL"}</button
+          >{skin ? "SHARE SKIN" : loop ? "SHARE LOOP" : "SHARE LEVEL"}</button
         >{/if}
       {#if qr}<img
           class="level-qr"
           src={qr}
           width="340"
           height="340"
-          alt={`Scan to preview ${skin ? skinName(skin) : level?.name || "this level"}`}
+          alt={`Scan to preview ${skin ? skinName(skin) : loop ? loopName(loop) : level?.name || "this level"}`}
         />
       {:else}<p class="qr-fallback">
           Too much detail for a clear QR. Send the complete code or file
@@ -200,9 +244,9 @@
         >DOWNLOAD FILE</a
       >
       <details bind:open={showCode}>
-        <summary>{skin ? "Skin code" : "Level code"}</summary>
+        <summary>{skin ? "Skin code" : loop ? "Loop code" : "Level code"}</summary>
         <label for="level-code"
-          >{skin ? "Copy into My skins → Import skin" : "Copy into My Levels → Import level"}</label
+          >{skin ? "Copy into My skins → Import skin" : loop ? "Copy into My loops → Import loop" : "Copy into My Levels → Import level"}</label
         >
         <textarea
           id="level-code"
@@ -212,7 +256,7 @@
       </details>
     {/if}
   {:else}
-    <label for="import-code">Paste a level or skin code or link</label>
+    <label for="import-code">Paste a level, skin or loop code or link</label>
     <textarea
       id="import-code"
       maxlength={MAX_CODE}
@@ -220,7 +264,9 @@
       disabled={busy}
       oninput={() => {
         preview = null;
+        hush();
         skinPreview = null;
+        loopPreview = null;
         message = "";
       }}
       spellcheck="false"
@@ -231,7 +277,7 @@
       disabled={busy || !input.trim()}
       onclick={() => inspect()}>PREVIEW</button
     >
-    <label class="file-label" for="level-file">Or open a level or skin file</label>
+    <label class="file-label" for="level-file">Or open a level, skin or loop file</label>
     <input
       id="level-file"
       type="file"
@@ -240,6 +286,18 @@
       onchange={readFile}
     />
     {#if busy}<p role="status">Checking…</p>{/if}
+    {#if loopPreview}
+      <section class="import-preview" aria-label="Loop preview">
+        <h3>{loopName(loopPreview)}</h3>
+        <p>Key {["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"][loopPreview.root % 12]} · wobble {loopPreview.wobble}{loopPreview.drop ? " · drop" : ""} · {loopPreview.notes.flat().length} notes</p>
+        <LoopGrid loop={loopPreview} now={auditStep} />
+        <button id="play-import-loop" aria-pressed={auditing} onclick={audition}
+          >{auditing ? "■ STOP" : "▶ PLAY"}</button
+        >
+        <p>Adds a new loop to My loops. Nothing is replaced.</p>
+        <button id="add-loop" class="primary" onclick={confirm}>ADD TO MY LOOPS</button>
+      </section>
+    {/if}
     {#if skinPreview}
       <section class="import-preview" aria-label="Skin preview">
         <h3>{skinName(skinPreview)}</h3>

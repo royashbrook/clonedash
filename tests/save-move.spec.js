@@ -137,7 +137,7 @@ test("bad, newer and cancelled loads write nothing; a save code in the level imp
   for (const [text, words] of [
     ["cdb1.0nope*", "Invalid save code."],
     ["cdb2.0AAAA", "This save is from a newer Cube Dash. Update the game, then load it again."],
-    ["cdb1.0" + Buffer.from(JSON.stringify({ v: 1, ...FULL, loops: {} })).toString("base64url"), "This save is from a newer Cube Dash. Update the game, then load it again."],
+    ["cdb1.0" + Buffer.from(JSON.stringify({ v: 1, ...FULL, music: {} })).toString("base64url"), "This save is from a newer Cube Dash. Update the game, then load it again."],
     ["cdb1.0" + Buffer.from(JSON.stringify({ v: 1, game: { ...FULL.game, sound: "yes" }, skins: FULL.skins })).toString("base64url"), "This save is damaged, so nothing was loaded."],
   ]) {
     await pb.locator("#save-input").fill(text);
@@ -158,7 +158,7 @@ test("bad, newer and cancelled loads write nothing; a save code in the level imp
   await pb.locator("#import-level").click();
   await pb.locator("#import-code").fill(code);
   await pb.locator("#preview-level").click();
-  await expect(pb.locator("#sheet")).toContainText("This is a whole save, not a level or skin. Load it from ABOUT → MOVE YOUR SAVE.");
+  await expect(pb.locator("#sheet")).toContainText("This is a whole save, not a level, skin or loop. Load it from ABOUT → MOVE YOUR SAVE.");
   expect(JSON.parse(await stored(pb, GAME))).toEqual(FRESH_GAME);
   await b.close();
 });

@@ -50,6 +50,8 @@
   import { IMPORT, writeBackup, type Backup } from "./backup.ts";
   import { importLevel } from "./transfer.ts";
   import SkinCreator from "./SkinCreator.svelte";
+  import LoopMaker from "./LoopMaker.svelte";
+  import { LOOPS, addLoop, commitLoops, emptyLoops, readLoops, type Loop, type LoopStore } from "./loop.ts";
   import {
     SKINS,
     addSkin,
@@ -73,7 +75,7 @@
     Transform,
   } from "./types.ts";
 
-  type Screen = "home" | "library" | "editor" | "play" | "skins";
+  type Screen = "home" | "library" | "editor" | "play" | "skins" | "loops";
   type Action = [label: string, handler: () => void, primary?: boolean];
   type Sheet = {
     title: string;
@@ -294,7 +296,9 @@
     checking = $state(false),
     pull = $state(0),
     pulled = $state(false);
-  let transfer = $state.raw<{ level?: Level; skin?: Skin; initial?: string }>({});
+  let transfer = $state.raw<{ level?: Level; skin?: Skin; loop?: Loop; initial?: string }>({});
+  let loops = $state.raw<LoopStore>(emptyLoops()),
+    loopsBroken = $state(false);
   let moving = $state.raw<{ initial?: string }>({});
   // skins live under their own key (docs/skins.md): a level write never touches them
   let skins = $state.raw<SkinStore>(emptyStore()),
@@ -498,12 +502,14 @@
   }
   function receiveLevel() {
     const params = new URLSearchParams(location.hash.slice(1));
-    if (!params.has("level") && !params.has("skin") && !params.has("save")) return;
+    if (!["level", "skin", "save", "loop"].some((k) => params.has(k))) return;
     const initial = location.href;
     history.replaceState(null, "", location.pathname + location.search);
     // a save link only previews too (#124); with anything else beside it, the save sheet refuses
     // it as ambiguous before reading either
     if (params.has("save")) moveSave(initial);
+    // a loop link opens its preview on the LOOPS screen (#121); ADD is a separate tap
+    else if (params.has("loop")) loopSheet({ initial });
     // a skin link only opens the preview; it is never added or worn without a tap
     else if (params.has("skin") && !params.has("level")) skinSheet({ initial });
     else sharing(undefined, initial);
@@ -540,10 +546,16 @@
       false,
     );
   }
-  const storedSave = (): Backup => ({
-    game: readSave(localStorage.getItem(SAVE), LEVELS.length),
-    skins: readSkins(localStorage.getItem(SKINS)),
-  });
+  // loops ride along only when this device has a loop key, so a device that never made one sends
+  // the same save 1.0.85 did (docs/loops.md)
+  const storedSave = (): Backup => {
+    const raw = localStorage.getItem(LOOPS);
+    return {
+      game: readSave(localStorage.getItem(SAVE), LEVELS.length),
+      skins: readSkins(localStorage.getItem(SKINS)),
+      ...(raw === null ? {} : { loops: readLoops(raw) }),
+    };
+  };
   // storageOK is also false when only the old save is unreadable, and replacing that is the point,
   // so the writer's own errors decide: it reads both stores back before it reports success
   function replaceSave(backup: Backup) {
@@ -572,6 +584,28 @@
     commitSkin((s) => void addSkin(s, skin));
     openSkins();
     toast("Skin added. Find it in My skins.");
+  }
+  // the LOOPS screen (#121, docs/loops.md); its writes follow the skin store's rules
+  function openLoops() {
+    closeSheet();
+    paused = false;
+    setMode("loops");
+  }
+  function loopSheet(next: { loop?: Loop; initial?: string }) {
+    openLoops();
+    transfer = next;
+    void sheet(next.loop ? "Share loop" : "Import", "", [], true, "transfer");
+  }
+  function commitLoop(change: (latest: LoopStore) => void) {
+    guard();
+    loops = commitLoops(localStorage, change);
+    loopsBroken = false;
+    return loops;
+  }
+  function addSharedLoop(loop: Loop) {
+    commitLoop((s) => void addLoop(s, loop));
+    openLoops();
+    toast("Loop added. Find it in My loops.");
   }
   function askSkin(title: string, text: string, yes: string, run: () => void) {
     void sheet(
@@ -1676,6 +1710,11 @@
       // never replaced by fallback data: the green cube shows and every skin write is refused
       skinsBroken = true;
     }
+    try {
+      loops = readLoops(localStorage.getItem(LOOPS));
+    } catch {
+      loopsBroken = true; // left as stored; every loop write is refused until it reads
+    }
     nextTrail();
     orientation();
     document.body.dataset.mode = mode;
@@ -1707,6 +1746,14 @@
       "storage",
       (e) => {
         if (e.key === IMPORT && stale()) return;
+        if (e.key === LOOPS || e.key === null)
+          try {
+            loops = readLoops(localStorage.getItem(LOOPS));
+            loopsBroken = false;
+          } catch {
+            loops = emptyLoops();
+            loopsBroken = true;
+          }
         if (e.key !== SKINS && e.key !== null) return;
         try {
           skins = readSkins(localStorage.getItem(SKINS));
@@ -1892,6 +1939,7 @@
       > MY LEVELS</button
     ><button id="editor-open" onclick={openEditor}>＋ LEVEL EDITOR</button
     ><button id="skins-open" onclick={openSkins}>SKINS</button
+    ><button id="loops-open" onclick={openLoops}>LOOPS</button
     ><button id="how" onclick={how}>HOW TO PLAY</button><button
       id="install"
       hidden={!installVisible}
@@ -1977,6 +2025,15 @@
     confirm={askSkin}
     share={(skin) => skinSheet({ skin })}
     importSkin={() => skinSheet({})}
+    back={home}
+  />{/if}
+{#if mode === "loops"}<LoopMaker
+    store={loops}
+    broken={loopsBroken}
+    commit={commitLoop}
+    confirm={askSkin}
+    share={(loop) => loopSheet({ loop })}
+    importLoop={() => loopSheet({})}
     back={home}
   />{/if}
 <section id="hud" hidden={mode !== "play"}>
@@ -2362,6 +2419,7 @@
             {...transfer}
             add={addSharedLevel}
             addSkin={addSharedSkin}
+            addLoop={addSharedLoop}
           />{/key}{/if}
       {#if panel.extra === "save"}{#key moving}<SaveMove
             initial={moving.initial}

@@ -45,7 +45,8 @@
 
   const words = (b: Backup) => {
     const s = summary(b);
-    return `${s.played} built-in levels played · ${s.levels} of your own levels · ${s.skins} skins`;
+    // loops are named only when a save carries them (a device that never made one has no loop key)
+    return `${s.played} built-in levels played · ${s.levels} of your own levels · ${s.skins} skins${b.loops ? ` · ${s.loops} loops` : ""}`;
   };
   function error(cause: unknown) {
     failed = true;

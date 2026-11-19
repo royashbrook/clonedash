@@ -1,4 +1,5 @@
 import { recordingFor } from "./recordings.ts";
+import { BEAT, seededNoise, voices } from "./voices.ts";
 // Original 150 BPM compositions: one block is an eighth note at 5 blocks/second.
 // Render locally once per trail, then play a buffer. No network, samples or audio timer drift.
 export const TRACKS = [
@@ -57,10 +58,8 @@ export const TRACKS = [
     wobble: 3,
   },
 ];
-const BEAT = 0.4,
-  BARS = 16,
+const BARS = 16,
   LENGTH = BARS * 4 * BEAT;
-const hz = (n: number) => 440 * 2 ** ((n - 69) / 12);
 export const trackName = (index: number) =>
   recordingFor(index)?.name ?? trackFor(index).name;
 export function trackFor(index: number) {
@@ -94,89 +93,19 @@ export async function compose(
   const volume = c.createGain();
   volume.gain.value = 0.68;
   master.connect(volume).connect(c.destination);
-  const noise = c.createBuffer(1, 44100, 44100),
-    data = noise.getChannelData(0);
-  let seed = 701 + index;
-  for (let i = 0; i < data.length; i++) {
-    seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
-    data[i] = seed / 2147483648 - 1;
-  }
-  function envelope(
-    t: number,
-    duration: number,
-    amplitude: number,
-    destination: AudioNode = master,
-  ) {
-    const g = c.createGain();
-    g.gain.setValueAtTime(0.0001, t);
-    g.gain.exponentialRampToValueAtTime(amplitude, t + 0.008);
-    g.gain.exponentialRampToValueAtTime(0.0001, t + duration);
-    g.connect(destination);
-    return g;
-  }
-  function note(
-    freq: number,
-    t: number,
-    duration: number,
-    amplitude: number,
-    type: OscillatorType = "triangle",
-    destination: AudioNode = master,
-  ) {
-    const o = c.createOscillator();
-    o.type = type;
-    o.frequency.value = freq;
-    o.connect(envelope(t, duration, amplitude, destination));
-    o.start(t);
-    o.stop(t + duration);
-    return o;
-  }
-  function hiss(
-    t: number,
-    duration: number,
-    frequency: number,
-    amplitude: number,
-  ) {
-    const s = c.createBufferSource(),
-      f = c.createBiquadFilter();
-    s.buffer = noise;
-    f.type = "highpass";
-    f.frequency.value = frequency;
-    s.connect(f).connect(envelope(t, duration, amplitude));
-    s.start(t);
-    s.stop(t + duration);
-  }
-  function kick(t: number, soft = false) {
-    const o = note(150, t, 0.3, soft ? 0.3 : 0.65, "sine");
-    o.frequency.exponentialRampToValueAtTime(44, t + 0.12);
-    hiss(t, 0.025, 1600, 0.04);
-  }
-  function snare(t: number) {
-    hiss(t, 0.19, 1100, 0.25);
-    note(185, t, 0.1, 0.2, "triangle");
-  }
+  const noise = seededNoise(c, 701 + index);
   const echo = c.createDelay(0.8),
     feedback = c.createGain();
   echo.delayTime.value = BEAT * 0.75;
   feedback.gain.value = 0.22;
   echo.connect(feedback).connect(echo);
   echo.connect(master);
+  const { kick, snare, hiss, pad, bass, lead } = voices(c, master, noise, echo);
   for (let bar = 0; bar < BARS; bar++) {
     const t = bar * 4 * BEAT,
       chord = [0, -5, 3, -2][Math.floor(bar / 2) % 4],
       drop = bar >= 2 && bar !== 8 && bar !== 9;
-    const padFilter = c.createBiquadFilter();
-    padFilter.type = "lowpass";
-    padFilter.frequency.value = drop ? 800 : 1400;
-    padFilter.connect(master);
-    for (const degree of [0, 3, 7])
-      note(
-        hz(song.root + chord + degree + 12),
-        t,
-        4 * BEAT - 0.02,
-        0.022,
-        "sawtooth",
-        padFilter,
-      );
+    pad(t, song.root + chord, drop);
     kick(t);
     kick(t + 2.75 * BEAT, !drop);
     if (drop) kick(t + 1.5 * BEAT, true);
@@ -191,46 +120,10 @@ export async function compose(
     if (bar % 4 === 3)
       for (let j = 0; j < 4; j++)
         hiss(t + (3 + j / 4) * BEAT, 0.05, 5000, 0.065);
-    for (let j = 0; j < 4; j++) {
-      const at = t + j * BEAT,
-        f = c.createBiquadFilter();
-      f.type = "lowpass";
-      f.Q.value = 5;
-      f.frequency.setValueAtTime(140, at);
-      f.frequency.exponentialRampToValueAtTime(drop ? 1900 : 450, at + 0.055);
-      f.frequency.exponentialRampToValueAtTime(100, at + BEAT - 0.02);
-      const lfo = c.createOscillator(),
-        depth = c.createGain();
-      lfo.frequency.value = song.wobble / BEAT;
-      depth.gain.value = drop ? 160 : 40;
-      lfo.connect(depth).connect(f.frequency);
-      lfo.start(at);
-      // Zero depth at the beat's end instead of stopping the LFO. With the stop, WebKit's
-      // offline render closed the page in our tests; without it, it did not (#122). Either way
-      // the filter gets no wobble after the beat.
-      depth.gain.setValueAtTime(0, at + BEAT);
-      f.connect(master);
-      note(
-        hz(song.root + chord),
-        at,
-        BEAT - 0.03,
-        drop ? 0.2 : 0.09,
-        "sawtooth",
-        f,
-      );
-      note(hz(song.root + chord - 12), at, BEAT - 0.03, 0.18, "sine");
-    }
+    for (let j = 0; j < 4; j++) bass(t + j * BEAT, song.root + chord, song.wobble, drop);
     for (let j = 0; j < 8; j++) {
       if (bar < 2 && j % 2 && index < TRACKS.length) continue;
-      const at = t + (j * BEAT) / 2,
-        pitch = song.root + 24 + song.melody[(j + (bar % 2) * 2) % 8];
-      const out = c.createGain();
-      out.gain.value = 1;
-      out.connect(master);
-      out.connect(echo);
-      note(hz(pitch), at, BEAT * 0.42, drop ? 0.055 : 0.04, "triangle", out);
-      if (drop && j % 2 === 0)
-        note(hz(pitch) * 1.003, at, BEAT * 0.3, 0.018, "sawtooth", out);
+      lead(t + (j * BEAT) / 2, song.root + 24 + song.melody[(j + (bar % 2) * 2) % 8], drop, j % 2 === 0);
     }
     if (bar % 8 === 7) hiss(t + 3 * BEAT, BEAT, 2800, 0.15);
   }
