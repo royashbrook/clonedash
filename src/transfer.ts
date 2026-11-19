@@ -247,29 +247,29 @@ export async function decodeLevel(text: string): Promise<Level> {
 // skin (src/skin.ts decodeSkin), a cdb1 code or a #save= link a whole save (src/backup.ts, #124),
 // anything else goes to decodeLevel exactly as before. A link must carry exactly one of them;
 // two kinds, or one twice, is ambiguous and refused before choosing.
-export function codeKind(text: string): "level" | "skin" | "save" {
+export type CodeKind = "level" | "skin" | "save" | "loop";
+export function codeKind(text: string): CodeKind {
   // nothing is parsed past the largest whole save, and only a save may pass a level's cap
   if (text.length > MAX_SAVE_TEXT) throw Error("This code is too large.");
   const kind = kindOf(text.trim());
   if (kind !== "save" && text.length > MAX_CODE) throw Error("This code is too large.");
   return kind;
 }
-function kindOf(code: string): "level" | "skin" | "save" {
+const ONE = "This link does not contain one level, skin, loop or save.";
+function kindOf(code: string): CodeKind {
   if (/^https?:\/\//i.test(code)) {
     let params: URLSearchParams;
     try {
       params = new URLSearchParams(new URL(code).hash.slice(1));
     } catch {
-      throw Error("This link does not contain one level, skin or save.");
+      throw Error(ONE);
     }
-    const levels = params.getAll("level").length,
-      skins = params.getAll("skin").length,
-      saves = params.getAll("save").length;
-    if (levels + skins + saves !== 1)
-      throw Error("This link does not contain one level, skin or save.");
-    return saves ? "save" : skins ? "skin" : "level";
+    const counts = (["level", "skin", "save", "loop"] as const).map((k) => [k, params.getAll(k).length] as const);
+    const found = counts.filter(([, n]) => n > 0);
+    if (found.length !== 1 || found[0][1] !== 1) throw Error(ONE);
+    return found[0][0];
   }
-  return code.startsWith("cdb") ? "save" : code.startsWith("cds1.") ? "skin" : "level";
+  return code.startsWith("cdb") ? "save" : code.startsWith("cdm") ? "loop" : code.startsWith("cds1.") ? "skin" : "level";
 }
 
 export function levelLink(code: string, address: string): string {

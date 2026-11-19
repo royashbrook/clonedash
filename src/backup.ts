@@ -83,7 +83,7 @@ export async function decodeBackup(text: string, trailCount: number): Promise<Ba
   let code = text.trim();
   if (/^https?:\/\//i.test(code)) {
     const params = new URLSearchParams(new URL(code).hash.slice(1));
-    if (params.getAll("save").length !== 1 || params.has("level") || params.has("skin"))
+    if (params.getAll("save").length !== 1 || params.has("level") || params.has("skin") || params.has("loop"))
       throw Error("This link does not contain one save.");
     code = params.get("save")!;
   }

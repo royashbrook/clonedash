@@ -97,7 +97,9 @@ test('codes, links and bounds fail with plain words and never decode past a boun
   const link = backupLink(await encodeBackup(fullSave(), N), 'https://x.test/');
   for (const extra of ['level=cdl1.0AA', 'skin=cds1.0AA', 'save=cdb1.0AA'])
     await assert.rejects(() => decodeBackup(link + '&' + extra, N), /one save/);
-  assert.throws(() => codeKind(link + '&level=cdl1.0AA'), /one level, skin or save/);
+  assert.throws(() => codeKind(link + '&level=cdl1.0AA'), /one level, skin, loop or save/);
+  assert.throws(() => codeKind(link + '&loop=cdm1.0AA'), /one level, skin, loop or save/);
+  await assert.rejects(() => decodeBackup(link + '&loop=cdm1.0AA', N), /one save/);
 });
 
 test('a large library stays movable as a code', async () => {
