@@ -53,17 +53,36 @@ third key the same way; it is best-effort recovery, not a transaction.
 
 ## Playing
 
-One live player owns the sound: a 25 ms timer schedules steps 120 ms ahead into its own output
-chain. STOP (or leaving the screen, a sheet, or the page hiding) disconnects that chain at once,
-so voices already queued are not heard, retires every live wobble modulator, and ignores a resume
-that finishes after it. A bass beat's wobble modulator is never left running: the offline render
-zeroes its depth at the beat's end (#122), and the live player also disconnects and stops each one
-shortly after its beat ends, so a long session holds only the few beats in flight.
+One live player owns the sound on the LOOPS screen, and the share sheet has its own for an incoming
+loop. A 25 ms timer schedules steps 120 ms ahead into the player's output chain; a tapped cell plays
+through a second, small chain. STOP, leaving the screen, opening a sheet or the page hiding cuts
+both chains at once, so voices already queued are not heard, retires every live wobble modulator,
+and voids any wake (resume) still pending, so a tap or PLAY that finishes waking afterwards makes no
+sound. PLAY first cuts a tapped cell's chain. In the share sheet, sound starts only on PLAY and is
+cut when the input changes, another preview arrives, ADD runs or the sheet closes.
+
+A stalled tab or a late timer never catches up: steps whose time has passed are skipped, keeping
+their place in the bar and the chord, and none of their voices is built.
+
+A bass beat's wobble modulator is never left running: the offline render zeroes its depth at the
+beat's end (#122), and the live player also disconnects, then stops, each one shortly after its
+beat ends, so a session holds only the beats in flight.
+
+Replacing the notes (START FROM, SURPRISE ME, CLEAR NOTES) asks first whenever the draft has notes;
+KEEP IT leaves the draft exactly as it was. A draft with no notes is not asked.
 
 ## Proof
 
 - `tests/compose-graph.test.mjs`: every synthesized song still builds the graph, schedule and noise
   frozen from main 6b7071e. This is graph/schedule/buffer-input equality, not PCM equality.
 - unit: the loop schema, the store, the code and its bounds, codeKind, the whole save with loops.
-- browser: make, play, stop, save, reload, share by code, link and file, import preview, the live
-  modulator count over many bars and after STOP, phone fit with 44 px targets.
+- `tests/loop-player.test.mjs`, on a recording context with a clock the test moves: a ten-second
+  gap starts nothing in the past and keeps the phase, the last step wraps to the next bar, a STOP
+  or a rejected resume during waking leaves no sound and no timer, a tapped cell is cut by STOP and
+  by PLAY, and leaving cuts everything. It shows the schedule asked for, not how a browser renders.
+- browser (`tests/loops.spec.js`, both engines): make, save, reload; replacing notes asks and KEEP
+  IT changes nothing; a tapped cell is cut by a sheet, by PLAY and by the page hiding; live play
+  over about eight bass beats keeps at most three modulators, each disconnected before it is
+  stopped, and none after STOP or leaving; share by code, link and file, with the import preview
+  silent until PLAY and silenced by an input change, ADD or closing the sheet; a save with loops
+  replaces, one without removes; phone fit with 44 px targets.

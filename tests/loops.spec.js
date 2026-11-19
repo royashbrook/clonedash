@@ -32,8 +32,16 @@ const instrument = () => {
   const disconnect = AudioNode.prototype.disconnect;
   AudioNode.prototype.disconnect = function (...a) {
     this.cut = true;
+    outs.delete(this);
     return disconnect.apply(this, a);
   };
+  // every node of a live context wired straight to the speakers and not yet cut
+  const outs = new Set(), toDestination = AudioNode.prototype.connect;
+  AudioNode.prototype.connect = function (target, ...rest) {
+    if (target instanceof AudioDestinationNode && this.context instanceof AudioContext) outs.add(this);
+    return toDestination.call(this, target, ...rest);
+  };
+  window.liveOutputs = () => outs.size;
   const stop = OscillatorNode.prototype.stop;
   OscillatorNode.prototype.stop = function (...a) {
     if (mods.has(this)) { if (!this.cut) window.audioLog.stoppedConnected++; mods.delete(this); }
@@ -68,6 +76,7 @@ test("make a loop, hear it, save it, and find it after a reload", async ({ brows
   await page.locator("#new-loop").click();
   await page.locator("#loop-name").fill("Night drive");
   await page.locator("#loop-clear").click();
+  await page.locator("#sheet").getByRole("button", { name: "CLEAR NOTES", exact: true }).click();
   await page.getByRole("button", { name: "note 10 step 1", exact: true }).click();
   await page.getByRole("button", { name: "note 1 step 3", exact: true }).click();
   await page.getByRole("button", { name: "snare step 7", exact: true }).click();
@@ -85,6 +94,69 @@ test("make a loop, hear it, save it, and find it after a reload", async ({ brows
   // the level save and skins are never written by loops
   expect(JSON.parse(await stored(page, GAME))).toEqual(LEVEL_SAVE);
   expect(await stored(page, SKINS)).toBeNull();
+  await ctx.close();
+});
+
+const pressed = (page) => page.locator("#loop-grid .cell[aria-pressed=true]").evaluateAll((cells) => cells.map((c) => c.ariaLabel));
+const hide = (page) => page.evaluate(() => {
+  Object.defineProperty(document, "hidden", { configurable: true, get: () => true });
+  document.dispatchEvent(new Event("visibilitychange"));
+});
+
+test("replacing notes asks first, KEEP IT changes nothing, and a blank draft is not asked", async ({ browser, baseURL }) => {
+  const ctx = await device(browser, baseURL);
+  const page = await ctx.newPage();
+  await page.goto("/");
+  await page.locator("#loops-open").click();
+  await page.locator("#new-loop").click();
+  const before = await pressed(page);
+  expect(before.some((l) => l.startsWith("note"))).toBe(true);
+  for (const [open, title] of [
+    [() => page.locator("#loop-surprise").click(), "Make new notes?"],
+    [() => page.locator("#loop-clear").click(), "Clear the notes?"],
+    [() => page.locator("#loop-song").selectOption({ label: "Air Time" }), "Start from Air Time?"],
+  ]) {
+    await open();
+    await expect(page.locator("#sheet-title")).toHaveText(title);
+    await page.locator("#sheet").getByRole("button", { name: "KEEP IT", exact: true }).click();
+    expect(await pressed(page)).toEqual(before);
+  }
+  await page.locator("#loop-song").selectOption({ label: "Air Time" });
+  await page.locator("#sheet").getByRole("button", { name: "START FROM IT", exact: true }).click();
+  expect(await pressed(page)).not.toEqual(before);
+  await page.locator("#loop-clear").click();
+  await page.locator("#sheet").getByRole("button", { name: "CLEAR NOTES", exact: true }).click();
+  expect((await pressed(page)).some((l) => l.startsWith("note"))).toBe(false);
+  // nothing left to lose: SURPRISE ME just does it
+  await page.locator("#loop-surprise").click();
+  await expect(page.locator("#sheet")).not.toBeVisible();
+  await ctx.close();
+});
+
+test("a tapped cell's sound is cut by a sheet, by PLAY taking over and by the page hiding", async ({ browser, baseURL }) => {
+  const ctx = await device(browser, baseURL);
+  const page = await ctx.newPage();
+  await page.goto("/");
+  await page.locator("#loops-open").click();
+  await page.locator("#new-loop").click();
+  // each tap turns a different cell ON (a cell tapped OFF makes no sound)
+  const cells = ["kick step 2", "kick step 3", "snare step 2"];
+  const tap = async () => {
+    await page.getByRole("button", { name: cells.shift(), exact: true }).click();
+    await expect.poll(() => page.evaluate(() => window.liveOutputs())).toBe(1);
+  };
+  await tap();
+  await page.locator("#loop-surprise").click(); // a sheet
+  expect(await page.evaluate(() => window.liveOutputs())).toBe(0);
+  await page.locator("#sheet").getByRole("button", { name: "KEEP IT", exact: true }).click();
+  await tap();
+  await page.locator("#loop-play").click(); // PLAY takes over: only its own output stays
+  await expect.poll(() => page.evaluate(() => window.liveOutputs())).toBe(1);
+  await page.locator("#loop-play").click();
+  expect(await page.evaluate(() => window.liveOutputs())).toBe(0);
+  await tap();
+  await hide(page);
+  expect(await page.evaluate(() => window.liveOutputs())).toBe(0);
   await ctx.close();
 });
 
@@ -124,8 +196,12 @@ test("a loop shared by code and link arrives as a preview, and ADD only adds", a
   await pa.locator("#copy-level").click();
   const code = await pa.evaluate(() => window.copied);
   expect(code.startsWith("cdm1.")).toBe(true);
+  const [download] = await Promise.all([pa.waitForEvent("download"), pa.locator(".download-level").click()]);
+  expect(download.suggestedFilename()).toBe("cube-dash-loop.clonedash.txt");
+  const fileText = await (await import("node:fs/promises")).readFile(await download.path(), "utf8");
+  expect(fileText).toBe(code);
   await a.close();
-  for (const how of ["link", "code"]) {
+  for (const how of ["link", "code", "file"]) {
     const b = await device(browser, baseURL, { [LOOPS]: JSON.stringify(storeOf("Mine")) });
     const pb = await b.newPage();
     if (how === "link") await pb.goto("/#loop=" + code);
@@ -133,12 +209,36 @@ test("a loop shared by code and link arrives as a preview, and ADD only adds", a
       await pb.goto("/");
       await pb.locator("#loops-open").click();
       await pb.locator("#import-loop").click();
-      await pb.locator("#import-code").fill(code);
-      await pb.locator("#preview-level").click();
+      if (how === "code") {
+        await pb.locator("#import-code").fill(code);
+        await pb.locator("#preview-level").click();
+      } else await pb.locator("#level-file").setInputFiles({ name: "cube-dash-loop.clonedash.txt", mimeType: "text/plain", buffer: Buffer.from(fileText) });
     }
     await expect(pb.locator("#sheet")).toContainText("Adds a new loop to My loops. Nothing is replaced.");
+    // the preview neither plays nor writes until tapped
+    expect(await pb.evaluate(() => window.liveOutputs())).toBe(0);
     expect(JSON.parse(await stored(pb, LOOPS)).loops.map((e) => e.loop.name)).toEqual(["Mine"]);
+    if (how === "code") {
+      // heard on a tap; changing the input silences it
+      await pb.locator("#play-import-loop").click();
+      await expect.poll(() => pb.evaluate(() => window.liveModulators())).toBeGreaterThan(0);
+      await pb.locator("#import-code").fill(code + " ");
+      expect(await pb.evaluate(() => [window.liveOutputs(), window.liveModulators()])).toEqual([0, 0]);
+      await pb.locator("#preview-level").click();
+    }
+    if (how === "file") {
+      // closing the sheet while it plays silences it
+      await pb.locator("#play-import-loop").click();
+      await expect.poll(() => pb.evaluate(() => window.liveModulators())).toBeGreaterThan(0);
+      await pb.keyboard.press("Escape");
+      await expect.poll(() => pb.evaluate(() => [window.liveOutputs(), window.liveModulators()])).toEqual([0, 0]);
+      await b.close();
+      continue;
+    }
+    await pb.locator("#play-import-loop").click();
+    await expect.poll(() => pb.evaluate(() => window.liveOutputs())).toBe(1);
     await pb.locator("#add-loop").click();
+    expect(await pb.evaluate(() => [window.liveOutputs(), window.liveModulators()])).toEqual([0, 0]);
     await expect(pb.getByRole("heading", { name: "Sendable" })).toBeVisible();
     expect(JSON.parse(await stored(pb, LOOPS)).loops.map((e) => e.loop.name)).toEqual(["Mine", "Sendable"]);
     await b.close();

@@ -4,7 +4,9 @@
   import { codeKind, decodeLevel, encodeLevel, levelLink, MAX_CODE } from "./transfer.ts";
   import { decodeSkin, encodeSkin, paintThumb, skinLink, skinName, type Skin } from "./skin.ts";
   import { trackFor } from "./music.ts";
-  import { decodeLoop, encodeLoop, loopLink, loopName, type Loop } from "./loop.ts";
+  import { blankLoop, decodeLoop, encodeLoop, loopLink, loopName, type Loop } from "./loop.ts";
+  import { LoopPlayer } from "./loop-player.ts";
+  import LoopGrid from "./LoopGrid.svelte";
   import type { Level } from "./types.ts";
 
   // One sheet shares a level or a skin, and imports either: a pasted code, link or file goes to
@@ -41,6 +43,24 @@
   let file = $state.raw<File | undefined>(),
     download = $state("");
   let alive = false;
+  // an incoming loop is heard only on a tap, and every change of what is shown silences it
+  let auditing = $state(false),
+    auditStep = $state(-1);
+  const auditor = new LoopPlayer(() => loopPreview ?? blankLoop(), (s) => (auditStep = s));
+  function hush() {
+    auditor.stop();
+    auditing = false;
+    auditStep = -1;
+  }
+  async function audition() {
+    if (auditing) return hush();
+    auditing = true;
+    try {
+      await auditor.start();
+    } catch {
+      auditing = false;
+    }
+  }
 
   function error(cause: unknown) {
     failed = true;
@@ -81,6 +101,7 @@
     busy = true;
     message = "";
     failed = false;
+    hush();
     preview = null;
     skinPreview = null;
     loopPreview = null;
@@ -109,6 +130,7 @@
   async function readFile(event: Event) {
     const picked = (event.currentTarget as HTMLInputElement).files?.[0];
     if (!picked) return;
+    hush();
     preview = null;
     skinPreview = null;
     loopPreview = null;
@@ -159,6 +181,7 @@
   }
   function confirm() {
     try {
+      hush();
       if (loopPreview) addLoop(loopPreview);
       else if (skinPreview) addSkin(skinPreview);
       else if (preview) add(preview);
@@ -177,9 +200,13 @@
     if (level || skin || loop) void prepare();
     else if (initial) void inspect();
     else busy = false;
+    const hide = () => document.hidden && hush();
+    document.addEventListener("visibilitychange", hide);
     return () => {
       alive = false;
+      document.removeEventListener("visibilitychange", hide);
       if (download) URL.revokeObjectURL(download);
+      void auditor.close();
     };
   });
 </script>
@@ -237,6 +264,7 @@
       disabled={busy}
       oninput={() => {
         preview = null;
+        hush();
         skinPreview = null;
         loopPreview = null;
         message = "";
@@ -262,6 +290,10 @@
       <section class="import-preview" aria-label="Loop preview">
         <h3>{loopName(loopPreview)}</h3>
         <p>Key {["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"][loopPreview.root % 12]} · wobble {loopPreview.wobble}{loopPreview.drop ? " · drop" : ""} · {loopPreview.notes.flat().length} notes</p>
+        <LoopGrid loop={loopPreview} now={auditStep} />
+        <button id="play-import-loop" aria-pressed={auditing} onclick={audition}
+          >{auditing ? "■ STOP" : "▶ PLAY"}</button
+        >
         <p>Adds a new loop to My loops. Nothing is replaced.</p>
         <button id="add-loop" class="primary" onclick={confirm}>ADD TO MY LOOPS</button>
       </section>

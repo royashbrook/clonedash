@@ -144,11 +144,18 @@
     const on = kind === "note" ? next.notes[step].includes(degree) : next[kind].includes(step);
     if (on) void player.hear(kind, kind === "note" ? degree : step).catch(() => {});
   }
+  // START FROM, SURPRISE ME and CLEAR NOTES replace the notes, and there is no undo, so they ask
+  // first whenever there are notes to lose; KEEP IT leaves the draft exactly as it was
+  function replace(next: Loop, title: string, yes: string) {
+    if (!loop.notes.some((s) => s.length)) return set(next);
+    sheet(() => confirm(title, "The notes in this loop now will be replaced. This cannot be undone.", yes, () => set(next)));
+  }
   function startFrom(event: Event) {
     const select = event.currentTarget as HTMLSelectElement;
     if (select.value === "") return;
-    set({ ...loopFromSong(Number(select.value)), name: loop.name });
+    const song = Number(select.value);
     select.value = "";
+    replace({ ...loopFromSong(song), name: loop.name }, `Start from ${trackFor(song).name}?`, "START FROM IT");
   }
   const info = (l: Loop) => `Key ${NAMES[l.root % 12]} · wobble ${l.wobble}${l.drop ? " · drop" : ""}`;
   // a sheet (share, confirm) always opens over silence
@@ -266,8 +273,12 @@
       <button id="loop-drop" aria-pressed={loop.drop} onclick={() => set({ ...loop, drop: !loop.drop })}
         >{loop.drop ? "DROP ON" : "DROP OFF"}</button
       >
-      <button id="loop-surprise" onclick={() => set(surprise(loop))}>SURPRISE ME</button>
-      <button id="loop-clear" onclick={() => set({ ...loop, notes: Array.from({ length: STEPS }, () => []) })}
+      <button id="loop-surprise" onclick={() => replace(surprise(loop), "Make new notes?", "SURPRISE ME")}
+        >SURPRISE ME</button
+      >
+      <button
+        id="loop-clear"
+        onclick={() => replace({ ...loop, notes: Array.from({ length: STEPS }, () => []) }, "Clear the notes?", "CLEAR NOTES")}
         >CLEAR NOTES</button
       >
     </div>
