@@ -83,6 +83,7 @@ export interface RenderOptions {
   avatar?: number;
   skin?: SkinArt | null; // a chosen skin, drawn in square mode only (docs/skins.md)
   view?: { width: number; height: number }; // a smaller canvas than the window (the skin preview)
+  zoom?: number; // scales the block size; 1 everywhere but a phone held upright (the player picks it)
 }
 export function render(
   canvas: HTMLCanvasElement,
@@ -103,6 +104,7 @@ export function render(
     avatar = AVATAR,
     skin = null,
     view,
+    zoom = 1,
   }: RenderOptions,
 ) {
   const w = view?.width ?? innerWidth,
@@ -128,7 +130,7 @@ export function render(
         ["wheel", "croissant", "gravity-up", "gravity-down"].includes(o.type),
       );
   const top = !editing && hasGravity ? Math.max(84, areaTop) : areaTop;
-  const unit = Math.max(12, Math.min((floor - top - 14) / 7, w / 13.5, 82));
+  const unit = Math.max(12, Math.min((floor - top - 14) / 7, w / 13.5, 82)) * zoom;
   const X = (x: number) => (x - camera) * unit,
     Y = (y: number) => floor - (y - cameraY) * unit,
     ground = Y(0);
