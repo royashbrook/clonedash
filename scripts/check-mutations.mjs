@@ -34,6 +34,8 @@ try {
     "loop-player.test.mjs",
     "loop-level.test.mjs",
     "music-lifetime.test.mjs",
+    "spin.test.mjs",
+    "canvas-log.mjs",
     "loop-song.test.mjs",
   ]) {
     const testSource = (await readFile(join("tests", testFile), "utf8"))
@@ -242,6 +244,16 @@ try {
     // a resume the close rejects after unmount (lifecycle, WebKit)
     ["music.ts", "        if (!this.disposed) throw e;", "        throw e;", "rejected while the game lives", "music-lifetime.test.mjs"],
     ["music.ts", "        if (!this.disposed) throw e;", "        void e;", "rejected while the game lives", "music-lifetime.test.mjs"],
+    // the cube's turn (#120)
+    ["spin.ts", "return { angle: s.base + (t - s.takeoff) * TURN, side: odd(s.rest) };", "return { angle: s.base - (t - s.takeoff) * TURN, side: odd(s.rest) };", "turns forward", "spin.test.mjs"],
+    ["spin.ts", "rest = Math.round(landed / QUARTER) * QUARTER,", "rest = 0,", "nearest flat side", "spin.test.mjs"],
+    ["spin.ts", "s.base = s.from + (s.rest - s.from) * ease(settle(s, t));", "s.base = 0;", "turns on from where it rests", "spin.test.mjs"],
+    ["spin.ts", "if (t < s.time || (state.mode !== \"square\" && state.mode !== \"pogo\")) Object.assign(s, newSpin());", "if (t < s.time) Object.assign(s, newSpin());", "another mode puts it upright", "spin.test.mjs"],
+    ["spin.ts", "if (t < s.time || (state.mode", "if ((state.mode", "starts again starts upright", "spin.test.mjs"],
+    ["spin.ts", "whole = Math.floor(rest / TURN) * TURN;", "whole = 0;", "a whole side in one turn", "spin.test.mjs"],
+    ["spin.ts", "const settle = (s: Spin, t: number) => Math.min(1, (t - s.at) / SETTLE);", "const settle = (s: Spin, t: number) => 1;", "settles there in a tenth", "spin.test.mjs"],
+    ["render.ts", "(X(cx + (sx - cx) * turn.side) - x) / k,\n          ((Y(cy + (sy - cy) * turn.side) - y) / k) * flip,", "(X(cx) - x) / k,\n          ((Y(cy) - y) / k) * flip,", "swapped box", "spin.test.mjs"],
+    ["render.ts", "      if (!reduced) {\n        let s = SPINS.get(state);", "      if (true) {\n        let s = SPINS.get(state);", "render turns the cube", "spin.test.mjs"],
     // the live loop player's races (#121)
     ["loop-player.ts", "    while (this.next < c.currentTime) this.advance();\n", "", "long gap", "loop-player.test.mjs"],
     ["loop-player.ts", "for (const s of [this.session, this.preview]) if (s)", "for (const s of [this.session]) if (s)", "tapped cell is cut", "loop-player.test.mjs"],

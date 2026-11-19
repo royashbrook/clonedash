@@ -22,6 +22,10 @@ import {
 } from "./engine.ts";
 import type { GameState, Level } from "./types.ts";
 import { skinBox, type SkinArt } from "./skin.ts";
+import { newSpin, spinAt, type Spin } from "./spin.ts";
+
+// each run's turn, by its state object: a restart makes a new state, so it starts upright
+const SPINS = new WeakMap<GameState, Spin>();
 // A colour trigger's colour laid over a piece's own colour (#rrggbb), for the pieces drawn in one
 // colour: rings, portals and coins.
 const hex = (v: number) => Math.round(v).toString(16).padStart(2, "0");
@@ -608,24 +612,37 @@ export function render(
             unit * 0.3,
           );
       }
+      // the cube's turn (src/spin.ts, #120), kept per run; reduced motion keeps it upright
+      let turn = { angle: 0, side: 0 };
+      if (!reduced) {
+        let s = SPINS.get(state);
+        if (!s) SPINS.set(state, (s = newSpin()));
+        turn = spinAt(s, state);
+      }
       if (state.mode === "square" && skin) {
         // A skin (docs/skins.md) replaces the square only: pogo shares the branch below and keeps
         // it. Its own fitted rectangle keeps the cube's anchoring (skinBox), drawn pixel for pixel.
-        const box = skinBox(state, skin.width, skin.height, avatar),
+        // On its side the turned image stands in the swapped box, so its feet stay on the ground.
+        const upright = skinBox(state, skin.width, skin.height, avatar),
+          sideways = skinBox(state, skin.height, skin.width, avatar),
+          cx = (upright.left + upright.right) / 2,
+          sx = (sideways.left + sideways.right) / 2,
+          cy = (upright.bottom + upright.top) / 2,
+          sy = (sideways.bottom + sideways.top) / 2,
           flip = state.gravity > 0 ? -1 : 1,
-          sw = ((box.right - box.left) * unit) / k,
-          sh = ((box.top - box.bottom) * unit) / k;
+          sw = ((upright.right - upright.left) * unit) / k,
+          sh = ((upright.top - upright.bottom) * unit) / k;
         if (state.gravity > 0) ctx.scale(1, -1);
         ctx.translate(
-          (X((box.left + box.right) / 2) - x) / k,
-          ((Y((box.bottom + box.top) / 2) - y) / k) * flip,
+          (X(cx + (sx - cx) * turn.side) - x) / k,
+          ((Y(cy + (sy - cy) * turn.side) - y) / k) * flip,
         );
-        if (!state.grounded && !reduced) ctx.rotate(-state.time * Math.PI * 2);
+        if (turn.angle) ctx.rotate(turn.angle);
         ctx.imageSmoothingEnabled = false;
         ctx.drawImage(skin.image, -sw / 2, -sh / 2, sw, sh);
       } else if (state.mode === "square" || state.mode === "pogo") {
         if (state.gravity > 0) ctx.scale(1, -1);
-        if (!state.grounded && !reduced) ctx.rotate(-state.time * Math.PI * 2);
+        if (turn.angle) ctx.rotate(turn.angle);
         const a = SIZE * unit;
         ctx.fillStyle = color;
         ctx.strokeStyle = "#fff";
