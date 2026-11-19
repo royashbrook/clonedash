@@ -1,0 +1,160 @@
+// Plays a loop live (#121, docs/loops.md "Playing"), through the game's own voices.
+// One player owns the sound. A 25 ms timer schedules each step 120 ms ahead into this play's own
+// output chain. STOP disconnects that chain at once, so steps already queued are not heard,
+// retires every wobble modulator, and voids a resume that finishes after it.
+//
+// Wobble modulators: the voices start one LFO per bass beat and zero its depth at the beat's end
+// (the offline render needs that, #122). Live, nothing would ever end them, so this player
+// disconnects each from its filter and then stops it a little after its beat. A long session only
+// ever holds the few beats in flight.
+import { BEAT, seededNoise, voices } from "./voices.ts";
+import type { Loop } from "./loop.ts";
+
+export const STEP = BEAT / 2;
+const AHEAD = 0.12,
+  TICK = 25,
+  RETIRE_AFTER = 0.05;
+const chordAt = (bar: number) => [0, -5, 3, -2][Math.floor(bar / 2) % 4];
+
+type Modulator = { lfo: OscillatorNode; end: number };
+type Session = { out: GainNode; play: ReturnType<typeof voices>; modulators: Modulator[] };
+
+export class LoopPlayer {
+  private context?: AudioContext;
+  private session?: Session;
+  private preview?: Session;
+  private timer = 0;
+  private token = 0;
+  private step = 0;
+  private bar = 0;
+  private next = 0;
+  private marks: [number, number][] = [];
+  playing = false;
+
+  constructor(
+    private loop: () => Loop,
+    private onStep: (step: number) => void = () => {},
+    private make: () => AudioContext = () => new AudioContext(),
+  ) {}
+
+  // a fresh output chain, the same as a rendered song's: compressor, volume, echo
+  private chain(c: AudioContext): Session {
+    const out = c.createGain();
+    out.connect(c.destination);
+    const master = c.createDynamicsCompressor();
+    master.threshold.value = -12;
+    master.knee.value = 15;
+    master.ratio.value = 5;
+    const volume = c.createGain();
+    volume.gain.value = 0.68;
+    master.connect(volume).connect(out);
+    const echo = c.createDelay(0.8),
+      feedback = c.createGain();
+    echo.delayTime.value = BEAT * 0.75;
+    feedback.gain.value = 0.22;
+    echo.connect(feedback).connect(echo);
+    echo.connect(master);
+    return { out, play: voices(c, master, seededNoise(c, 701), echo), modulators: [] };
+  }
+  private async wake() {
+    this.context ??= this.make();
+    if (this.context.state === "suspended") await this.context.resume();
+    return this.context;
+  }
+
+  async start() {
+    this.stop();
+    const token = ++this.token;
+    const c = await this.wake();
+    if (token !== this.token) return; // stopped while waking
+    this.session = this.chain(c);
+    this.playing = true;
+    this.step = this.bar = 0;
+    this.marks = [];
+    this.next = c.currentTime + 0.06;
+    this.timer = window.setInterval(() => this.tick(), TICK);
+    this.tick();
+  }
+  stop() {
+    this.token++;
+    window.clearInterval(this.timer);
+    this.timer = 0;
+    if (this.session) this.retire(this.session, true);
+    this.session = undefined;
+    if (this.playing) this.onStep(-1);
+    this.playing = false;
+  }
+  // leaving the screen: stop, drop the preview chain and let the context sleep
+  async leave() {
+    this.stop();
+    if (this.preview) this.retire(this.preview, true);
+    this.preview = undefined;
+    if (this.context?.state === "running") await this.context.suspend();
+  }
+  async close() {
+    this.stop();
+    this.preview = undefined;
+    const c = this.context;
+    this.context = undefined;
+    await c?.close();
+  }
+  // how many wobble modulators are alive (the playing session's), for the lifetime checks
+  get modulators() {
+    return this.session?.modulators.length ?? 0;
+  }
+
+  // one tapped cell, heard at once
+  async hear(kind: "note" | "kick" | "snare" | "hat", value: number) {
+    const token = this.token;
+    const c = await this.wake();
+    if (token !== this.token && !this.playing) return;
+    const s = this.session ?? (this.preview ??= this.chain(c)),
+      loop = this.loop(),
+      t = c.currentTime + 0.01;
+    if (kind === "note") s.play.lead(t, loop.root + 24 + value, loop.drop, true);
+    else this.drum(s, kind, value, t);
+  }
+
+  private drum(s: Session, kind: "kick" | "snare" | "hat", step: number, t: number) {
+    if (kind === "kick") s.play.kick(t);
+    else if (kind === "snare") s.play.snare(t);
+    else s.play.hiss(t, step === 7 ? 0.12 : 0.045, 6500, step % 2 ? 0.035 : 0.055);
+  }
+  private playStep(s: Session, step: number, t: number) {
+    const loop = this.loop(),
+      root = loop.root + chordAt(this.bar);
+    if (step === 0) s.play.pad(t, root, loop.drop);
+    if (step % 2 === 0) s.modulators.push({ lfo: s.play.bass(t, root, loop.wobble, loop.drop).lfo, end: t + BEAT });
+    for (const kind of ["kick", "snare", "hat"] as const) if (loop[kind].includes(step)) this.drum(s, kind, step, t);
+    for (const degree of loop.notes[step]) s.play.lead(t, loop.root + 24 + degree, loop.drop, step % 2 === 0);
+  }
+  private tick() {
+    const s = this.session,
+      c = this.context;
+    if (!s || !c) return;
+    while (this.next < c.currentTime + AHEAD) {
+      this.playStep(s, this.step, this.next);
+      this.marks.push([this.next, this.step]);
+      this.next += STEP;
+      if (++this.step === 8) {
+        this.step = 0;
+        this.bar++;
+      }
+    }
+    this.retire(s, false);
+    let shown = -2;
+    while (this.marks.length && this.marks[0][0] <= c.currentTime) shown = this.marks.shift()![1];
+    if (shown > -2) this.onStep(shown);
+  }
+  // disconnect, then stop: a modulator never sits stopped while still feeding a filter (#122)
+  private retire(s: Session, all: boolean) {
+    const now = this.context?.currentTime ?? Infinity;
+    s.modulators = s.modulators.filter((m) => {
+      if (!all && m.end + RETIRE_AFTER > now) return true;
+      m.lfo.disconnect();
+      m.lfo.stop();
+      return false;
+    });
+    if (all) s.out.disconnect();
+  }
+}
