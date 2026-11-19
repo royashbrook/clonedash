@@ -5,7 +5,11 @@
 // that fails any of that is refused whole, never loaded in part. An unknown field at the save,
 // game, level-entry, level or piece level says "newer"; an unknown field inside a skin is dropped
 // by its reader, so it is refused as damaged instead.
+// Loops (#121) are an optional part: a save without them is byte-for-byte what 1.0.85 made, and
+// loading one REPLACES this device's loops (absent removes them). A loop's raw fields are checked
+// before its reader runs, because validateLoop drops what it does not know.
 import { SAVE, readSave } from "./library.ts";
+import { LOOPS, readLoops, type LoopStore } from "./loop.ts";
 import { SKINS, readSkins, type SkinStore } from "./skin.ts";
 import { MAX_SAVE_BYTES, MAX_SAVE_TEXT, packCode, portableLevel, unpackCode } from "./transfer.ts";
 import type { SaveData } from "./types.ts";
@@ -16,7 +20,9 @@ export const MAX_BACKUP_BYTES = MAX_SAVE_BYTES;
 export interface Backup {
   game: SaveData;
   skins: SkinStore;
+  loops?: LoopStore;
 }
+const LOOP_FIELDS = ["name", "root", "wobble", "drop", "notes", "kick", "snare", "hat"];
 
 const NEWER = "This save is from a newer Cube Dash. Update the game, then load it again.";
 const DAMAGED = "This save is damaged, so nothing was loaded.";
@@ -43,7 +49,7 @@ function fields(v: unknown, known: string[], required: string[]): Record<string,
 // The whole check, run before encoding and after decoding, so a code this game makes is always
 // one it accepts. trailCount is the number of built-in levels (progress keys must name one).
 export function checkBackup(input: unknown, trailCount: number): Backup {
-  const top = fields(input, ["v", "game", "skins"], ["v", "game", "skins"]);
+  const top = fields(input, ["v", "game", "skins", "loops"], ["v", "game", "skins"]);
   if (top.v !== 1) throw Error(typeof top.v === "number" && top.v > 1 ? NEWER : DAMAGED);
   const game = fields(
     top.game,
@@ -69,7 +75,18 @@ export function checkBackup(input: unknown, trailCount: number): Backup {
   // whitelist; the one difference allowed is the default song a level from before songs lacks
   for (const level of [readGame.draft, ...readGame.customLevels.map((e) => e.level)])
     if (!same(portableLevel(level), { ...level, song: level.song ?? 9 })) throw Error(NEWER);
-  return { game: readGame, skins: readSkinStore };
+  if (!("loops" in top)) return { game: readGame, skins: readSkinStore };
+  const loops = fields(top.loops, ["version", "next", "loops"], ["version", "next", "loops"]);
+  if (!Array.isArray(loops.loops)) throw Error(DAMAGED);
+  for (const entry of loops.loops) fields(fields(entry, ["id", "loop"], ["id", "loop"]).loop, LOOP_FIELDS, LOOP_FIELDS);
+  let readLoopStore: LoopStore;
+  try {
+    readLoopStore = readLoops(JSON.stringify(loops));
+  } catch {
+    throw Error(DAMAGED);
+  }
+  if (!same(readLoopStore, loops)) throw Error(DAMAGED);
+  return { game: readGame, skins: readSkinStore, loops: readLoopStore };
 }
 
 export async function encodeBackup(backup: Backup, trailCount: number): Promise<string> {
@@ -113,6 +130,7 @@ export function summary(backup: Backup) {
     played: Object.values(backup.game.best).filter((b) => b > 0).length,
     levels: backup.game.customLevels.length,
     skins: backup.skins.skins.length,
+    loops: backup.loops?.loops.length ?? 0,
   };
 }
 
@@ -131,16 +149,21 @@ export const IMPORT = "clonedash.import";
 export function writeBackup(storage: Storage, backup: Backup, trailCount: number) {
   // the whole check again, here at the last step before anything is written
   const checked = checkBackup({ v: 1, ...backup }, trailCount);
-  const parts: [string, string, string][] = [
+  // each part's new value; null means the key is removed (a save without loops replaces this
+  // device's loops with none)
+  const parts: [string, string | null, string][] = [
     [SAVE, JSON.stringify(checked.game), "levels and progress"],
     [SKINS, JSON.stringify(checked.skins), "skins"],
+    [LOOPS, checked.loops ? JSON.stringify(checked.loops) : null, "loops"],
   ];
   const before = parts.map(([key]) => storage.getItem(key)),
     marker = storage.getItem(IMPORT),
     id = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
   storage.setItem(IMPORT, JSON.stringify({ state: "pending", id }));
   try {
-    for (const [key, value] of parts) storage.setItem(key, value);
+    for (const [key, value] of parts)
+      if (value === null) storage.removeItem(key);
+      else storage.setItem(key, value);
     if (parts.some(([key, value]) => storage.getItem(key) !== value))
       throw Error("A store did not read back as written.");
   } catch (cause) {

@@ -6,7 +6,7 @@ import { TYPES, object } from '../src/engine.ts';
 import { LEVELS } from '../src/levels.ts';
 import { SAVE, newLevel, readSave, storeDraft } from '../src/library.ts';
 import { SKINS, addSkin, emptyStore, readSkins, wearSkin } from '../src/skin.ts';
-import { MAX_CODE, MAX_SAVE_TEXT, codeKind } from '../src/transfer.ts';
+import { MAX_CODE, MAX_SAVE_TEXT, codeKind, unpackCode } from '../src/transfer.ts';
 
 // #124, a whole save moving between devices. docs: notes in src/backup.ts.
 const N = LEVELS.length;
@@ -41,7 +41,7 @@ test('a full save round-trips exactly, as a code and as a link', async () => {
   assert.equal(new URL(link).search, '');
   assert.deepEqual(await decodeBackup(link, N), save);
   assert.equal(codeKind(code), 'save'); assert.equal(codeKind(link), 'save');
-  assert.deepEqual(summary(save), { played: 2, levels: 3, skins: 3 });
+  assert.deepEqual(summary(save), { played: 2, levels: 3, skins: 3, loops: 0 });
 });
 
 test('a fresh device save round-trips too', async () => {
@@ -57,7 +57,8 @@ const refuses = async (change, pattern) => {
 };
 
 test('every field is one this version knows, of its type: unknown parts say update, wrong ones say damaged', async () => {
-  await refuses((d) => { d.loops = { version: 1 }; }, /newer Cube Dash/);
+  await refuses((d) => { d.music = { version: 1 }; }, /newer Cube Dash/);
+  await refuses((d) => { d.loops = { version: 1 }; }, /damaged/);
   await refuses((d) => { d.v = 2; }, /newer Cube Dash/);
   await refuses((d) => { d.v = '1'; }, /damaged/);
   await refuses((d) => { d.game.futureField = {}; }, /newer Cube Dash/);
@@ -216,4 +217,85 @@ test('every load leaves a marker no earlier load left', () => {
   const s = storage(OLD), seen = new Set();
   for (let i = 0; i < 5; i++) { writeBackup(s, fullSave(), N); seen.add(s.map.get(IMPORT)); }
   assert.equal(seen.size, 5);
+});
+
+// ---- loops in a whole save (#121, docs/loops.md) ----
+import { execFileSync } from 'node:child_process';
+import { mkdtemp, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { LOOPS, addLoop, blankLoop, emptyLoops, readLoops } from '../src/loop.ts';
+
+const tune = (name) => ({ ...blankLoop(), name, notes: [[0], [], [12], [], [7], [], [3], []] });
+function withLoops() {
+  const loops = emptyLoops(); addLoop(loops, tune('A')); addLoop(loops, tune('B'));
+  return { ...fullSave(), loops: readLoops(JSON.stringify(loops)) };
+}
+
+test('loops travel in a save and come back equal; a save without loops is the same bytes as before', async () => {
+  const save = withLoops();
+  assert.deepEqual(await decodeBackup(await encodeBackup(save, N), N), save);
+  assert.equal(summary(save).loops, 2);
+  const plain = fullSave(), code = await encodeBackup(plain, N);
+  const json = JSON.parse(await unpackCode(code, BACKUP_PREFIX, MAX_BACKUP_BYTES, 'save'));
+  assert.deepEqual(Object.keys(json), ['v', 'game', 'skins']);
+  assert.equal(JSON.stringify(json), JSON.stringify({ v: 1, ...plain }));
+});
+
+test('a loop field this version does not know is refused before any reader can drop it', async () => {
+  for (const [change, words] of [
+    [(d) => { d.loops.loops[0].loop.tempo = 140; }, /newer Cube Dash/],
+    [(d) => { d.loops.loops[0].colour = 1; }, /newer Cube Dash/],
+    [(d) => { d.loops.future = 1; }, /newer Cube Dash/],
+    [(d) => { delete d.loops.loops[0].loop.hat; }, /damaged/],
+    [(d) => { d.loops.loops[0].loop.root = 99; }, /damaged/],
+    [(d) => { d.loops.next = 1; }, /damaged/],
+  ]) {
+    const data = { v: 1, ...structuredClone(withLoops()) }; change(data);
+    await assert.rejects(() => decodeBackup(raw(data), N), words);
+    assert.throws(() => checkBackup(data, N), words);
+  }
+});
+
+test('loading replaces this device\'s loops: absent removes them, an empty store keeps its numbers', () => {
+  const had = { ...OLD, [LOOPS]: JSON.stringify(withLoops().loops) };
+  const s = storage(had);
+  assert.doesNotThrow(() => writeBackup(s, fullSave(), N));
+  assert.equal(s.map.has(LOOPS), false);
+  const empty = { version: 1, next: 7, loops: [] }, e = storage(had);
+  assert.doesNotThrow(() => writeBackup(e, { ...fullSave(), loops: empty }, N));
+  assert.deepEqual(JSON.parse(e.map.get(LOOPS)), empty);
+  const w = storage(OLD);
+  assert.doesNotThrow(() => writeBackup(w, withLoops(), N));
+  assert.deepEqual(readLoops(w.map.get(LOOPS)), withLoops().loops);
+});
+
+test('a failed third write or read-back puts every store back exactly, absent stays absent', () => {
+  const had = { ...OLD, [LOOPS]: JSON.stringify(withLoops().loops) };
+  for (const [initial, save, fail] of [
+    [OLD, withLoops(), { write: (k) => k === LOOPS }],
+    [OLD, withLoops(), { readback: LOOPS }],
+    [had, fullSave(), { remove: LOOPS }],
+  ]) {
+    const s = storage(initial, fail);
+    assert.throws(() => writeBackup(s, save, N), /Nothing was changed|remove|quota/);
+    for (const key of [SAVE, SKINS, LOOPS]) assert.equal(s.map.get(key), initial[key], key);
+    assert.equal(s.map.has(LOOPS), LOOPS in initial);
+  }
+  // the loops fail and putting the skins back fails too: the error names the skins
+  let skins = 0;
+  const p = storage(OLD, { write: (k) => k === LOOPS || (k === SKINS && ++skins > 1), remove: SKINS });
+  assert.throws(() => writeBackup(p, withLoops(), N), /your skins may be from the new save/);
+  assert.equal(JSON.parse(p.map.get(IMPORT)).state, 'pending');
+});
+
+test('the 1.0.85 reader itself refuses a save that carries loops', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'cube-1085-'));
+  await writeFile(join(dir, 'src.tar'), execFileSync('git', ['archive', '--format=tar', '6b7071e03bd080be63d1a3ebe00cb5524e8cdc91', 'src']));
+  execFileSync('tar', ['-xf', join(dir, 'src.tar'), '-C', dir]);
+  const old = await import(join(dir, 'src', 'backup.ts'));
+  const code = await encodeBackup(withLoops(), N);
+  await assert.rejects(() => old.decodeBackup(code, N), /newer Cube Dash/);
+  // and still opens one without them
+  assert.deepEqual(await old.decodeBackup(await encodeBackup(fullSave(), N), N), fullSave());
 });

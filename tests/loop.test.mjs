@@ -79,7 +79,7 @@ test('the store adds, saves over and deletes through fresh reads, and refuses ra
   assert.throws(() => commitLoops(storage({}, { readback: true }), (x) => addLoop(x, good())), /could not confirm/);
   const full = emptyLoops(); for (let i = 0; i < MAX_LOOPS; i++) addLoop(full, good());
   assert.throws(() => addLoop(full, good()), /100 loops/);
-  for (const bad of [{ version: 2, next: 1, loops: [] }, { version: 1, next: 1, loops: [{ id: 1, loop: good() }] }, { version: 1, next: 3, loops: [{ id: 1, loop: good() }, { id: 1, loop: good() }] }])
+  for (const bad of [{ version: 2, next: 1, loops: [] }, { version: 1, next: 0, loops: [] }, { version: 1, next: 1.5, loops: [] },{ version: 1, next: 1, loops: [{ id: 1, loop: good() }] }, { version: 1, next: 3, loops: [{ id: 1, loop: good() }, { id: 1, loop: good() }] }])
     assert.throws(() => readLoops(JSON.stringify(bad)));
 });
 

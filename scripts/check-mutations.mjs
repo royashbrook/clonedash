@@ -30,6 +30,7 @@ try {
     "backup.test.mjs",
     "compose-graph.test.mjs",
     "audio-graph.mjs",
+    "loop.test.mjs",
   ]) {
     const testSource = (await readFile(join("tests", testFile), "utf8"))
       .replaceAll("../src/", "./src/")
@@ -197,19 +198,28 @@ try {
     ["skin.ts", "    throw Error(\"Your saved skins could not be read, so nothing was changed.\");", "    latest = emptyStore();", "refused, unconfirmed and invalid writes", "skin.test.mjs"],
     ["skin.ts", "if (storage.getItem(SKINS) !== raw)", "if (false)", "refused, unconfirmed and invalid writes", "skin.test.mjs"],
     ["transfer.ts", "if (params.getAll(\"level\").length !== 1 || params.has(\"skin\"))", "if (params.getAll(\"level\").length !== 1)", "wrong-kind skin codes", "skin.test.mjs"],
-    ["transfer.ts", "if (levels + skins + saves !== 1)", "if (levels + skins + saves < 1)", "import dispatches by prefix", "skin.test.mjs"],
+    ["transfer.ts", "if (found.length !== 1 || found[0][1] !== 1) throw Error(ONE);", "if (found.length < 1) throw Error(ONE);", "import dispatches by prefix", "skin.test.mjs"],
+    ["transfer.ts", "if (found.length !== 1 || found[0][1] !== 1) throw Error(ONE);", "if (found.length !== 1) throw Error(ONE);", "travels as a cdm1 code", "loop.test.mjs"],
     // a whole save (#124)
     ["backup.ts", "if (Object.keys(v).some((k) => !known.includes(k))) throw Error(NEWER);", "", "every field is one this version knows", "backup.test.mjs"],
     ["backup.ts", "if (typeof game.sound !== \"boolean\" || ", "if (", "every field is one this version knows", "backup.test.mjs"],
     ["backup.ts", "if (!same(portableLevel(level), { ...level, song: level.song ?? 9 })) throw Error(NEWER);", "", "every field is one this version knows", "backup.test.mjs"],
     ["backup.ts", "if (!same(readGame, game) || !same(readSkinStore, skins)) throw Error(DAMAGED);", "", "every field is one this version knows", "backup.test.mjs"],
-    ["backup.ts", "const checked = checkBackup({ v: 1, ...backup }, trailCount);\n  const parts", "const checked = backup;\n  const parts", "the writer checks the whole save itself", "backup.test.mjs"],
+    ["backup.ts", "const checked = checkBackup({ v: 1, ...backup }, trailCount);\n  // each part", "const checked = backup;\n  // each part", "the writer checks the whole save itself", "backup.test.mjs"],
     ["backup.ts", "if (parts.some(([key, value]) => storage.getItem(key) !== value))", "if (false)", "any failed write or readback", "backup.test.mjs"],
     ["backup.ts", "        else storage.setItem(key, before[i]!);", "", "any failed write or readback", "backup.test.mjs"],
     ["backup.ts", "    else storage.setItem(IMPORT, marker);", "    else storage.removeItem(IMPORT);", "puts an earlier marker back", "backup.test.mjs"],
     ["backup.ts", "  } catch (cause) {\n    throw Error(\n      \"The save was copied in", "  } catch (cause) {\n    if (cause) return;\n    throw Error(\n      \"The save was copied in", "done marker failing", "backup.test.mjs"],
     ["transfer.ts", "if (text.length > MAX_SAVE_TEXT) throw Error(\"This code is too large.\");", "", "past the whole-save ceiling", "backup.test.mjs"],
     ["transfer.ts", "if (kind !== \"save\" && text.length > MAX_CODE)", "if (false)", "past the whole-save ceiling", "backup.test.mjs"],
+    // loops in a whole save (#121)
+    ["backup.ts", "for (const entry of loops.loops) fields(fields(entry, [\"id\", \"loop\"], [\"id\", \"loop\"]).loop, LOOP_FIELDS, LOOP_FIELDS);", "", "loop field this version does not know", "backup.test.mjs"],
+    ["backup.ts", "    [LOOPS, checked.loops ? JSON.stringify(checked.loops) : null, \"loops\"],\n", "", "replaces this device's loops", "backup.test.mjs"],
+    ["backup.ts", "if (value === null) storage.removeItem(key);\n      else storage.setItem(key, value);", "if (value !== null) storage.setItem(key, value);", "replaces this device's loops", "backup.test.mjs"],
+    ["loop.ts", "v.every((x, i) => i === 0 || (x as number) > (v[i - 1] as number))", "true", "exactly its eight fields", "loop.test.mjs"],
+    ["loop.ts", "if (!int(s.next, 1, MAX_ID)) throw Error(\"Invalid loops\");", "", "refuses rather than drop", "loop.test.mjs"],
+    ["loop.ts", "if (storage.getItem(LOOPS) !== raw) throw Error", "if (false) throw Error", "refuses rather than drop", "loop.test.mjs"],
+    ["loop.ts", "await unpackCode(code, PREFIX, MAX_LOOP_BYTES, \"loop\")", "await unpackCode(code, PREFIX, MAX_LOOP_BYTES * 100, \"loop\")", "bounded and refuse", "loop.test.mjs"],
     // the shared song voices (#121): each kind of change must move the frozen graph
     ["voices.ts", "seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;", "seed = (Math.imul(seed, 1664525) + 1013904225) >>> 0;", "frozen graph, schedule and noise", "compose-graph.test.mjs"],
     ["voices.ts", "g.gain.exponentialRampToValueAtTime(amplitude, t + 0.008);", "g.gain.exponentialRampToValueAtTime(amplitude, t + 0.009);", "frozen graph, schedule and noise", "compose-graph.test.mjs"],
