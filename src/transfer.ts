@@ -4,6 +4,10 @@ import type { Level, SaveData } from "./types.ts";
 
 export const MAX_CODE = 192 * 1024;
 export const MAX_LEVEL_BYTES = 128 * 1024;
+// A whole save (#124, src/backup.ts) has its own explicit transfer ceiling, far above a level's:
+// 5 MiB of save, and the longest text (code or link) that could carry it.
+export const MAX_SAVE_BYTES = 5 * 1024 * 1024,
+  MAX_SAVE_TEXT = Math.ceil((MAX_SAVE_BYTES * 4) / 3) + 1024;
 // A level that uses width and height, touch triggers or multi touch (#117) travels as cdl2, which a
 // copy of the game from before them refuses instead of playing a different level. Every other
 // level is the same cdl1 code it always was.
@@ -244,10 +248,13 @@ export async function decodeLevel(text: string): Promise<Level> {
 // anything else goes to decodeLevel exactly as before. A link must carry exactly one of them;
 // two kinds, or one twice, is ambiguous and refused before choosing.
 export function codeKind(text: string): "level" | "skin" | "save" {
-  // a whole save may be far larger than a level or skin; decodeBackup holds its own bound
-  if (text.length > MAX_CODE && !/^\s*(cdb|https?:\/\/[^#]*#(.*&)?save=)/i.test(text.slice(0, 4096)))
-    throw Error("This code is too large.");
-  const code = text.trim();
+  // nothing is parsed past the largest whole save, and only a save may pass a level's cap
+  if (text.length > MAX_SAVE_TEXT) throw Error("This code is too large.");
+  const kind = kindOf(text.trim());
+  if (kind !== "save" && text.length > MAX_CODE) throw Error("This code is too large.");
+  return kind;
+}
+function kindOf(code: string): "level" | "skin" | "save" {
   if (/^https?:\/\//i.test(code)) {
     let params: URLSearchParams;
     try {

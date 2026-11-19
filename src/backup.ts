@@ -2,15 +2,17 @@
 // cdb1 code, in the same envelope as a skin (src/transfer.ts packCode). The game's own readers stay
 // the authority on what a store may hold; this file adds what they do not check: every field is
 // one this version knows, of the type it expects, and reading it back changes nothing. A save
-// that fails any of that is refused whole, never loaded in part.
+// that fails any of that is refused whole, never loaded in part. An unknown field at the save,
+// game, level-entry, level or piece level says "newer"; an unknown field inside a skin is dropped
+// by its reader, so it is refused as damaged instead.
 import { SAVE, readSave } from "./library.ts";
 import { SKINS, readSkins, type SkinStore } from "./skin.ts";
-import { packCode, portableLevel, unpackCode } from "./transfer.ts";
+import { MAX_SAVE_BYTES, MAX_SAVE_TEXT, packCode, portableLevel, unpackCode } from "./transfer.ts";
 import type { SaveData } from "./types.ts";
 
 export const BACKUP_PREFIX = "cdb1.";
-// localStorage holds about 5 MB for the whole game, so no real save is larger
-export const MAX_BACKUP_BYTES = 5 * 1024 * 1024;
+// the transfer ceiling for one whole save, the same both ways (src/transfer.ts)
+export const MAX_BACKUP_BYTES = MAX_SAVE_BYTES;
 export interface Backup {
   game: SaveData;
   skins: SkinStore;
@@ -28,6 +30,7 @@ const sorted = (v: unknown): unknown =>
       : v;
 // equal as data, whatever order the keys were written in
 const same = (a: unknown, b: unknown) => JSON.stringify(sorted(a)) === JSON.stringify(sorted(b));
+export const sameData = (a: Backup, b: Backup) => same(a, b);
 
 // every key known, every required key present
 function fields(v: unknown, known: string[], required: string[]): Record<string, unknown> {
@@ -76,7 +79,7 @@ export async function encodeBackup(backup: Backup, trailCount: number): Promise<
 }
 
 export async function decodeBackup(text: string, trailCount: number): Promise<Backup> {
-  if (text.length > Math.ceil((MAX_BACKUP_BYTES * 4) / 3) + 1024) throw Error("This save is too large.");
+  if (text.length > MAX_SAVE_TEXT) throw Error("This save is too large.");
   let code = text.trim();
   if (/^https?:\/\//i.test(code)) {
     const params = new URLSearchParams(new URL(code).hash.slice(1));
@@ -113,9 +116,11 @@ export function summary(backup: Backup) {
   };
 }
 
-// Written last by a load that finished, and first by one that starts: other open tabs reload when
-// it says done (a stale tab would otherwise write its old save back on its next save), and a boot
-// that finds it pending knows a load was cut off.
+// Written first by a load that starts (pending) and last by one that finished (done), each with
+// a fresh id. Every open tab remembers the value it loaded with and reads it again before each of
+// its own writes: a different value means another tab loaded a save, so that tab reloads instead
+// of writing its old save back (storage events are only the fast path, they can arrive late). A
+// boot that finds it pending knows a load did not finish.
 export const IMPORT = "clonedash.import";
 
 // localStorage writes one key per call, never several as one step, so this is the policy: snapshot
@@ -123,13 +128,17 @@ export const IMPORT = "clonedash.import";
 // that was absent is removed again) and the error says nothing changed. If putting them back fails
 // too, the error names which parts may now be from the new save. Success is only reported after
 // both read back exactly as written.
-export function writeBackup(storage: Storage, backup: Backup) {
+export function writeBackup(storage: Storage, backup: Backup, trailCount: number) {
+  // the whole check again, here at the last step before anything is written
+  const checked = checkBackup({ v: 1, ...backup }, trailCount);
   const parts: [string, string, string][] = [
-    [SAVE, JSON.stringify(backup.game), "levels and progress"],
-    [SKINS, JSON.stringify(backup.skins), "skins"],
+    [SAVE, JSON.stringify(checked.game), "levels and progress"],
+    [SKINS, JSON.stringify(checked.skins), "skins"],
   ];
-  const before = parts.map(([key]) => storage.getItem(key));
-  storage.setItem(IMPORT, JSON.stringify({ state: "pending" }));
+  const before = parts.map(([key]) => storage.getItem(key)),
+    marker = storage.getItem(IMPORT),
+    id = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+  storage.setItem(IMPORT, JSON.stringify({ state: "pending", id }));
   try {
     for (const [key, value] of parts) storage.setItem(key, value);
     if (parts.some(([key, value]) => storage.getItem(key) !== value))
@@ -152,14 +161,20 @@ export function writeBackup(storage: Storage, backup: Backup) {
           "from the new save. Free some space on this device and load the save again.",
         { cause },
       );
-    storage.removeItem(IMPORT);
+    // nothing changed, so the marker goes back to what it was too: other tabs then see no load
+    if (marker === null) storage.removeItem(IMPORT);
+    else storage.setItem(IMPORT, marker);
     throw Error("There isn't room to load this save on this device. Nothing was changed.", { cause });
   }
-  // both stores are in: if even this small marker cannot be written, clearing it still tells the
-  // next boot there was no cut-off load (other tabs then miss only the reload signal)
+  // both stores are in. If even this small marker cannot be written, the pending one stays (it is
+  // still the signal other tabs check) and the load is reported as not finished, never as done.
   try {
-    storage.setItem(IMPORT, JSON.stringify({ state: "done", at: Date.now() }));
-  } catch {
-    storage.removeItem(IMPORT);
+    storage.setItem(IMPORT, JSON.stringify({ state: "done", id }));
+  } catch (cause) {
+    throw Error(
+      "The save was copied in, but this device ran out of room before it finished. Free some " +
+        "space, then load the save again.",
+      { cause },
+    );
   }
 }

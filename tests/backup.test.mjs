@@ -6,7 +6,7 @@ import { TYPES, object } from '../src/engine.ts';
 import { LEVELS } from '../src/levels.ts';
 import { SAVE, newLevel, readSave, storeDraft } from '../src/library.ts';
 import { SKINS, addSkin, emptyStore, readSkins, wearSkin } from '../src/skin.ts';
-import { codeKind } from '../src/transfer.ts';
+import { MAX_CODE, MAX_SAVE_TEXT, codeKind } from '../src/transfer.ts';
 
 // #124, a whole save moving between devices. docs: notes in src/backup.ts.
 const N = LEVELS.length;
@@ -138,7 +138,7 @@ const OLD = { [SAVE]: JSON.stringify(readSave(null, N)) }; // an old device with
 
 test('replace writes both stores, reads them back, then marks the load done', () => {
   const s = storage(OLD), save = fullSave();
-  writeBackup(s, save);
+  writeBackup(s, save, N);
   assert.deepEqual(readSave(s.map.get(SAVE), N), save.game);
   assert.deepEqual(readSkins(s.map.get(SKINS)), save.skins);
   assert.equal(JSON.parse(s.map.get(IMPORT)).state, 'done');
@@ -153,7 +153,7 @@ test('any failed write or readback puts both stores back exactly, absent keys st
     { readback: SKINS },                          // wrote, but does not read back
   ]) {
     const s = storage(OLD, fail);
-    assert.throws(() => writeBackup(s, save), /Nothing was changed|quota/);
+    assert.throws(() => writeBackup(s, save, N), /Nothing was changed|quota/);
     assert.equal(s.map.get(SAVE), OLD[SAVE]);
     assert.equal(s.map.has(SKINS), false);
     assert.equal(s.map.has(IMPORT), false);
@@ -165,16 +165,53 @@ test('a rollback that fails names what may be new and leaves the load marked pen
   let saves = 0;
   // the level save writes, the skins fail, and putting the old level save back fails too
   const s = storage(OLD, { write: (k) => k === SKINS || (k === SAVE && ++saves > 1) });
-  assert.throws(() => writeBackup(s, save), /your levels and progress may be from the new save/);
+  assert.throws(() => writeBackup(s, save, N), /your levels and progress may be from the new save/);
   assert.equal(JSON.parse(s.map.get(IMPORT)).state, 'pending');
   // an old key that was absent and cannot be removed again is named too
   const r = storage({}, { write: (k) => k === SKINS, remove: SAVE });
-  assert.throws(() => writeBackup(r, save), /your levels and progress may be from the new save/);
+  assert.throws(() => writeBackup(r, save, N), /your levels and progress may be from the new save/);
 });
 
-test('the done marker failing still clears pending, and the load stands', () => {
+test('the done marker failing is reported as not finished, and pending stays as the signal', () => {
   const s = storage(OLD, { write: (k, n, v) => k === IMPORT && String(v).includes('done') }), save = fullSave();
-  writeBackup(s, save);
-  assert.deepEqual(readSkins(s.map.get(SKINS)), save.skins);
-  assert.equal(s.map.has(IMPORT), false);
+  assert.throws(() => writeBackup(s, save, N), /ran out of room before it finished/);
+  assert.equal(JSON.parse(s.map.get(IMPORT)).state, 'pending');
+});
+
+test('the writer checks the whole save itself and writes nothing for a bad one', () => {
+  for (const change of [(b) => { b.skins.skins[0].skin.pixels = 'x'; }, (b) => { b.game.sound = 'yes'; }, (b) => { b.game.future = 1; }]) {
+    const s = storage(OLD), bad = fullSave(); change(bad);
+    assert.throws(() => writeBackup(s, bad, N), /damaged|newer/);
+    assert.deepEqual([...s.map.keys()], [SAVE]);
+    assert.equal(s.map.get(SAVE), OLD[SAVE]);
+  }
+});
+
+test('a failed load puts an earlier marker back exactly', () => {
+  const earlier = JSON.stringify({ state: 'done', id: 'earlier' });
+  const s = storage({ ...OLD, [IMPORT]: earlier }, { write: (k) => k === SKINS });
+  assert.throws(() => writeBackup(s, fullSave(), N), /Nothing was changed/);
+  assert.equal(s.map.get(IMPORT), earlier);
+});
+
+test('no text past the whole-save ceiling is parsed as a link, and only a save passes a level cap', () => {
+  const real = globalThis.URL;
+  let built = 0;
+  globalThis.URL = class extends real { constructor(...a) { built++; super(...a); } };
+  try {
+    const huge = 'https://x.test/#save=' + 'A'.repeat(MAX_SAVE_TEXT);
+    assert.throws(() => codeKind(huge), /too large/);
+    assert.equal(built, 0);
+  } finally {
+    globalThis.URL = real;
+  }
+  const levelSized = 'https://x.test/#level=' + 'A'.repeat(MAX_CODE);
+  assert.throws(() => codeKind(levelSized), /too large/);
+  assert.equal(codeKind('https://x.test/#save=' + 'A'.repeat(MAX_CODE)), 'save');
+});
+
+test('every load leaves a marker no earlier load left', () => {
+  const s = storage(OLD), seen = new Set();
+  for (let i = 0; i < 5; i++) { writeBackup(s, fullSave(), N); seen.add(s.map.get(IMPORT)); }
+  assert.equal(seen.size, 5);
 });
