@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { labelOf } from '../src/types.ts';
+import { pauseClock } from './paused-clock.mjs';
 
 test('copy + paste preserves transforms; delete all cancels safely and clears only the draft when confirmed', async ({ page }) => {
   await page.addInitScript(() => {
@@ -31,12 +32,15 @@ test('copy + paste preserves transforms; delete all cancels safely and clears on
 });
 
 for (const mode of ['square', 'plane', 'wheel', 'pogo', 'angle']) test(`${mode} wall impact dies and restarts instead of stopping at the wall`, async ({ page }) => {
-  await page.clock.install();
+  // a fixed timeline: the hit, the tap and the restart are each a set amount of run time. Paused,
+  // so a slow host's real time is never added to them (#113).
+  await page.clock.install({ time: 0 });
   await page.addInitScript(mode => {
     const piece = (type, x, y = 0) => ({ type, x, y, rotation: 0, flipX: false, flipY: false });
     localStorage.setItem('clonedash.v1', JSON.stringify({ version: 1, best: {}, sound: false, draft: { name: 'Wall impact', length: 20, objects: [piece(mode, 3), ...[0, 1, 2, 3].map(y => piece('outline', 6, y))] } }));
   }, mode);
-  await page.goto('/'); await page.locator('#editor-open').click(); await page.locator('#test-level').click();
+  await page.goto('/'); await pauseClock(page, test.info());
+  await page.locator('#editor-open').click(); await page.locator('#test-level').click();
   await page.clock.runFor(1500); await expect(page.locator('#attempt')).toHaveText('TRY 1');
   await expect(page.locator('#level-name')).toContainText(labelOf(mode)); // shown name, not the stored id
   const x = () => page.locator('#run-progress').evaluate(e => 1 + e.value / 100 * 19);

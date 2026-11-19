@@ -676,6 +676,8 @@ body[data-mode="editor"] #world {
   .home-head button {
     font-size: 12px;
     padding: 9px;
+    /* a short label like USE must not fall under the 44px target with a narrower font */
+    min-width: 44px;
   }
   footer {
     margin-top: 16px;

@@ -19,6 +19,10 @@ jobs:
        github.event.workflow_run.head_branch == 'main' &&
        github.event.workflow_run.head_repository.full_name == github.repository)
     runs-on: ubuntu-latest
+    # the same version-matched image as the checks (#122)
+    container:
+      image: mcr.microsoft.com/playwright:v1.64.1-noble
+      options: --user 1001
     steps:
       - uses: actions/checkout@v7
         with:
@@ -35,7 +39,6 @@ jobs:
       - run: npm run test:mutations
       - run: RELEASE_BUILD=1 npm run build
       - run: npm run test:release
-      - run: npx playwright install --with-deps chromium webkit
       - run: npm run test:browser
       - uses: actions/upload-artifact@v7
         # every run, so a failure the retry hid still leaves its first attempt
