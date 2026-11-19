@@ -35,6 +35,52 @@ test("the bar is gone while playing and in the editor, and back on the menus", a
   await expect(page.locator("#dock")).toBeVisible();
 });
 
+// a tab would leave an open skin or loop without its editor's own ask, so the bar steps aside there
+for (const [tab, screen, start, name, done] of [
+  ["#loops-open", "#loops", "#new-loop", "#loop-name", "#loop-done"],
+  ["#skins-open", "#skins", "#new-skin", "#skin-name", "#skin-done"],
+])
+  test(`an open draft hides the bar and its own back still asks: ${screen}`, async ({ page }) => {
+    await page.goto("/");
+    await page.locator(tab).click();
+    await expect(page.locator("#dock")).toBeVisible();
+    await page.locator(start).click();
+    await expect(page.locator(name)).toBeVisible();
+    await expect(page.locator("#dock")).toHaveCount(0);
+    expect(await page.locator(screen).evaluate((e) => parseFloat(getComputedStyle(e).paddingBottom))).toBeLessThan(60);
+    await page.locator(name).fill("Mine");
+    await page.locator(done).click();
+    const sheet = page.locator("#sheet");
+    await expect(sheet).toContainText("Leave without saving?");
+    await sheet.getByRole("button", { name: "LEAVE", exact: true }).click();
+    await expect(page.locator(start)).toBeVisible();
+    await expect(page.locator("#dock")).toBeVisible();
+  });
+
+test("MORE over the loop list silences a loop that is playing", async ({ page }) => {
+  await page.addInitScript((store) => {
+    localStorage.setItem("clonedash.loops.v1", store);
+    // every node of a live context wired to its destination and not yet cut (as loops.spec.js)
+    const outs = new Set(), connect = AudioNode.prototype.connect, disconnect = AudioNode.prototype.disconnect;
+    AudioNode.prototype.connect = function (target, ...rest) {
+      if (this.context instanceof AudioContext && target === this.context.destination) outs.add(this);
+      return connect.call(this, target, ...rest);
+    };
+    AudioNode.prototype.disconnect = function (...a) {
+      outs.delete(this);
+      return disconnect.apply(this, a);
+    };
+    window.liveOutputs = () => outs.size;
+  }, JSON.stringify({ version: 1, next: 2, loops: [{ id: 1, loop: { name: "Beat", root: 43, wobble: 3, drop: false, notes: [[0], [], [12], [], [7], [], [3], []], kick: [0, 4], snare: [2, 6], hat: [1, 3, 5, 7] } }] }));
+  await page.goto("/");
+  await page.locator("#loops-open").click();
+  await page.getByRole("button", { name: "Play Beat", exact: true }).click();
+  await expect.poll(() => page.evaluate(() => window.liveOutputs())).toBe(1);
+  await page.locator("#more").click();
+  await expect(page.locator("#sheet")).toBeVisible();
+  expect(await page.evaluate(() => window.liveOutputs())).toBe(0);
+});
+
 // a phone with its notch and home indicator (emulated in Chromium only, see portrait-home.spec.js)
 const phones = [
   ["upright", { width: 420, height: 912 }, { top: 62, bottom: 34, left: 0, right: 0 }],

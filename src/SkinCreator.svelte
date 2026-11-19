@@ -39,6 +39,7 @@
     share,
     importSkin,
     back,
+    editing = $bindable(false),
   }: {
     store: SkinStore;
     broken: boolean;
@@ -47,6 +48,9 @@
     share: (skin: Skin) => void;
     importSkin: () => void;
     back: () => void;
+    // true while a skin is open: the app hides its bottom bar, so the only way out is the
+    // creator's own back, which asks before dropping changes
+    editing?: boolean;
   } = $props();
 
   // kid-friendly colours; "" is empty (see-through)
@@ -89,6 +93,9 @@
   };
 
   let view = $state<"list" | "edit">("list");
+  $effect(() => {
+    editing = view !== "list";
+  });
   let editingId = $state<number | null>(null),
     name = $state(""),
     width = $state(8),

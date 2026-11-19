@@ -34,6 +34,7 @@
     share,
     importLoop,
     back,
+    editing = $bindable(false),
   }: {
     store: LoopStore;
     broken: boolean;
@@ -42,6 +43,9 @@
     share: (loop: Loop) => void;
     importLoop: () => void;
     back: () => void;
+    // true while a loop is open: the app hides its bottom bar, so the only way out is ← LOOPS,
+    // which asks before dropping changes
+    editing?: boolean;
   } = $props();
 
   const NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
@@ -54,6 +58,9 @@
   const SONGS = Array.from({ length: TRACKS.length + 100 }, (_, i) => i);
 
   let view = $state<"list" | "edit">("list");
+  $effect(() => {
+    editing = view !== "list";
+  });
   let editingId = $state<number | null>(null),
     loop = $state.raw<Loop>(blankLoop()),
     dirty = $state(false),
@@ -86,7 +93,8 @@
       return false;
     }
   }
-  function silence() {
+  // also called by the app before its own sheets (MORE) open over the loop list
+  export function silence() {
     player.stop();
     playing = false;
     playingId = null;

@@ -242,7 +242,11 @@
   let draft = $state.raw(structuredClone(initialSave.draft));
   let mode = $state<Screen>("home"),
     current = $state(0),
-    custom = $state(false);
+    custom = $state(false),
+    // a skin or a loop is open in its editor: the bottom bar steps aside (its tabs would leave
+    // without the editor's own ask before dropping changes)
+    drafting = $state(false),
+    loopMaker = $state<ReturnType<typeof LoopMaker>>();
   // The selection is a group (#87); its last piece is the one the controls show and a pinch
   // turns. Plain taps keep it to one piece; the MULTI tool adds to it and sweeps a box.
   let group = $state<number[]>([]),
@@ -610,6 +614,7 @@
     );
   }
   function more() {
+    if (mode === "loops") loopMaker?.silence(); // a sheet opens over silence, as the loop list's own do
     sheet("More", "", [
       ["HOW TO PLAY", how],
       ...(installVisible ? [["INSTALL", () => installer?.prompt()] as Action] : []),
@@ -1960,7 +1965,7 @@
   </section>
 </main>
 <!-- the house bottom bar (kidgames STANDARD: menus only; play and the editor keep the whole screen) -->
-{#if mode === "home" || mode === "library" || mode === "skins" || mode === "loops"}
+{#if mode === "home" || mode === "library" || ((mode === "skins" || mode === "loops") && !drafting)}
   <nav id="dock" aria-label="Cube Dash">
     {#each DOCK as [tab, id, label, icon]}
       <button
@@ -2045,8 +2050,10 @@
     share={(skin) => skinSheet({ skin })}
     importSkin={() => skinSheet({})}
     back={home}
+    bind:editing={drafting}
   />{/if}
 {#if mode === "loops"}<LoopMaker
+    bind:this={loopMaker}
     store={loops}
     broken={loopsBroken}
     commit={commitLoop}
@@ -2054,6 +2061,7 @@
     share={(loop) => loopSheet({ loop })}
     importLoop={() => loopSheet({})}
     back={home}
+    bind:editing={drafting}
   />{/if}
 <section id="hud" hidden={mode !== "play"}>
   <button

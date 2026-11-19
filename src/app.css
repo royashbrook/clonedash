@@ -998,10 +998,8 @@ footer button {
 #dock #more svg {
   stroke-width: 3.5;
 }
-/* every menu screen keeps its last line above the bar */
-#home,
-#library,
-#skins,
-#loops {
+/* every menu screen keeps its last line above the bar, while the bar is there (an open skin or
+   loop hides it and gets the space back) */
+:root:has(#dock) :is(#home, #library, #skins, #loops) {
   padding-bottom: calc(var(--dock) + 12px) !important;
 }
