@@ -207,7 +207,10 @@ export class Soundtrack {
     }
     try {
       this.context ??= new AudioContext();
-      void this.context.resume();
+      // a resume still pending when the game unmounts is rejected by the close (WebKit): expected
+      this.context.resume().catch((e) => {
+        if (!this.disposed) throw e;
+      });
       this.sync(this.intent.music, this.intent.running, this.intent.offset);
     } catch {
       this.enabled = false;

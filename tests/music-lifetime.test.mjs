@@ -38,6 +38,22 @@ test('disposing the soundtrack aborts an in-flight recording without starting a 
   } finally {globalThis.fetch=originalFetch;}
 });
 
+test('a resume the close rejects after unmount is expected; one rejected while the game lives is not hidden', () => {
+  // the resume's rejection handler, as the soundtrack attaches it
+  const unlocked = () => { const music = new Soundtrack(); let handler;
+    music.context = { resume: () => ({ catch: (fn) => { handler = fn; } }), close: async () => {} };
+    music.unlock(true);
+    return { music, handler }; };
+  const closed = new DOMException('Context is closed', 'InvalidStateError');
+  const gone = unlocked();
+  assert.equal(typeof gone.handler, 'function', 'the resume has a rejection handler');
+  gone.music.dispose(); // WebKit: the close rejects the pending resume
+  assert.doesNotThrow(() => gone.handler(closed));
+  const live = unlocked();
+  assert.throws(() => live.handler(closed), (e) => e === closed, 'while the game lives the real error goes on');
+  live.music.dispose();
+});
+
 test('recordings do not require the newer AbortSignal static helpers', async () => {
   const any=Object.getOwnPropertyDescriptor(AbortSignal,'any');
   const timeout=Object.getOwnPropertyDescriptor(AbortSignal,'timeout');

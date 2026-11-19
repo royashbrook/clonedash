@@ -33,6 +33,7 @@ try {
     "loop.test.mjs",
     "loop-player.test.mjs",
     "loop-level.test.mjs",
+    "music-lifetime.test.mjs",
     "loop-song.test.mjs",
   ]) {
     const testSource = (await readFile(join("tests", testFile), "utf8"))
@@ -238,6 +239,9 @@ try {
     ["loop-player.ts", "  const root = loop.root + chordAt(bar);", "  const root = loop.root;", "1.0.96 player and this one", "loop-song.test.mjs"],
     ["music.ts", "  for (let bar = 0; bar < BARS; bar++)\n    for (let step = 0; step < 8; step++) playLoopStep", "  for (let bar = 0; bar < BARS - 1; bar++)\n    for (let step = 0; step < 8; step++) playLoopStep", "exactly what PLAY plays", "loop-song.test.mjs"],
     ["music.ts", "  for (let bar = 0; bar < BARS; bar++)\n    for (let step = 0; step < 8; step++) playLoopStep", "  for (let bar = 0; bar < BARS + 1; bar++)\n    for (let step = 0; step < 8; step++) playLoopStep", "exactly what PLAY plays", "loop-song.test.mjs"],
+    // a resume the close rejects after unmount (lifecycle, WebKit)
+    ["music.ts", "        if (!this.disposed) throw e;", "        throw e;", "rejected while the game lives", "music-lifetime.test.mjs"],
+    ["music.ts", "        if (!this.disposed) throw e;", "        void e;", "rejected while the game lives", "music-lifetime.test.mjs"],
     // the live loop player's races (#121)
     ["loop-player.ts", "    while (this.next < c.currentTime) this.advance();\n", "", "long gap", "loop-player.test.mjs"],
     ["loop-player.ts", "for (const s of [this.session, this.preview]) if (s)", "for (const s of [this.session]) if (s)", "tapped cell is cut", "loop-player.test.mjs"],
