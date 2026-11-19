@@ -182,8 +182,8 @@
     </p>
     <div id="loop-list">
       {#each store.loops as { id, loop: saved } (id)}
-        <article class="skin-card loop-card">
-          <div class="skin-info">
+        <article class="loop-card">
+          <div>
             <h2>{loopName(saved)}</h2>
             <p>{info(saved)}</p>
           </div>
@@ -310,12 +310,61 @@
 </section>
 
 <style>
+  /* the same screen frame as My skins */
+  #loops {
+    position: relative;
+    height: 100dvh;
+    overflow: auto;
+    background: var(--surface);
+    padding: max(20px, env(safe-area-inset-top)) max(20px, env(safe-area-inset-right))
+      max(20px, env(safe-area-inset-bottom)) max(20px, env(safe-area-inset-left));
+  }
+  .home-head {
+    flex-wrap: wrap;
+  }
+  h1 {
+    font-size: 32px;
+    letter-spacing: -0.025em;
+  }
   .loops-status,
   .empty {
-    margin: 8px 0 16px;
+    color: var(--ink-dim);
+    margin: 20px 0;
+    line-height: 1.5;
+    font-size: 14px;
+  }
+  #loop-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 270px), 1fr));
+    gap: 16px;
+  }
+  .loop-card {
+    display: grid;
+    gap: 12px;
+    padding: 16px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--surface-raised);
+    min-width: 0;
+  }
+  .loop-card h2 {
+    font-size: 18px;
+    overflow-wrap: anywhere;
+  }
+  .loop-card p {
+    font-size: 14px;
+    color: var(--ink-dim);
+    margin-top: 4px;
   }
   .loop-card .buttons {
+    display: flex;
     flex-wrap: wrap;
+    gap: 8px;
+  }
+  .loop-card .buttons button {
+    flex: 1;
+    padding-inline: 10px;
+    font-size: 13px;
   }
   .loop-head {
     flex-wrap: wrap;
@@ -341,10 +390,19 @@
     gap: 8px;
     margin: 8px 0;
   }
+  /* WebKit keeps a native select short whatever its min-height, so it draws its own box */
   .start-from select {
-    min-height: 44px;
+    -webkit-appearance: none;
+    appearance: none;
+    height: 44px;
     max-width: 100%;
+    padding: 0 12px;
     font: inherit;
+    font-weight: 800;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--surface-raised);
+    color: var(--ink);
   }
   .key {
     display: flex;
