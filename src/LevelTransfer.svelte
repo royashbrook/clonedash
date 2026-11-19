@@ -78,7 +78,10 @@
     preview = null;
     skinPreview = null;
     try {
-      if (codeKind(text) === "skin") {
+      const kind = codeKind(text);
+      if (kind === "save")
+        throw Error("This is a whole save, not a level or skin. Load it from ABOUT → MOVE YOUR SAVE.");
+      if (kind === "skin") {
         const decoded = await decodeSkin(text);
         if (alive) skinPreview = decoded;
         return;

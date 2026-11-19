@@ -46,6 +46,8 @@
   import { installControl } from "./install.ts";
   import { updateControl, type UpdateCheck } from "./pwa.ts";
   import LevelTransfer from "./LevelTransfer.svelte";
+  import SaveMove from "./SaveMove.svelte";
+  import { IMPORT, writeBackup, type Backup } from "./backup.ts";
   import { importLevel } from "./transfer.ts";
   import SkinCreator from "./SkinCreator.svelte";
   import {
@@ -78,7 +80,7 @@
     text: string;
     actions: Action[];
     closable: boolean;
-    extra?: "about" | "settings" | "transfer" | "object";
+    extra?: "about" | "settings" | "transfer" | "object" | "save";
   };
   const choices = {
     blocks: [
@@ -293,6 +295,7 @@
     pull = $state(0),
     pulled = $state(false);
   let transfer = $state.raw<{ level?: Level; skin?: Skin; initial?: string }>({});
+  let moving = $state.raw<{ initial?: string }>({});
   // skins live under their own key (docs/skins.md): a level write never touches them
   let skins = $state.raw<SkinStore>(emptyStore()),
     skinsBroken = $state(false);
@@ -341,7 +344,35 @@
     clearTimeout(toastTimer);
     toastTimer = later(() => (notice = ""), 4200);
   }
+  // The import marker this tab loaded with (#124, src/backup.ts IMPORT). If it has changed, another
+  // tab loaded a whole save since this one read its stores, so this tab reloads instead of writing
+  // its old save over the new one. Checked before every write, not only on storage events, which
+  // can arrive after this tab's next write.
+  let importSeen: string | null = null;
+  // a load that did not finish leaves the stores mixed; until the player loads again or keeps what
+  // is here, ordinary saving stays off so it cannot make that harder to undo
+  let importCutOff = $state(false);
+  function stale() {
+    let now: string | null;
+    try {
+      now = localStorage.getItem(IMPORT);
+    } catch {
+      return false; // no storage, nothing to protect
+    }
+    if (now === importSeen) return false;
+    location.reload();
+    return true;
+  }
+  function guard() {
+    if (importCutOff) throw Error("Finish loading your save first: ABOUT → MOVE YOUR SAVE.");
+    if (stale()) throw Error("A save was loaded in another tab. Reloading…");
+  }
   function persist() {
+    if (storageOK && importCutOff) {
+      if (!panel) cutOffSheet(); // a change that can't be saved brings the choice back
+      return;
+    }
+    if (storageOK && stale()) return;
     if (storageOK)
       try {
         localStorage.setItem(SAVE, JSON.stringify(save));
@@ -467,12 +498,57 @@
   }
   function receiveLevel() {
     const params = new URLSearchParams(location.hash.slice(1));
-    if (!params.has("level") && !params.has("skin")) return;
+    if (!params.has("level") && !params.has("skin") && !params.has("save")) return;
     const initial = location.href;
     history.replaceState(null, "", location.pathname + location.search);
+    // a save link only previews too (#124); with anything else beside it, the save sheet refuses
+    // it as ambiguous before reading either
+    if (params.has("save")) moveSave(initial);
     // a skin link only opens the preview; it is never added or worn without a tap
-    if (params.has("skin") && !params.has("level")) skinSheet({ initial });
+    else if (params.has("skin") && !params.has("level")) skinSheet({ initial });
     else sharing(undefined, initial);
+  }
+  // Moving a whole save (#124, src/backup.ts). The sheet reads the stores itself, so it shows what
+  // is saved, and a replace reloads the page so nothing here keeps the old save in memory.
+  function moveSave(initial = "") {
+    closeSheet();
+    paused = false;
+    if (mode === "play") home();
+    moving = { initial };
+    void sheet("Move your save", "", [], true, "save");
+  }
+  function cutOffSheet() {
+    void sheet(
+      "Loading a save didn't finish",
+      "Some of your progress, levels or skins may be from the save you were loading. Nothing new is saved until you load it again or keep what's here now.",
+      [
+        ["LOAD IT AGAIN", () => moveSave(), true],
+        [
+          "KEEP WHAT'S HERE",
+          () => {
+            // another tab may have finished a newer load meanwhile: then this tab reloads into it
+            // rather than erase that load's marker and resume what it read at boot
+            if (stale()) return;
+            // the player chose: clearing the marker tells every tab, and saving turns back on
+            localStorage.removeItem(IMPORT);
+            importSeen = null;
+            importCutOff = false;
+            closeSheet();
+          },
+        ],
+      ],
+      false,
+    );
+  }
+  const storedSave = (): Backup => ({
+    game: readSave(localStorage.getItem(SAVE), LEVELS.length),
+    skins: readSkins(localStorage.getItem(SKINS)),
+  });
+  // storageOK is also false when only the old save is unreadable, and replacing that is the point,
+  // so the writer's own errors decide: it reads both stores back before it reports success
+  function replaceSave(backup: Backup) {
+    writeBackup(localStorage, backup, LEVELS.length);
+    location.reload();
   }
   function openSkins() {
     closeSheet();
@@ -487,6 +563,7 @@
   // every skin write re-reads the skins key (skin.ts commitSkins, stale-tab preservation); a
   // refused write throws and leaves the last confirmed skins showing
   function commitSkin(change: (latest: SkinStore) => void) {
+    guard(); // a change made against this tab's skins must not land on a loaded save's skins
     skins = commitSkins(localStorage, change);
     skinsBroken = false;
     return skins;
@@ -518,6 +595,7 @@
       throw Error(
         "Storage is unavailable. Enable it before importing a level.",
       );
+    guard();
     save = importLevel(localStorage, save, level, LEVELS.length);
     draft = structuredClone(save.draft);
     forget();
@@ -542,6 +620,7 @@
         throw Error(
           "Storage is unavailable. Your current level was not replaced.",
         );
+      guard();
       const source = run.level; // as authored, not where this run's triggers moved things
       // Import uses a fresh storage read, a new ID, and verified writes. Only then
       // select the copy; the previous draft remains in its original library slot.
@@ -1577,6 +1656,14 @@
   }
   onMount(() => {
     alive = true;
+    // the marker first, then the stores: a load in another tab between the two still changes the
+    // marker, so this tab's first write reloads instead of writing (#124)
+    try {
+      importSeen = localStorage.getItem(IMPORT);
+      importCutOff = importSeen !== null && JSON.parse(importSeen).state === "pending";
+    } catch {
+      /* no storage: the save below reports it */
+    }
     try {
       save = readSave(localStorage.getItem(SAVE), LEVELS.length);
     } catch {
@@ -1593,6 +1680,7 @@
     orientation();
     document.body.dataset.mode = mode;
     if (!storageOK) persist();
+    if (importCutOff) cutOffSheet();
     const abort = new AbortController(),
       signal = abort.signal,
       motion = matchMedia("(prefers-reduced-motion: reduce)");
@@ -1613,10 +1701,12 @@
     );
     window.addEventListener("keydown", keydown, { signal });
     window.addEventListener("hashchange", receiveLevel, { signal });
-    // another tab saved skins: show them (each write here re-reads anyway)
+    // another tab saved skins: show them (each write here re-reads anyway). Another tab loaded a
+    // whole save: reload now (the fast path; every write checks the marker itself too)
     window.addEventListener(
       "storage",
       (e) => {
+        if (e.key === IMPORT && stale()) return;
         if (e.key !== SKINS && e.key !== null) return;
         try {
           skins = readSkins(localStorage.getItem(SKINS));
@@ -2273,6 +2363,12 @@
             add={addSharedLevel}
             addSkin={addSharedSkin}
           />{/key}{/if}
+      {#if panel.extra === "save"}{#key moving}<SaveMove
+            initial={moving.initial}
+            read={storedSave}
+            trails={LEVELS.length}
+            replace={replaceSave}
+          />{/key}{/if}
       {#if panel.extra === "settings"}<div class="level-settings">
           <label
             >Height (7–40 blocks)<input
@@ -2311,7 +2407,7 @@
         </p>
         <button id="check-update" disabled={checking} onclick={() => checkForUpdate()}
           >{checking ? "CHECKING…" : "CHECK FOR UPDATE"}</button
-        ><a
+        ><button id="move-save" onclick={() => moveSave()}>MOVE YOUR SAVE</button><a
           class="about-link"
           href="/licenses.md"
           target="_blank"

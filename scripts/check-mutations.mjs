@@ -27,6 +27,7 @@ try {
     "gesture.test.mjs",
     "skin.test.mjs",
     "width-height-touch-multi.test.mjs",
+    "backup.test.mjs",
   ]) {
     const testSource = (await readFile(join("tests", testFile), "utf8"))
       .replaceAll("../src/", "./src/")
@@ -188,13 +189,25 @@ try {
     // shifted anchoring and a changed body must each fail their own test.
     ["skin.ts", "(v as number) <= MAX_SIDE", "true", "the schema: every bound", "skin.test.mjs"],
     ["skin.ts", "if (store.skins.length >= MAX_SKINS)", "if (false)", "the store: 100 skins", "skin.test.mjs"],
-    ["skin.ts", "new DecompressionStream(\"deflate-raw\")),\n      MAX_SKIN_BYTES,", "new DecompressionStream(\"deflate-raw\")),\n      MAX_SKIN_BYTES * 100,", "skin inflation is bounded", "skin.test.mjs"],
+    ["skin.ts", "await unpackCode(code, PREFIX, MAX_SKIN_BYTES, \"skin\")", "await unpackCode(code, PREFIX, MAX_SKIN_BYTES * 100, \"skin\")", "skin inflation is bounded", "skin.test.mjs"],
     ["skin.ts", "const portable = (skin: Skin) => validateSkin(skin);", "const portable = (skin: Skin) => skin;", "the export carries", "skin.test.mjs"],
     ["skin.ts", "latest = readSkins(storage.getItem(SKINS));", "latest = emptyStore();", "stale-tab preservation", "skin.test.mjs"],
     ["skin.ts", "    throw Error(\"Your saved skins could not be read, so nothing was changed.\");", "    latest = emptyStore();", "refused, unconfirmed and invalid writes", "skin.test.mjs"],
     ["skin.ts", "if (storage.getItem(SKINS) !== raw)", "if (false)", "refused, unconfirmed and invalid writes", "skin.test.mjs"],
     ["transfer.ts", "if (params.getAll(\"level\").length !== 1 || params.has(\"skin\"))", "if (params.getAll(\"level\").length !== 1)", "wrong-kind skin codes", "skin.test.mjs"],
-    ["transfer.ts", "if (levels + skins !== 1)", "if (levels + skins < 1)", "import dispatches by prefix", "skin.test.mjs"],
+    ["transfer.ts", "if (levels + skins + saves !== 1)", "if (levels + skins + saves < 1)", "import dispatches by prefix", "skin.test.mjs"],
+    // a whole save (#124)
+    ["backup.ts", "if (Object.keys(v).some((k) => !known.includes(k))) throw Error(NEWER);", "", "every field is one this version knows", "backup.test.mjs"],
+    ["backup.ts", "if (typeof game.sound !== \"boolean\" || ", "if (", "every field is one this version knows", "backup.test.mjs"],
+    ["backup.ts", "if (!same(portableLevel(level), { ...level, song: level.song ?? 9 })) throw Error(NEWER);", "", "every field is one this version knows", "backup.test.mjs"],
+    ["backup.ts", "if (!same(readGame, game) || !same(readSkinStore, skins)) throw Error(DAMAGED);", "", "every field is one this version knows", "backup.test.mjs"],
+    ["backup.ts", "const checked = checkBackup({ v: 1, ...backup }, trailCount);\n  const parts", "const checked = backup;\n  const parts", "the writer checks the whole save itself", "backup.test.mjs"],
+    ["backup.ts", "if (parts.some(([key, value]) => storage.getItem(key) !== value))", "if (false)", "any failed write or readback", "backup.test.mjs"],
+    ["backup.ts", "        else storage.setItem(key, before[i]!);", "", "any failed write or readback", "backup.test.mjs"],
+    ["backup.ts", "    else storage.setItem(IMPORT, marker);", "    else storage.removeItem(IMPORT);", "puts an earlier marker back", "backup.test.mjs"],
+    ["backup.ts", "  } catch (cause) {\n    throw Error(\n      \"The save was copied in", "  } catch (cause) {\n    if (cause) return;\n    throw Error(\n      \"The save was copied in", "done marker failing", "backup.test.mjs"],
+    ["transfer.ts", "if (text.length > MAX_SAVE_TEXT) throw Error(\"This code is too large.\");", "", "past the whole-save ceiling", "backup.test.mjs"],
+    ["transfer.ts", "if (kind !== \"save\" && text.length > MAX_CODE)", "if (false)", "past the whole-save ceiling", "backup.test.mjs"],
     ["render.ts", "if (state.mode === \"square\" && skin) {", "if (skin) {", "a skin draws in square mode only", "skin.test.mjs"],
     ["skin.ts", "bottom = s.gravity > 0 ? s.y + SIZE - h : s.y;", "bottom = s.gravity > 0 ? s.y + SIZE - h : s.y + (1 - h) / 2;", "anchors feet", "skin.test.mjs"],
     ["skin.ts", "bottom = s.gravity > 0 ? s.y + SIZE - h : s.y;", "bottom = s.gravity > 0 ? s.y + SIZE - 1 + (1 - h) / 2 : s.y;", "anchors feet", "skin.test.mjs"],
