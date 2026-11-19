@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { pauseClock } from './paused-clock.mjs';
 
 async function trackPaint(page) {
   await page.addInitScript(() => {
@@ -100,7 +101,8 @@ test('editor palette groups never shrink underneath neighboring controls', async
 });
 
 test('Air Steps lands on the high outline shelf using real air jumps and saves completion', async ({ page }) => {
-  await page.clock.install(); await trackPaint(page); await page.goto('/');
+  // a closed loop of 20ms steps; paused, so only the steps move the run (#113)
+  await page.clock.install({ time: 0 }); await trackPaint(page); await page.goto('/'); await pauseClock(page, test.info());
   await page.getByRole('button', { name: 'Play Air Steps', exact: true }).click();
   await page.clock.runFor(32);
   const ground = await page.evaluate(() => window.playerPaint);

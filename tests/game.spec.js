@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { pauseClock } from './paused-clock.mjs';
 import http from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { resolve, extname } from 'node:path';
@@ -59,7 +60,9 @@ test('editor places, selects, micro-adjusts, rotates, flips and persists; test r
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem('clonedash.v1')).draft)).toEqual(draft);
 });
 test('first trail can be completed with actual Space events; replay and completion persist', async ({ page }) => {
-  await page.clock.install(); await page.goto('/');
+  // a closed loop: each step reads where the run is, then moves it 20ms. The clock is paused so the
+  // run moves only by those steps, never by how long a read took on the host (#113).
+  await page.clock.install({ time: 0 }); await page.goto('/'); await pauseClock(page, test.info());
   await page.getByRole('button', { name: 'Play First Spark', exact: true }).click();
   const obstacles = [6, 12, 18, 24, 30]; let lastJump = -10;
   for (let i = 0; i < 600; i++) {

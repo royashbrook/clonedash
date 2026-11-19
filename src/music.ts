@@ -205,7 +205,10 @@ export async function compose(
       depth.gain.value = drop ? 160 : 40;
       lfo.connect(depth).connect(f.frequency);
       lfo.start(at);
-      lfo.stop(at + BEAT);
+      // Zero depth at the beat's end instead of stopping the LFO. With the stop, WebKit's
+      // offline render closed the page in our tests; without it, it did not (#122). Either way
+      // the filter gets no wobble after the beat.
+      depth.gain.setValueAtTime(0, at + BEAT);
       f.connect(master);
       note(
         hz(song.root + chord),
