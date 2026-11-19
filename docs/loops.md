@@ -73,8 +73,10 @@ KEEP IT leaves the draft exactly as it was. A draft with no notes is not asked.
 
 ## Proof
 
-- `tests/compose-graph.test.mjs`: every synthesized song still builds the graph, schedule and noise
-  frozen from main 6b7071e. This is graph/schedule/buffer-input equality, not PCM equality.
+- `tests/compose-graph.test.mjs`: every synthesized song still builds the same graph, schedule and
+  noise as compose on main 6b7071e, taken from git and run in the same process (a frequency's last
+  bit comes from the JS engine's maths and differs between Node versions, so hashes frozen on one
+  runtime could not judge another). This is graph/schedule/buffer-input equality, not PCM equality.
 - unit: the loop schema, the store, the code and its bounds, codeKind, the whole save with loops.
 - `tests/loop-player.test.mjs`, on a recording context with a clock the test moves: a ten-second
   gap starts nothing in the past and keeps the phase, the last step wraps to the next bar, a STOP
