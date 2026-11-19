@@ -59,7 +59,8 @@ export function transformGroup(pieces: Piece[], action: Transform, step = 1) {
       if (action === "flipX") o.flipX = !o.flipX;
       else o.flipY = !o.flipY;
     } else transform(o, action);
-    // a scaled piece grows from its own base, which a flip top to bottom moves to the other side
+    // a single-scale piece grows from its own base, which a flip top to bottom moves to the other
+    // side; a width and height piece (#117) has no single scale (k is 1), so nothing moves
     const k = scaleOf(o),
       lift = action === "flipY" ? (k - 1) * h : 0,
       a = (o.rotation * Math.PI) / 180;

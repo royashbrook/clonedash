@@ -118,6 +118,19 @@ export const TURNABLE = [...BLOCKS, ...ZONES, ...SPIKES, ...SLOPES];
 // Pieces that take a size (#106): everything with a body. Triggers have none.
 export const SCALABLE = TYPES.filter((t) => !TRIGGERS.includes(t));
 export const scaleOf = (o: Piece) => (SCALABLE.includes(o.type) ? (o.scale ?? 1) : 1);
+// A piece sized by width and height (#117) grows from its middle; one sized by the older single
+// scale grows from its base, exactly as it always has. These are the two modes; every reader of a
+// piece's shape asks here which one it is.
+export const centred = (o: Piece) => o.scaleX !== undefined && SCALABLE.includes(o.type);
+export const sized = (o: Piece) => o.scale !== undefined || o.scaleX !== undefined;
+export function axes(o: Piece): [number, number] {
+  if (centred(o)) return [o.scaleX!, o.scaleY!];
+  const k = scaleOf(o);
+  return [k, k];
+}
+// The width, height, touch and multi fields (#117) are what a cdl2 code carries and a cdl1 never does.
+export const usesNew = (o: Piece) =>
+  o.scaleX !== undefined || o.scaleY !== undefined || o.touch !== undefined || o.multi !== undefined;
 // Blocks drawn with a white outline take an edges field (types.ts Edges); NO BORDER has none.
 export const OUTLINED = ["block", "grid", "black", "outline"];
 export const EDGES = ["edge", "parallel", "outer", "inner", "none"];
@@ -166,10 +179,12 @@ function frame(o: Piece) {
     // angle is a real rotation.
     c = quarter ? Math.round(Math.cos(a)) : Math.cos(a),
     s = quarter ? Math.round(Math.sin(a)) : Math.sin(a),
-    k = scaleOf(o);
+    [kx, ky] = axes(o),
+    // the base shift only for the single scale; a width and height piece stays on its middle
+    lift = centred(o) ? 0 : ((ky - 1) * h) / 2;
   return (x: number, y: number): Point => {
-    x = (x - w / 2) * k * (o.flipX ? -1 : 1);
-    y = (y - h / 2) * k * (o.flipY ? -1 : 1) + ((k - 1) * h) / 2;
+    x = (x - w / 2) * kx * (o.flipX ? -1 : 1);
+    y = (y - h / 2) * ky * (o.flipY ? -1 : 1) + lift;
     return [o.x + w / 2 + x * c - y * s, o.y + h / 2 + x * s + y * c];
   };
 }
@@ -178,7 +193,8 @@ export const pointOf = (o: Piece, x: number, y: number) => frame(o)(x, y);
 // contact pass skips a piece only past this.
 export function reach(o: Piece) {
   const { w, h } = pieceSize(o);
-  return w / 2 + scaleOf(o) * (Math.hypot(w, h) / 2 + h / 2);
+  // a middle-grown piece reaches less than this; the larger axis keeps the bound safe for both
+  return w / 2 + Math.max(...axes(o)) * (Math.hypot(w, h) / 2 + h / 2);
 }
 export function polygon(o: Piece): Point[] {
   const { w, h } = pieceSize(o);
@@ -281,6 +297,7 @@ export function effects(level: Level): { fx: RunEffects; level: Level } | null {
       picked: [],
       triggers,
       fired: new Uint8Array(n),
+      inside: new Uint8Array(n),
       groups,
       move: new Float64Array(n * 6),
       movers: [],
@@ -324,11 +341,47 @@ function baseState(level: Level): GameState {
 // The black and gray rings are not ready in angle mode (#106 rule 3b).
 export function ringReady(s: GameState, o: Piece, index: number) {
   if (s.mode === "angle" && o.type !== "ring") return false;
-  const [cx, cy] = pointOf(o, 0.5, 0.5),
-    r = 0.6 * scaleOf(o);
-  const dx = Math.max(s.x - cx, 0, cx - s.x - SIZE);
-  const dy = Math.max(s.y - cy, 0, cy - s.y - SIZE);
-  return !o.noTouch && !s.usedRings.includes(index) && dx * dx + dy * dy <= r * r;
+  return !o.noTouch && !s.usedRings.includes(index) && inReach(s, o);
+}
+// Whether the player's box is within a ring's reach. A width and height ring's reach is an
+// ellipse in its own turned frame (#117): the whole box is taken into that frame and squeezed
+// until the ellipse is the unit circle, then the circle is tested against the box's shape there.
+// A single-scale ring keeps the circle test it always had.
+export function inReach(s: GameState, o: Piece) {
+  const [cx, cy] = pointOf(o, 0.5, 0.5);
+  if (!centred(o)) {
+    const r = 0.6 * scaleOf(o);
+    const dx = Math.max(s.x - cx, 0, cx - s.x - SIZE);
+    const dy = Math.max(s.y - cy, 0, cy - s.y - SIZE);
+    return dx * dx + dy * dy <= r * r;
+  }
+  const a = (o.rotation * Math.PI) / 180,
+    c = Math.cos(a),
+    n = Math.sin(a),
+    rx = 0.6 * o.scaleX!,
+    ry = 0.6 * o.scaleY!;
+  const box = playerPolygon(s).map(([x, y]): Point => {
+    const dx = x - cx,
+      dy = y - cy;
+    return [(dx * c + dy * n) / rx, (dy * c - dx * n) / ry];
+  });
+  return distanceToOrigin(box) <= 1;
+}
+// How far a convex polygon is from the origin: 0 when it holds the origin.
+function distanceToOrigin(p: Point[]) {
+  let inside = true,
+    best = Infinity;
+  for (let i = 0; i < p.length; i++) {
+    const [ax, ay] = p[i],
+      [bx, by] = p[(i + 1) % p.length],
+      ex = bx - ax,
+      ey = by - ay,
+      t = Math.max(0, Math.min(1, -(ax * ex + ay * ey) / (ex * ex + ey * ey)));
+    best = Math.min(best, Math.hypot(ax + ex * t, ay + ey * t));
+    // the origin is on the inner side of every edge of a counter-clockwise polygon
+    if (ex * -ay - ey * -ax < 0) inside = false;
+  }
+  return inside ? 0 : best;
 }
 // What a ring or a booster does to the run; a booster does what its ring does (#106). A black ring
 // or booster sends you down at DROP_SPEED, a gray one stops your rise or fall, both once.
@@ -384,9 +437,16 @@ export function runTriggers(s: GameState, fx: RunEffects) {
   let moved = false;
   for (let k = 0; k < fx.triggers.length; k++) {
     const t = fx.triggers[k];
-    if (fx.fired[t]) continue;
     const o = s.level.objects[t];
-    if (s.x < o.x) continue;
+    if (o.touch) {
+      // a TOUCH trigger (#117) fires when the body overlaps its cell; a MULTI one again on each
+      // new touch, once the body has been out of it. Being inside is committed here, on the first
+      // contact pass only, like firing itself.
+      const touching = intersects(playerPolygon(s), polygon(o)),
+        entered = touching && !fx.inside[t];
+      fx.inside[t] = touching ? 1 : 0;
+      if (!entered || (fx.fired[t] && !o.multi)) continue;
+    } else if (fx.fired[t] || s.x < o.x) continue;
     fx.fired[t] = 1;
     const members = o.target === undefined ? undefined : fx.groups.get(o.target);
     if (!members) continue;
@@ -494,6 +554,10 @@ export function step(
     height = levelHeight(s.level);
   // A dash orb starts on a hold, not only a fresh tap, and lasts until the hold ends.
   if (!held) s.dash = null;
+  // a MULTI TOUCH ring (#117) works again once the player has left the reach that fired it, so it
+  // re-arms here, before this step picks a ring; a plain ring stays used for the run
+  if (s.usedRings.some((i) => s.level.objects[i].multi))
+    s.usedRings = s.usedRings.filter((i) => !s.level.objects[i].multi || inReach(s, s.level.objects[i]));
   const ring = s.level.objects.findIndex(
     (o, i) => RINGS.includes(o.type) && (o.dash ? held : tapped) && ringReady(s, o, i),
   );
@@ -853,6 +917,25 @@ export function validateLevel(input: unknown): Level {
         !SCALABLE.includes(o.type))
     )
       throw Error("Invalid scale");
+    // width and height come together, each in the scale's range, never beside a single scale, and
+    // never both 1: that piece is unsized, so it carries no size field (one meaning per shape)
+    const axis = (v: unknown) => typeof v === "number" && Number.isFinite(v) && v >= 0.25 && v <= 4;
+    if (
+      (o.scaleX !== undefined || o.scaleY !== undefined) &&
+      (!axis(o.scaleX) ||
+        !axis(o.scaleY) ||
+        o.scale !== undefined ||
+        !SCALABLE.includes(o.type) ||
+        (o.scaleX === 1 && o.scaleY === 1))
+    )
+      throw Error("Invalid size");
+    if (o.touch !== undefined && (o.touch !== true || !TRIGGERS.includes(o.type)))
+      throw Error("Invalid touch trigger");
+    if (
+      o.multi !== undefined &&
+      (o.multi !== true || !(RINGS.includes(o.type) || (TRIGGERS.includes(o.type) && o.touch)))
+    )
+      throw Error("Invalid multi touch");
     if (
       o.color !== undefined &&
       ((!RINGS.includes(o.type) && o.type !== "color-trigger") ||
@@ -927,7 +1010,7 @@ export function validateLevel(input: unknown): Level {
     // A sized ring, portal, coin or booster (new in #106) fits under the ceiling, the default 7 too.
     // Other pieces keep the check they had, only on a level that sets its height, so a default
     // height level saved before still loads.
-    const sizedNew = o.scale !== undefined && !TURNABLE.includes(o.type);
+    const sizedNew = (o.scale !== undefined && !TURNABLE.includes(o.type)) || o.scaleX !== undefined;
     if ((raw.height !== undefined || sizedNew) && bounds(o).top > height + 0.00001)
       throw Error("Object above ceiling");
   }
@@ -945,9 +1028,30 @@ export function transform(o: Piece, action: Transform, amount = 1) {
   if (action === "ccw") o.rotation = (o.rotation + 90) % 360;
   if (action === "flipX") o.flipX = !o.flipX;
   if (action === "flipY") o.flipY = !o.flipY;
-  o.x = Math.round(o.x * 20) / 20;
-  o.y = Math.round(o.y * 20) / 20;
+  // a move lands on the twentieth grid; a turn or flip leaves the anchor exactly where it was, so a
+  // width and height piece converted to an off-grid middle (#117) is not nudged by turning it
+  if (["left", "right", "up", "down"].includes(action)) {
+    o.x = Math.round(o.x * 20) / 20;
+    o.y = Math.round(o.y * 20) / 20;
+  }
   return o;
+}
+// A single-scale piece turned into its width and height form (#117) with its shape where it was:
+// the anchor moves, exactly, so the middle stays put, and both axes take the old scale. Any other
+// piece comes back as it was. The caller converts only inside an edit that changes size or turn.
+export function toCentred(o: Piece): Piece {
+  if (o.scale === undefined || !SCALABLE.includes(o.type)) return o;
+  const { w, h } = pieceSize(o),
+    [cx, cy] = pointOf(o, w / 2, h / 2),
+    { scale, ...rest } = o;
+  // a stored scale of 1 is the unsized shape in both modes: it becomes no size field, in place
+  if (scale === 1) return rest;
+  return { ...rest, x: cx - w / 2, y: cy - h / 2, scaleX: scale, scaleY: scale };
+}
+// A piece at a new width and height, converted first if it was single-scale; 1 by 1 is no field.
+export function resized(o: Piece, kx: number, ky: number): Piece {
+  const { scaleX, scaleY, ...rest } = toCentred(structuredClone(o));
+  return kx === 1 && ky === 1 ? rest : { ...rest, scaleX: kx, scaleY: ky };
 }
 export function duplicateObject(level: Level, index: number) {
   const source = level.objects[index];
