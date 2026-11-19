@@ -146,16 +146,22 @@
   }
   // START FROM, SURPRISE ME and CLEAR NOTES replace the notes, and there is no undo, so they ask
   // first whenever there are notes to lose; KEEP IT leaves the draft exactly as it was
-  function replace(next: Loop, title: string, yes: string) {
-    if (!loop.notes.some((s) => s.length)) return set(next);
-    sheet(() => confirm(title, "The notes in this loop now will be replaced. This cannot be undone.", yes, () => set(next)));
+  // `lose` is whether the replacement throws away anything the player made
+  function replace(next: Loop, lose: boolean, title: string, yes: string, what: string) {
+    if (!lose) return set(next);
+    sheet(() => confirm(title, `${what} will be replaced. This cannot be undone.`, yes, () => set(next)));
   }
+  const hasNotes = () => loop.notes.some((s) => s.length);
+  // START FROM replaces everything but the name: key, wobble, drop, drums and notes, so anything
+  // that differs from a blank loop is work to lose (a drum-only loop included)
+  const blank = blankLoop();
+  const changed = () => JSON.stringify({ ...loop, name: "" }) !== JSON.stringify({ ...blank, name: "" });
   function startFrom(event: Event) {
     const select = event.currentTarget as HTMLSelectElement;
     if (select.value === "") return;
     const song = Number(select.value);
     select.value = "";
-    replace({ ...loopFromSong(song), name: loop.name }, `Start from ${trackFor(song).name}?`, "START FROM IT");
+    replace({ ...loopFromSong(song), name: loop.name }, changed(), `Start from ${trackFor(song).name}?`, "START FROM IT", "Everything in this loop but its name");
   }
   const info = (l: Loop) => `Key ${NAMES[l.root % 12]} · wobble ${l.wobble}${l.drop ? " · drop" : ""}`;
   // a sheet (share, confirm) always opens over silence
@@ -273,12 +279,13 @@
       <button id="loop-drop" aria-pressed={loop.drop} onclick={() => set({ ...loop, drop: !loop.drop })}
         >{loop.drop ? "DROP ON" : "DROP OFF"}</button
       >
-      <button id="loop-surprise" onclick={() => replace(surprise(loop), "Make new notes?", "SURPRISE ME")}
+      <button id="loop-surprise" onclick={() => replace(surprise(loop), hasNotes(), "Make new notes?", "SURPRISE ME", "The notes in this loop")}
         >SURPRISE ME</button
       >
       <button
         id="loop-clear"
-        onclick={() => replace({ ...loop, notes: Array.from({ length: STEPS }, () => []) }, "Clear the notes?", "CLEAR NOTES")}
+        onclick={() =>
+          replace({ ...loop, notes: Array.from({ length: STEPS }, () => []) }, hasNotes(), "Clear the notes?", "CLEAR NOTES", "The notes in this loop")}
         >CLEAR NOTES</button
       >
     </div>

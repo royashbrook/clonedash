@@ -133,6 +133,34 @@ test("replacing notes asks first, KEEP IT changes nothing, and a blank draft is 
   await ctx.close();
 });
 
+test("START FROM asks for a drum-only loop too: KEEP IT keeps every field, START FROM IT applies the song", async ({ browser, baseURL }) => {
+  const ctx = await device(browser, baseURL);
+  const page = await ctx.newPage();
+  await page.goto("/");
+  await page.locator("#loops-open").click();
+  await page.locator("#new-loop").click();
+  await page.locator("#loop-clear").click();
+  await page.locator("#sheet").getByRole("button", { name: "CLEAR NOTES", exact: true }).click();
+  // no notes at all, but drums, key and drop of its own
+  for (const cell of ["kick step 2", "kick step 8", "snare step 3", "hat step 1"]) await page.getByRole("button", { name: cell, exact: true }).click();
+  await page.locator("#key-up").click();
+  await page.locator("#loop-drop").click();
+  const state = async () => ({ cells: await pressed(page), key: await page.locator("#loop-key").textContent(), drop: await page.locator("#loop-drop").textContent() });
+  const before = await state();
+  expect(before.cells.some((l) => l.startsWith("note"))).toBe(false);
+  await page.locator("#loop-song").selectOption({ label: "Air Time" });
+  await expect(page.locator("#sheet-title")).toHaveText("Start from Air Time?");
+  await page.locator("#sheet").getByRole("button", { name: "KEEP IT", exact: true }).click();
+  expect(await state()).toEqual(before);
+  await page.locator("#loop-song").selectOption({ label: "Air Time" });
+  await page.locator("#sheet").getByRole("button", { name: "START FROM IT", exact: true }).click();
+  const after = await state();
+  expect(after.key).toBe("A"); // Air Time's root, 45
+  expect(after.drop).toBe("DROP OFF");
+  expect(after.cells.filter((l) => l.startsWith("kick"))).toEqual(["kick step 1", "kick step 4", "kick step 6"]);
+  await ctx.close();
+});
+
 test("a tapped cell's sound is cut by a sheet, by PLAY taking over and by the page hiding", async ({ browser, baseURL }) => {
   const ctx = await device(browser, baseURL);
   const page = await ctx.newPage();
