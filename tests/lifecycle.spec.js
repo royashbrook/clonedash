@@ -90,14 +90,15 @@ test("unmount cancels frames, listeners and pending audio; remount owns exactly 
         if (this.loop) window.audioStarted++;
         return start.apply(this, args);
       };
-      const render = OfflineAudioContext.prototype.startRendering;
       window.releaseRender = undefined;
-      OfflineAudioContext.prototype.startRendering = async function () {
-        const buffer = await render.call(this);
-        await new Promise((resolve) => {
-          window.releaseRender = resolve;
+      // A song render the test holds open: it finishes only when released, with a short silent
+      // buffer, so what is pinned is the game's handling of a render that finishes after unmount,
+      // never how long a real song takes to render on a slow machine.
+      OfflineAudioContext.prototype.startRendering = function () {
+        const { numberOfChannels, sampleRate } = this;
+        return new Promise((resolve) => {
+          window.releaseRender = () => resolve(new AudioBuffer({ numberOfChannels, sampleRate, length: 1 }));
         });
-        return buffer;
       };
     });
     const page = await context.newPage(),
