@@ -526,6 +526,9 @@
         [
           "KEEP WHAT'S HERE",
           () => {
+            // another tab may have finished a newer load meanwhile: then this tab reloads into it
+            // rather than erase that load's marker and resume what it read at boot
+            if (stale()) return;
             // the player chose: clearing the marker tells every tab, and saving turns back on
             localStorage.removeItem(IMPORT);
             importSeen = null;
@@ -541,8 +544,9 @@
     game: readSave(localStorage.getItem(SAVE), LEVELS.length),
     skins: readSkins(localStorage.getItem(SKINS)),
   });
+  // storageOK is also false when only the old save is unreadable, and replacing that is the point,
+  // so the writer's own errors decide: it reads both stores back before it reports success
   function replaceSave(backup: Backup) {
-    if (!storageOK) throw Error("Storage is unavailable, so a save can't be loaded here.");
     writeBackup(localStorage, backup, LEVELS.length);
     location.reload();
   }

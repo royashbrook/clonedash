@@ -231,6 +231,35 @@ test("a load that did not finish says so at the next start and saves nothing unt
   await b.close();
 });
 
+test("KEEP after another tab finished a newer load reloads into that load instead of erasing it", async ({ browser, baseURL }) => {
+  const ctx = await device(browser, baseURL, { [GAME]: JSON.stringify(FRESH_GAME), [IMPORT]: JSON.stringify({ state: "pending", id: "x" }) });
+  const a = await ctx.newPage();
+  // this tab never hears storage events: only KEEP's own check can see the newer load
+  await a.addInitScript(() => window.addEventListener("storage", (e) => e.stopImmediatePropagation(), true));
+  await a.goto("/");
+  await expect(a.locator("#sheet-title")).toHaveText("Loading a save didn't finish");
+  // a second tab (it boots to the same choice) loads the save by link
+  const b = await ctx.newPage();
+  await b.goto("/#save=" + (await encodeBackup(FULL, LEVELS.length)));
+  await Promise.all([b.waitForEvent("load"), b.locator("#replace-save").click()]);
+  const marker = await stored(b, IMPORT), loaded = await both(b);
+  expect(JSON.parse(marker).state).toBe("done");
+  await Promise.all([a.waitForEvent("load"), a.locator("#sheet").getByRole("button", { name: "KEEP WHAT'S HERE" }).click()]);
+  expect(await stored(a, IMPORT)).toBe(marker);
+  expect(await both(a)).toEqual(loaded);
+  await ctx.close();
+});
+
+test("a device whose own save can't be read can still load a whole save", async ({ browser, baseURL }) => {
+  const b = await device(browser, baseURL, { [GAME]: "{broken", [SKINS]: null });
+  const pb = await b.newPage();
+  await pb.goto("/#save=" + (await encodeBackup(FULL, LEVELS.length)));
+  await expect(pb.locator("#here-summary")).toHaveText("A save that can't be read");
+  await Promise.all([pb.waitForEvent("load"), pb.locator("#replace-save").click()]);
+  expect(await both(pb)).toEqual(FULL);
+  await b.close();
+});
+
 test("the sheet fits 320 wide and phone landscape with 44px targets; a big save has no QR but a full code", async ({ browser, baseURL }) => {
   const big = structuredClone(FULL);
   big.game.customLevels = Array.from({ length: 30 }, (_, i) => ({
