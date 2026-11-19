@@ -246,11 +246,15 @@ test("resize, save, reload, use, blank drafts, delete back to the green cube; th
     await page.reload();
     // the worn skin draws on the home screen's cube and in play
     await expect.poll(() => worldImages(page)).toBeGreaterThan(0);
+    expect(await stored(page, "clonedash.v1"), "no skin action wrote the level save").toBe(levelBefore);
     await page.locator("#play").click();
     const inPlay = await worldImages(page);
     await expect.poll(() => worldImages(page)).toBeGreaterThan(inPlay + 10);
     await page.locator("#menu").click();
     await page.getByRole("button", { name: "MAIN MENU", exact: true }).click();
+    // real-time play may save a best (a slow host travels further before the menu tap), so the
+    // skin actions from here are held to the save as play left it
+    const levelAfterPlay = await stored(page, "clonedash.v1");
     await page.locator("#skins-open").click();
     await expect(page.getByRole("button", { name: "Use Wide one", exact: true })).toHaveText("WEARING");
     // a blank skin saves as a draft but can't be worn
@@ -285,7 +289,7 @@ test("resize, save, reload, use, blank drafts, delete back to the green cube; th
     expect(await worldImages(page), "back to the procedural cube").toBe(0);
     await page.locator("#skins-open").click();
     await expect(page.getByRole("button", { name: "Use Green cube" })).toHaveText("WEARING");
-    expect(await stored(page, "clonedash.v1")).toBe(levelBefore);
+    expect(await stored(page, "clonedash.v1"), "no skin action wrote the level save").toBe(levelAfterPlay);
     expect(errors).toEqual([]);
   } finally {
     await context.close();
