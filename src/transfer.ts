@@ -1,7 +1,6 @@
 import { usesNew, validateLevel } from "./engine.ts";
 import { SAVE, readSave, selectLevel } from "./library.ts";
 import type { Level, SaveData } from "./types.ts";
-import { MAX_LOOP_BYTES } from "./loop-schema.ts";
 
 export const MAX_CODE = 192 * 1024;
 export const MAX_LEVEL_BYTES = 128 * 1024;
@@ -246,11 +245,8 @@ export async function decodeLevel(text: string): Promise<Level> {
   // carry one (null or malformed included), and cdl3 always does
   if ((raw !== null && typeof raw === "object" && "loop" in raw) !== third) throw Error("Invalid level code.");
   const level = portableLevel(raw);
-  if (third) {
-    if (!level.loop || new TextEncoder().encode(JSON.stringify(level.loop)).byteLength > MAX_LOOP_BYTES)
-      throw Error("Invalid level code.");
-    return level;
-  }
+  // cdl3: the raw check above already required the loop, and validateLevel bounds and checks it
+  if (third) return level;
   // each prefix means one thing: a cdl1 never carries the #117 fields, a cdl2 always does
   if (level.objects.some(usesNew) !== second) throw Error("Invalid level code.");
   return level;

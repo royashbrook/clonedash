@@ -8,16 +8,34 @@
 // disconnects each from its filter and then stops it a little after its beat. A long session only
 // ever holds the few beats in flight.
 import { BEAT, seededNoise, voices } from "./voices.ts";
-import type { Loop } from "./loop.ts";
+import type { Loop } from "./loop-schema.ts";
 
 export const STEP = BEAT / 2;
 const AHEAD = 0.12,
   TICK = 25,
   RETIRE_AFTER = 0.05;
 const chordAt = (bar: number) => [0, -5, 3, -2][Math.floor(bar / 2) % 4];
+type Voices = ReturnType<typeof voices>;
+
+// One drum hit, and one step of a loop: what a loop plays at step `step` of bar `bar`, starting at
+// `t`. The live player and a loop levels rendered song (music.ts composeLoop) both play steps through
+// this, so a level sounds exactly like PLAY. Returns the steps wobble modulator, if it has one.
+export function playDrum(play: Voices, kind: "kick" | "snare" | "hat", step: number, t: number) {
+  if (kind === "kick") play.kick(t);
+  else if (kind === "snare") play.snare(t);
+  else play.hiss(t, step === 7 ? 0.12 : 0.045, 6500, step % 2 ? 0.035 : 0.055);
+}
+export function playLoopStep(play: Voices, loop: Loop, bar: number, step: number, t: number) {
+  const root = loop.root + chordAt(bar);
+  if (step === 0) play.pad(t, root, loop.drop);
+  const lfo = step % 2 === 0 ? play.bass(t, root, loop.wobble, loop.drop).lfo : null;
+  for (const kind of ["kick", "snare", "hat"] as const) if (loop[kind].includes(step)) playDrum(play, kind, step, t);
+  for (const degree of loop.notes[step]) play.lead(t, loop.root + 24 + degree, loop.drop, step % 2 === 0);
+  return lfo;
+}
 
 type Modulator = { lfo: OscillatorNode; end: number };
-type Session = { out: GainNode; play: ReturnType<typeof voices>; modulators: Modulator[] };
+type Session = { out: GainNode; play: Voices; modulators: Modulator[] };
 
 export class LoopPlayer {
   private context?: AudioContext;
@@ -118,21 +136,12 @@ export class LoopPlayer {
       loop = this.loop(),
       t = c.currentTime + 0.01;
     if (kind === "note") s.play.lead(t, loop.root + 24 + value, loop.drop, true);
-    else this.drum(s, kind, value, t);
+    else playDrum(s.play, kind, value, t);
   }
 
-  private drum(s: Session, kind: "kick" | "snare" | "hat", step: number, t: number) {
-    if (kind === "kick") s.play.kick(t);
-    else if (kind === "snare") s.play.snare(t);
-    else s.play.hiss(t, step === 7 ? 0.12 : 0.045, 6500, step % 2 ? 0.035 : 0.055);
-  }
   private playStep(s: Session, step: number, t: number) {
-    const loop = this.loop(),
-      root = loop.root + chordAt(this.bar);
-    if (step === 0) s.play.pad(t, root, loop.drop);
-    if (step % 2 === 0) s.modulators.push({ lfo: s.play.bass(t, root, loop.wobble, loop.drop).lfo, end: t + BEAT });
-    for (const kind of ["kick", "snare", "hat"] as const) if (loop[kind].includes(step)) this.drum(s, kind, step, t);
-    for (const degree of loop.notes[step]) s.play.lead(t, loop.root + 24 + degree, loop.drop, step % 2 === 0);
+    const lfo = playLoopStep(s.play, this.loop(), this.bar, step, t);
+    if (lfo) s.modulators.push({ lfo, end: t + BEAT });
   }
   private tick() {
     const s = this.session,

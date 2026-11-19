@@ -9,7 +9,7 @@ import type {
   Transform,
 } from "./types.ts";
 import { recordingFor } from "./recordings.ts";
-import { validateLoop } from "./loop-schema.ts";
+import { MAX_LOOP_BYTES, validateLoop } from "./loop-schema.ts";
 // Quarter-block clearance makes a two-block ledge landable, not just reachable at one instant.
 export const SPEED = 5,
   GRAVITY = 16,
@@ -895,6 +895,8 @@ export function validateLevel(input: unknown): Level {
   // the validated copy, so nothing a loop does not hold rides along in it.
   if (raw.loop !== undefined) {
     if (raw.song !== undefined) throw Error("Invalid level settings");
+    // the loop's own bound, measured on what arrived, before its check can drop anything
+    if (new TextEncoder().encode(JSON.stringify(raw.loop)).byteLength > MAX_LOOP_BYTES) throw Error("Invalid level settings");
     level.loop = validateLoop(raw.loop);
   }
   for (const o of level.objects) {

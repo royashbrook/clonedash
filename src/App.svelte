@@ -51,7 +51,7 @@
   import { importLevel } from "./transfer.ts";
   import SkinCreator from "./SkinCreator.svelte";
   import LoopMaker from "./LoopMaker.svelte";
-  import { LOOPS, addLoop, commitLoops, emptyLoops, readLoops, type Loop, type LoopStore } from "./loop.ts";
+  import { LOOPS, addLoop, commitLoops, emptyLoops, loopName, readLoops, validateLoop, type Loop, type LoopStore } from "./loop.ts";
   import {
     SKINS,
     addSkin,
@@ -327,6 +327,8 @@
   const selection = $derived(draft.objects[selected]);
   const select = (index: number) => (group = index >= 0 ? [index] : []);
   const draftSong = () => draft.song ?? 8 + save.activeLevel;
+  // what the level being edited or played plays: its own loop (#121), or its song
+  const draftMusic = () => draft.loop ?? draftSong();
   const songs = $derived([
     ...new Set([
       ...RECORDINGS.map((song) => song.id),
@@ -664,7 +666,8 @@
         {
           ...source,
           name: `${source.name.slice(0, 33)} (copy)`,
-          song: custom ? draftSong() : courseSong(current),
+          // one song source: a level with its own loop keeps it and gets no song beside it
+          ...(custom && source.loop ? {} : { song: custom ? draftSong() : courseSong(current) }),
         },
         LEVELS.length,
         true,
@@ -737,7 +740,7 @@
     endStroke(); // the window lost focus or the page went away: the stroke ends (rule 6d)
     pause();
     run.interrupt();
-    music.stop();
+    music.interrupt();
     void audio?.suspend();
   }
   function complete() {
@@ -941,7 +944,7 @@
     }
     music.sync(
       mode === "editor" || (mode === "play" && custom)
-        ? draftSong()
+        ? draftMusic()
         : mode === "play"
           ? courseSong(current)
           : 109,
@@ -1985,7 +1988,7 @@
         <h2>{level.name}</h2>
         <p>
           {level.length} × {levelHeight(level)} blocks · {level.objects.length} pieces
-          · ♪ {trackName(level.song ?? 8 + id)}{#if coinCount(level)}
+          · ♪ {level.loop ? loopName(level.loop) : trackName(level.song ?? 8 + id)}{#if coinCount(level)}
             · <span class="best-coins"
               >best {shownCoins(coins, level)} / {coinCount(level)} coins</span
             >{/if}
@@ -2007,7 +2010,7 @@
           >
           <button
             aria-label={`Share ${level.name}`}
-            onclick={() => sharing({ ...level, song: level.song ?? 8 + id })}
+            onclick={() => sharing(level.loop ? level : { ...level, song: level.song ?? 8 + id })}
             >SHARE</button
           >
           <button
@@ -2441,16 +2444,34 @@
           ><label
             >Song<select
               id="level-song"
-              value={draftSong()}
+              value={draft.loop ? "this-loop" : String(draftSong())}
               onchange={(e) => {
-                draft = { ...draft, song: Number(e.currentTarget.value) };
+                // one song source (#121): a loop is a copy of the saved one, so editing or
+                // deleting that loop later never changes this level; a song clears the loop
+                const value = e.currentTarget.value,
+                  { song: _song, loop: _loop, ...rest } = draft;
+                if (value === "this-loop") return;
+                const picked = value.startsWith("loop:")
+                  ? loops.loops.find((entry) => entry.id === Number(value.slice(5)))
+                  : undefined;
+                draft = picked
+                  ? { ...rest, loop: validateLoop(structuredClone(picked.loop)) }
+                  : { ...rest, song: Number(value) };
                 saveDraft();
               }}
-              >{#each songs as index}<option value={index}
-                  >{trackName(index)}{index === 8 + save.activeLevel
-                    ? " · this level’s original"
-                    : ""}</option
-                >{/each}</select
+              >{#if draft.loop}<option value="this-loop"
+                  >♪ {loopName(draft.loop)} · this level’s loop</option
+                >{/if}{#if loops.loops.length}<optgroup label="MY LOOPS"
+                  >{#each loops.loops as entry (entry.id)}<option value={`loop:${entry.id}`}
+                      >{loopName(entry.loop)}</option
+                    >{/each}</optgroup
+                >{/if}<optgroup label="SONGS"
+                >{#each songs as index}<option value={String(index)}
+                    >{trackName(index)}{index === 8 + save.activeLevel
+                      ? " · this level’s original"
+                      : ""}</option
+                  >{/each}</optgroup
+              ></select
             ></label
           ><button onclick={toggleSound}
             >{save.sound ? "MUTE PREVIEW" : "LISTEN"}</button
