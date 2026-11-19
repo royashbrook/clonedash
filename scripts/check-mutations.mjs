@@ -236,6 +236,8 @@ try {
     // so dropping the snapshot is equivalent today; it guards a future await before that point)
     ["music.ts", "(typeof music === \"number\" ? music : `l${JSON.stringify(music)}`)", "(typeof music === \"number\" ? music : \"loop\")", "renders as it was", "loop-song.test.mjs"],
     ["loop-player.ts", "  const root = loop.root + chordAt(bar);", "  const root = loop.root;", "1.0.96 player and this one", "loop-song.test.mjs"],
+    ["music.ts", "  for (let bar = 0; bar < BARS; bar++)\n    for (let step = 0; step < 8; step++) playLoopStep", "  for (let bar = 0; bar < BARS - 1; bar++)\n    for (let step = 0; step < 8; step++) playLoopStep", "exactly what PLAY plays", "loop-song.test.mjs"],
+    ["music.ts", "  for (let bar = 0; bar < BARS; bar++)\n    for (let step = 0; step < 8; step++) playLoopStep", "  for (let bar = 0; bar < BARS + 1; bar++)\n    for (let step = 0; step < 8; step++) playLoopStep", "exactly what PLAY plays", "loop-song.test.mjs"],
     // the live loop player's races (#121)
     ["loop-player.ts", "    while (this.next < c.currentTime) this.advance();\n", "", "long gap", "loop-player.test.mjs"],
     ["loop-player.ts", "for (const s of [this.session, this.preview]) if (s)", "for (const s of [this.session]) if (s)", "tapped cell is cut", "loop-player.test.mjs"],
