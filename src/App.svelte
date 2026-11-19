@@ -326,7 +326,17 @@
   const completed = $derived(
     LEVELS.filter((_, i) => save.best[i] === 100).length,
   );
-  const rotate = $derived(portrait && (mode === "play" || mode === "editor"));
+  // a phone held upright plays (#138 preview); the editor still asks to turn the phone
+  const rotate = $derived(portrait && mode === "editor");
+  // upright play: the view looks further ahead, at a zoom the player picks while paused
+  const LEAD = 1.5,
+    ZOOM_MIN = 0.7,
+    ZOOM_MAX = 1.5;
+  let zoom = $state(1);
+  const upright = () => portrait && mode === "play";
+  function zoomBy(step: number) {
+    zoom = Math.round(Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, zoom + step)) * 10) / 10;
+  }
   const selected = $derived(group.at(-1) ?? -1);
   const selection = $derived(draft.objects[selected]);
   const select = (index: number) => (group = index >= 0 ? [index] : []);
@@ -751,18 +761,20 @@
         [custom ? "BACK TO EDITOR" : "MAIN MENU", custom ? openEditor : home],
         ["EDIT A COPY", copyPlayedLevel],
         ...(custom ? [["MY LEVELS", library] as Action] : []),
+        // upright only, and only here: the run is stopped behind this sheet, so a tap is never a jump
+        ...(portrait
+          ? ([
+              ["ZOOM OUT (SEE FURTHER)", () => zoomBy(-0.1)],
+              ["ZOOM IN (SEE BIGGER)", () => zoomBy(0.1)],
+            ] as Action[])
+          : []),
       ],
       false,
     );
   }
   function orientation() {
     portrait = innerHeight > innerWidth;
-    if (portrait && mode === "play") {
-      paused = true;
-      run.interrupt();
-      music.stop();
-      closeSheet();
-    } else if (
+    if (
       mode === "play" &&
       paused &&
       !panel &&
@@ -932,7 +944,8 @@
       level,
       state: live() ? run.state : mode === "home" ? attract : null,
       skin: wornArt,
-      camera: live() ? run.camera : mode === "editor" ? pan : 0,
+      camera: live() ? run.camera + (upright() ? LEAD : 0) : mode === "editor" ? pan : 0,
+      zoom: upright() ? zoom : 1,
       cameraY: live() ? run.cameraY : mode === "editor" ? panY : 0,
       editing: mode === "editor",
       layer,
