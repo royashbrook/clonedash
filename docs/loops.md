@@ -51,6 +51,34 @@ a save REPLACES this device's loops: a save without `loops` removes them, a save
 store keeps its `version` and `next`. The write, read-back, restore and marker steps cover the
 third key the same way; it is best-effort recovery, not a transaction.
 
+## A loop as a level's song
+
+Only a custom level can play a loop; built-in courses and the recorded songs never change. A level
+has one song source: its own `loop`, or a numbered `song` (or neither, which is its original). It
+is never both: the level reader refuses that. In the editor's Song picker, MY LOOPS lists the saved
+loops; picking one stores a copy of it in the level, so editing or deleting the saved loop later
+never changes the level, and picking a song removes the level's loop. Copying a level (EDIT A COPY),
+sharing it, and moving a save keep exactly one source too.
+
+What the level plays is the loop exactly as PLAY plays it, through the same step function
+(`loop-player.ts playLoopStep`): the same key, chords per bar, drop, drums and notes, rendered for
+16 bars (25.6 s) and repeated by the looping source. Live PLAY runs on without a seam; the rendered
+song repeats its 16 bars, so the echo tail at the end of the 16th bar does not carry into the first.
+The soundtrack keeps a buffer under what it sounds like (a song's number, or the loop's whole
+content), so two levels with different loops never share one. As before, one render runs at a time
+and one buffer is kept. A render or a failure that finishes after the level changed only fills the
+cache or tries the music now wanted; it never silences the new choice. Losing focus or hiding the
+page drops the wish to play at once, so a render finishing while the page is hidden stays silent.
+
+On the wire, a level with a loop is `cdl3`, with every piece the game knows. A loop under `cdl1` or
+`cdl2` (even `null` or a damaged one) is refused on the raw data, before anything could drop it, and
+`cdl3` without a valid loop is refused. Levels without a loop keep the exact `cdl1`/`cdl2` bytes
+they always had. A copy of the game from before loops refuses `cdl3` code, link and file. A level's
+loop is bounded to 8 KiB as it arrives, before its check can drop anything, inside the level's own
+128 KiB. In a whole save, the loop's fields are checked one by one before any reader runs. Importing
+a level never adds its loop to My loops. Old tabs editing the same device's save are not covered:
+the guard is for reading what arrives, not for a copy of the game from before loops writing.
+
 ## Playing
 
 One live player owns the sound on the LOOPS screen, and the share sheet has its own for an incoming
@@ -88,3 +116,14 @@ KEEP IT leaves the draft exactly as it was. A draft with no notes is not asked.
   stopped, and none after STOP or leaving; share by code, link and file, with the import preview
   silent until PLAY and silenced by an input change, ADD or closing the sheet; a save with loops
   replaces, one without removes; phone fit with 44 px targets.
+- `tests/loop-level.test.mjs`: one song source; `cdl3` round trip; levels without a loop keep the
+  1.0.96 writer's bytes; a loop under `cdl1`/`cdl2` refused raw and compressed; the pre-loop and
+  1.0.96 readers (from git) refuse `cdl3`; save, selection and backup keep the loop.
+- `tests/loop-song.test.mjs`, on the recording context: the 1.0.96 live player (from git) and this
+  one log the same schedule; a loop level's rendered song is PLAY's events step for step for 16
+  bars, after shifting PLAY's 60 ms start; a late render, a late failure and hiding obey the latest
+  intent; the render uses the loop as asked for; the raw 8 KiB bound and a save's loop fields.
+- browser (`tests/loop-level.spec.js`, both engines): pick a saved loop, the looping buffer that
+  starts is that loop's render and 25.6 s long, kept after a reload, a song clears it; share as
+  `cdl3`, import and ADD keep the loop without touching My loops; deleting the saved loop leaves the
+  level's copy; EDIT A COPY adds no song; MOVE YOUR SAVE carries it.

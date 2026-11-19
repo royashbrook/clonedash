@@ -59,6 +59,9 @@ export function checkBackup(input: unknown, trailCount: number): Backup {
   if (typeof game.sound !== "boolean" || !Number.isInteger(game.activeLevel)) throw Error(DAMAGED);
   if (!Array.isArray(game.customLevels)) throw Error(DAMAGED);
   for (const entry of game.customLevels) fields(entry, ["id", "level", "coins"], ["id", "level"]);
+  // a level's own loop (#121): its raw fields are checked here, before its reader can drop any
+  for (const level of [game.draft, ...game.customLevels.map((e) => (e as Record<string, unknown>).level)])
+    if (plain(level) && "loop" in level) fields(level.loop, LOOP_FIELDS, LOOP_FIELDS);
   const skins = fields(top.skins, ["version", "next", "skins", "selected"], ["version", "next", "skins"]);
   if (!Array.isArray(skins.skins)) throw Error(DAMAGED);
   for (const entry of skins.skins) fields(entry, ["id", "skin"], ["id", "skin"]);
@@ -74,7 +77,7 @@ export function checkBackup(input: unknown, trailCount: number): Backup {
   // readSave keeps piece fields it does not know, so each level is also held to the share
   // whitelist; the one difference allowed is the default song a level from before songs lacks
   for (const level of [readGame.draft, ...readGame.customLevels.map((e) => e.level)])
-    if (!same(portableLevel(level), { ...level, song: level.song ?? 9 })) throw Error(NEWER);
+    if (!same(portableLevel(level), level.loop ? level : { ...level, song: level.song ?? 9 })) throw Error(NEWER);
   if (!("loops" in top)) return { game: readGame, skins: readSkinStore };
   const loops = fields(top.loops, ["version", "next", "loops"], ["version", "next", "loops"]);
   if (!Array.isArray(loops.loops)) throw Error(DAMAGED);

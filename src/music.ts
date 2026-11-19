@@ -1,5 +1,7 @@
 import { recordingFor } from "./recordings.ts";
 import { BEAT, seededNoise, voices } from "./voices.ts";
+import { playLoopStep } from "./loop-player.ts";
+import type { Loop } from "./loop-schema.ts";
 // Original 150 BPM compositions: one block is an eighth note at 5 blocks/second.
 // Render locally once per trail, then play a buffer. No network, samples or audio timer drift.
 export const TRACKS = [
@@ -129,19 +131,51 @@ export async function compose(
   }
   return c.startRendering();
 }
+// What a level plays: a numbered song, or a custom level's own loop (#121). A buffer is kept under
+// what it sounds like: the song's number, or the loop's whole content, so two levels with
+// different loops never share one, whatever their ids.
+export type Music = number | Loop;
+const keyOf = (music: Music) => (typeof music === "number" ? music : `l${JSON.stringify(music)}`);
+
+// A loop level's song (#121, docs/loops.md): the loop exactly as PLAY plays it, through the same step
+// function as the live player, for 16 bars (25.6 s), then repeated by the looping source.
+export async function composeLoop(loop: Loop, Offline = globalThis.OfflineAudioContext) {
+  const c = new Offline(2, Math.ceil(LENGTH * 44100), 44100);
+  const master = c.createDynamicsCompressor();
+  master.threshold.value = -12;
+  master.knee.value = 15;
+  master.ratio.value = 5;
+  const volume = c.createGain();
+  volume.gain.value = 0.68;
+  master.connect(volume).connect(c.destination);
+  const noise = seededNoise(c, 701);
+  const echo = c.createDelay(0.8),
+    feedback = c.createGain();
+  echo.delayTime.value = BEAT * 0.75;
+  feedback.gain.value = 0.22;
+  echo.connect(feedback).connect(echo);
+  echo.connect(master);
+  const play = voices(c, master, noise, echo);
+  for (let bar = 0; bar < BARS; bar++)
+    for (let step = 0; step < 8; step++) playLoopStep(play, loop, bar, step, ((bar * 8 + step) * BEAT) / 2);
+  return c.startRendering();
+}
+
 export class Soundtrack {
   enabled = false;
-  buffers = new Map<number, AudioBuffer>();
-  pending = new Set<number>();
+  buffers = new Map<number | string, AudioBuffer>();
+  pending = new Set<number | string>();
   source: AudioBufferSourceNode | null = null;
   context?: AudioContext;
-  track = -1;
-  intent = { index: 0, running: false, offset: 0 };
+  track: number | string = -1;
+  intent: { music: Music; running: boolean; offset: number } = { music: 0, running: false, offset: 0 };
   private disposed = false;
   private request: AbortController | null = null;
   fallback = false;
-  private async load(index: number) {
-    const song = recordingFor(index);
+  private async load(music: Music) {
+    if (typeof music !== "number") return composeLoop(music);
+    const index = music,
+      song = recordingFor(index);
     if (song && this.context) {
       // One pending load, with cancellation usable on older Safari too.
       const request = (this.request = new AbortController());
@@ -174,7 +208,7 @@ export class Soundtrack {
     try {
       this.context ??= new AudioContext();
       void this.context.resume();
-      this.sync(this.intent.index, this.intent.running, this.intent.offset);
+      this.sync(this.intent.music, this.intent.running, this.intent.offset);
     } catch {
       this.enabled = false;
     }
@@ -194,41 +228,55 @@ export class Soundtrack {
     this.buffers.clear();
     void this.context?.close();
   }
-  sync(index: number, running: boolean, offset: number) {
+  // The page hid or lost focus: stop, and drop the wish to play, so a render that finishes while
+  // no frame runs (a hidden page may get none) cannot start sound again. The next frame that wants
+  // music says so through sync.
+  interrupt() {
+    this.intent = { ...this.intent, running: false };
+    this.stop();
+  }
+  sync(music: Music, running: boolean, offset: number) {
     if (this.disposed) return;
-    this.intent = { index, running, offset };
+    this.intent = { music, running, offset };
     if (!this.enabled || !this.context || !running) {
       this.stop();
       return;
     }
-    if (this.source && this.track === index) return;
+    const key = keyOf(music);
+    if (this.source && this.track === key) return;
     this.stop();
-    if (!this.buffers.has(index)) {
+    if (!this.buffers.has(key)) {
       // One render at a time; a big level library must not turn into a big audio cache.
       if (!this.pending.size) {
-        this.pending.add(index);
-        this.load(index)
+        this.pending.add(key);
+        // the music as it is now: the level may change while its song renders
+        const snapshot = typeof music === "number" ? music : structuredClone(music);
+        this.load(snapshot)
           .then((buffer) => {
-            this.pending.delete(index);
+            this.pending.delete(key);
             if (this.disposed) return;
             // Long recordings decode to tens of MB. Retain only the current track.
             this.buffers.clear();
-            this.buffers.set(index, buffer);
+            this.buffers.set(key, buffer);
             const i = this.intent;
-            this.sync(i.index, i.running, i.offset);
+            this.sync(i.music, i.running, i.offset);
           })
           .catch(() => {
-            this.pending.delete(index);
-            this.enabled = false;
+            this.pending.delete(key);
+            if (this.disposed) return;
+            // a failure silences only the music it was for: if the level moved on, play that
+            const i = this.intent;
+            if (keyOf(i.music) !== key) this.sync(i.music, i.running, i.offset);
+            else this.enabled = false;
           });
       }
       return;
     }
     this.source = this.context.createBufferSource();
-    this.source.buffer = this.buffers.get(index)!;
+    this.source.buffer = this.buffers.get(key)!;
     this.source.loop = true;
     this.source.connect(this.context.destination);
     this.source.start(0, Math.max(0, offset) % this.source.buffer.duration);
-    this.track = index;
+    this.track = key;
   }
 }

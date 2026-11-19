@@ -315,7 +315,7 @@
         <h3>{preview.name || "Untitled trail"}</h3>
         <p>
           {preview.length} × {preview.height ?? 7} blocks · {preview.objects
-            .length} pieces<br />♪ {trackFor(preview.song!).name}
+            .length} pieces<br />♪ {preview.loop ? `${loopName(preview.loop)} (its own loop)` : trackFor(preview.song!).name}
         </p>
         <p>
           Adds a new level. Nothing you have made or earned will be replaced.

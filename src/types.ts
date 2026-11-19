@@ -1,3 +1,4 @@
+import type { Loop } from "./loop-schema.ts";
 export type GameMode = "square" | "plane" | "wheel" | "pogo" | "angle" | "croissant";
 // What the player SEES for an id whose upper-cased form is not the label. Stored ids that were
 // renamed for real (jumper became pogo) are mapped on read instead: engine.ts LEGACY_TYPES.
@@ -104,6 +105,8 @@ export interface Level {
   objects: Piece[];
   height?: number;
   song?: number;
+  // a custom level's own music, a copy of a loop (#121); a level has a song or a loop, never both
+  loop?: Loop;
   note?: string;
   color?: string;
 }
