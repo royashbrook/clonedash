@@ -17,7 +17,7 @@ test('My Levels preserves a legacy draft, creates independent levels and reopens
     if (!localStorage.getItem('clonedash.v1')) localStorage.setItem('clonedash.v1', JSON.stringify({ version: 1, best: { 0: 100 }, sound: false, draft: { name: 'Old favorite', length: 40, objects: [{ type: 'grid', x: 6, y: 0, rotation: 0, flipX: false, flipY: false }] } }));
   });
   await page.goto('/');
-  await expect(page.locator('#my-levels svg path')).toHaveAttribute('d', /M5 17H27V29H5Z M9 17 16 3 23 17/);
+  await expect(page.locator('#my-levels svg path')).toHaveAttribute('d', /M3 14h6v6H3Z M9 14h6v6H9Z M15 14h6v6h-6Z M9 8h6v6H9Z/);
   await page.locator('#my-levels').click(); await expect(page.locator('.custom-card')).toHaveCount(1);
   await page.locator('#new-level').click();
   await page.locator('#level-title').fill('Sky workshop'); await page.locator('#level-title').blur();

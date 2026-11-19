@@ -1,4 +1,4 @@
-import { test, expect } from "./quiet.mjs";
+import { test, expect, openAbout } from "./quiet.mjs";
 import { execFileSync } from "node:child_process";
 import { mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -130,7 +130,7 @@ for (const redirected of [false, true]) {
       await page.goto(server.url);
       await page.evaluate(() => navigator.serviceWorker.ready);
       await page.waitForFunction(() => !!navigator.serviceWorker.controller);
-      await page.locator("#about").click();
+      await openAbout(page);
       const { build } = JSON.parse(await readFile("dist/version.json", "utf8"));
       const cached = await page.evaluate(async (key) => {
         const response = await (

@@ -21,10 +21,13 @@ for (const [name, viewport, insets] of [
     expect(head.top).toBeGreaterThanOrEqual(insets.top);
     expect(head.left).toBeGreaterThanOrEqual(insets.left);
     expect(head.right).toBeLessThanOrEqual(viewport.width - insets.right);
-    // the end of the screen: the last line clears the home indicator
-    await page.evaluate(() => { for (const e of [document.scrollingElement, document.querySelector('#home')]) e.scrollTop = e.scrollHeight; });
-    const foot = await box('#home > footer');
-    expect(foot.bottom).toBeLessThanOrEqual(viewport.height - insets.bottom);
+    // the bottom bar clears the home indicator, and the last trail, scrolled to, sits above the bar
+    const buttons = await page.locator('#dock button').evaluateAll((all) => all.map((b) => b.getBoundingClientRect().bottom));
+    expect(buttons).toHaveLength(5);
+    for (const bottom of buttons) expect(bottom).toBeLessThanOrEqual(viewport.height - insets.bottom);
+    await page.evaluate(() => { for (const e of [document.scrollingElement, document.querySelector('#home'), document.querySelector('.home-content'), document.querySelector('#levels')]) e.scrollTop = e.scrollHeight; });
+    const last = await box('.level-card:last-of-type'), dock = await box('#dock');
+    expect(last.bottom).toBeLessThanOrEqual(dock.top);
   });
 
 // Phone portrait: a level card's note can wrap to two lines, and the card must grow with it.

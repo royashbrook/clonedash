@@ -34,6 +34,7 @@
     share,
     importLoop,
     back,
+    editing = $bindable(false),
   }: {
     store: LoopStore;
     broken: boolean;
@@ -42,6 +43,9 @@
     share: (loop: Loop) => void;
     importLoop: () => void;
     back: () => void;
+    // true while a loop is open: the app hides its bottom bar, so the only way out is ← LOOPS,
+    // which asks before dropping changes
+    editing?: boolean;
   } = $props();
 
   const NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
@@ -54,6 +58,9 @@
   const SONGS = Array.from({ length: TRACKS.length + 100 }, (_, i) => i);
 
   let view = $state<"list" | "edit">("list");
+  $effect(() => {
+    editing = view !== "list";
+  });
   let editingId = $state<number | null>(null),
     loop = $state.raw<Loop>(blankLoop()),
     dirty = $state(false),
@@ -86,7 +93,8 @@
       return false;
     }
   }
-  function silence() {
+  // also called by the app before its own sheets (MORE) open over the loop list
+  export function silence() {
     player.stop();
     playing = false;
     playingId = null;
@@ -180,7 +188,7 @@
   });
 </script>
 
-<section id="loops" class="screen" aria-label="My loops">
+<section id="loops" class="screen" class:editing={view !== "list"} aria-label="My loops">
   {#if view === "list"}
     <header class="home-head">
       <button id="loops-back" onclick={() => (silence(), back())}>← MENU</button>
@@ -245,6 +253,8 @@
       >
       <button id="save-loop" onclick={save}>SAVE</button>
     </header>
+    <!-- the toolbar above stays put; the controls and the grid scroll here (#133) -->
+    <div class="loop-body">
     <div class="loop-controls">
       <label class="start-from"
         ><span class="sr">Start from a song</span><select id="loop-song" onchange={startFrom}>
@@ -323,6 +333,7 @@
         {/each}
       </div>
     </div>
+    </div>
   {/if}
   <p id="loop-message" class:failed role="status" hidden={!message}>{message}</p>
 </section>
@@ -339,6 +350,21 @@
   }
   .home-head {
     flex-wrap: wrap;
+  }
+  /* editing a loop: the name, PLAY and SAVE stay on screen; only the body below them scrolls */
+  #loops.editing {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  #loops.editing > .loop-head {
+    flex: none;
+  }
+  .loop-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
   }
   h1 {
     font-size: 32px;

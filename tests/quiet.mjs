@@ -58,3 +58,9 @@ export const test = base.extend({
   ],
 });
 export { expect };
+
+// ABOUT (updates, moving a save) lives in the bottom bar's MORE sheet
+export async function openAbout(page) {
+  await page.locator("#more").click();
+  await page.locator("#sheet").getByRole("button", { name: "ABOUT, UPDATES AND YOUR SAVE", exact: true }).click();
+}

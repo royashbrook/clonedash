@@ -1,4 +1,4 @@
-import { test, expect } from "./quiet.mjs";
+import { test, expect, openAbout } from "./quiet.mjs";
 
 // CHECK FOR UPDATE says what it found (#66), and pulling the home screen down checks too, and
 // installs when there is something to install (#67). The service worker is blocked so the probe's
@@ -12,7 +12,7 @@ const answer = (page, reply) => {
 const build = (page) => page.locator('meta[name=build]').getAttribute('content');
 const meta = (content) => ({ status: 200, contentType: 'text/html', body: `<!doctype html><meta name="build" content="${content}">` });
 async function check(page) {
-  await page.locator('#about').click();
+  await openAbout(page);
   await page.locator('#check-update').click();
 }
 

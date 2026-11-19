@@ -1,4 +1,4 @@
-import { test, expect } from "./quiet.mjs";
+import { test, expect, openAbout } from "./quiet.mjs";
 import jsQR from "jsqr";
 import { encodeBackup } from "../src/backup.ts";
 import { LEVELS } from "../src/levels.ts";
@@ -60,7 +60,7 @@ async function device(browser, baseURL, stores = {}) {
 const stored = (page, key) => page.evaluate((k) => localStorage.getItem(k), key);
 const both = async (page) => ({ game: JSON.parse(await stored(page, GAME)), skins: JSON.parse(await stored(page, SKINS)) });
 async function openMove(page) {
-  await page.locator("#about").click();
+  await openAbout(page);
   await page.locator("#move-save").click();
   await expect(page.locator("#sheet-title")).toHaveText("Move your save");
 }
