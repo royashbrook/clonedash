@@ -152,6 +152,48 @@
     const on = kind === "note" ? next.notes[step].includes(degree) : next[kind].includes(step);
     if (on) void player.hear(kind, kind === "note" ? degree : step).catch(() => {});
   }
+  // SWIPE NOTES (#139): off, a cell toggles on its own tap and the grid scrolls sideways as before.
+  // on, a finger stroke paints: the first cell decides paint (it was off) or erase (it was on), and
+  // every cell the stroke crosses is set to that, so coming back over a cell never flips it again.
+  // the path between two pointer events is sampled, so a fast swipe cannot jump a cell, and
+  // lifting the finger or a cancel ends the stroke. the stroke holds the pointer, so the click that
+  // follows lands on the grid, not a cell; a keyboard press still clicks, and toggles, one cell.
+  type Kind = "note" | "kick" | "snare" | "hat";
+  let swipe = $state(false),
+    stroke: { paint: boolean; x: number; y: number } | null = null;
+  const isOn = (kind: Kind, step: number, degree: number) =>
+    kind === "note" ? loop.notes[step].includes(degree) : loop[kind].includes(step);
+  const cellAt = (x: number, y: number) =>
+    document.elementFromPoint(x, y)?.closest<HTMLElement>("#loop-grid .cell") ?? null;
+  const read = (c: HTMLElement) => [c.dataset.kind as Kind, Number(c.dataset.step), Number(c.dataset.degree)] as const;
+  function paint(c: HTMLElement) {
+    const [kind, step, degree] = read(c);
+    if (stroke && isOn(kind, step, degree) !== stroke.paint) tap(kind, step, degree);
+  }
+  function strokeDown(e: PointerEvent) {
+    if (!swipe) return;
+    const c = cellAt(e.clientX, e.clientY);
+    if (!c) return;
+    e.preventDefault();
+    (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
+    stroke = { paint: !isOn(...read(c)), x: e.clientX, y: e.clientY };
+    paint(c);
+  }
+  function strokeMove(e: PointerEvent) {
+    if (!stroke) return;
+    const dx = e.clientX - stroke.x,
+      dy = e.clientY - stroke.y,
+      n = Math.max(1, Math.ceil(Math.hypot(dx, dy) / 8));
+    for (let i = 1; i <= n; i++) {
+      const c = cellAt(stroke.x + (dx * i) / n, stroke.y + (dy * i) / n);
+      if (c) paint(c);
+    }
+    stroke.x = e.clientX;
+    stroke.y = e.clientY;
+  }
+  function strokeEnd() {
+    stroke = null;
+  }
   // START FROM, SURPRISE ME and CLEAR NOTES replace the notes, and there is no undo, so they ask
   // first whenever there are notes to lose; KEEP IT leaves the draft exactly as it was
   // `lose` is whether the replacement throws away anything the player made
@@ -298,9 +340,20 @@
           replace({ ...loop, notes: Array.from({ length: STEPS }, () => []) }, hasNotes(), "Clear the notes?", "CLEAR NOTES", "The notes in this loop")}
         >CLEAR NOTES</button
       >
+      <button id="loop-swipe" aria-pressed={swipe} onclick={() => (swipe = !swipe)}
+        >{swipe ? "SWIPE NOTES ON" : "SWIPE NOTES OFF"}</button
+      >
     </div>
-    <div class="loop-grid-box">
-      <div id="loop-grid" role="group" aria-label="Loop steps">
+    <div class="loop-grid-box" class:swiping={swipe}>
+      <div
+        id="loop-grid"
+        role="group"
+        aria-label="Loop steps"
+        onpointerdown={strokeDown}
+        onpointermove={strokeMove}
+        onpointerup={strokeEnd}
+        onpointercancel={strokeEnd}
+      >
         <div class="loop-row steps">
           <span class="tag"></span>
           {#each { length: STEPS } as _, s}<b class:now={now === s}>{s + 1}</b>{/each}
@@ -314,6 +367,9 @@
                
                 aria-label={`note ${DEGREES.length - r} step ${s + 1}`}
                 aria-pressed={loop.notes[s].includes(degree)}
+                data-kind="note"
+                data-step={s}
+                data-degree={degree}
                 onclick={() => tap("note", s, degree)}
               ></button>{/each}
           </div>
@@ -327,6 +383,9 @@
                
                 aria-label={`${kind} step ${s + 1}`}
                 aria-pressed={loop[kind].includes(s)}
+                data-kind={kind}
+                data-step={s}
+                data-degree="0"
                 onclick={() => tap(kind, s)}
               ></button>{/each}
           </div>
@@ -477,6 +536,10 @@
     max-width: 100%;
     overflow-x: auto;
     padding-bottom: 8px;
+  }
+  /* SWIPE NOTES on: a finger on the grid paints instead of scrolling it */
+  .loop-grid-box.swiping #loop-grid {
+    touch-action: none;
   }
   #loop-grid {
     display: grid;
