@@ -11,8 +11,9 @@ const PREFIX = "cdl1.",
   PREFIX2 = "cdl2.";
 const DECODE_MS = 5000;
 
-// A level, never a save. Whitelist fields even when a valid level carries extras.
-function portableLevel(input: unknown): Level {
+// A level, never a save. Whitelist fields even when a valid level carries extras. A whole save
+// (src/backup.ts) holds every level to this same list.
+export function portableLevel(input: unknown): Level {
   const level = validateLevel(input);
   if (
     (level.height !== undefined && typeof level.height !== "number") ||
@@ -116,6 +117,60 @@ export async function boundedBytes(
   }
 }
 
+// The share envelope a skin (cds1) and a whole save (cdb1) travel in: prefix, a flag (0 raw,
+// 1 deflate-raw), then base64url. Both ends hold one byte bound, through the same bounded reader
+// and deadline as levels. `kind` names the thing in every message.
+export async function packCode(prefix: string, raw: Uint8Array, limit: number, kind: string) {
+  if (raw.byteLength > limit) throw Error(`This ${kind} is too large.`);
+  let payload = raw,
+    flag = "0";
+  let compressor: CompressionStream | undefined;
+  if (typeof CompressionStream !== "undefined") {
+    try {
+      compressor = new CompressionStream("deflate-raw");
+    } catch {
+      /* Older browsers may implement gzip but not deflate-raw. */
+    }
+  }
+  if (compressor) {
+    const compressed = await boundedBytes(
+      new Blob([raw as Uint8Array<ArrayBuffer>]).stream().pipeThrough(compressor),
+      limit,
+      kind,
+    );
+    if (compressed.length < raw.length) {
+      payload = compressed;
+      flag = "1";
+    }
+  }
+  return prefix + flag + base64(payload);
+}
+
+// The text inside a code the caller has already checked starts with `prefix`.
+export async function unpackCode(code: string, prefix: string, limit: number, kind: string) {
+  const flag = code[prefix.length],
+    encoded = code.slice(prefix.length + 1);
+  if (!/[01]/.test(flag ?? "") || !/^[\w-]+$/.test(encoded)) throw Error(`Invalid ${kind} code.`);
+  // a code longer than the largest one could ever encode to is refused before decoding it
+  if (encoded.length > Math.ceil((limit * 4) / 3)) throw Error(`This ${kind} is too large.`);
+  const bytes = Uint8Array.from(atob(encoded.replaceAll("-", "+").replaceAll("_", "/")), (c) =>
+    c.charCodeAt(0),
+  );
+  if (base64(bytes) !== encoded) throw Error(`Invalid ${kind} code.`);
+  if (bytes.length > limit) throw Error(`This ${kind} is too large.`);
+  let decoded = bytes;
+  if (flag === "1") {
+    if (typeof DecompressionStream === "undefined")
+      throw Error(`Update your browser to open compressed ${kind}s.`);
+    decoded = await boundedBytes(
+      new Blob([bytes]).stream().pipeThrough(new DecompressionStream("deflate-raw")),
+      limit,
+      kind,
+    );
+  }
+  return new TextDecoder("utf-8", { fatal: true }).decode(decoded);
+}
+
 export async function encodeLevel(input: Level): Promise<string> {
   const level = portableLevel(input),
     raw = new TextEncoder().encode(JSON.stringify(level));
@@ -185,25 +240,29 @@ export async function decodeLevel(text: string): Promise<Level> {
 }
 
 // Import takes one text and hands it to one domain decoder: a cds1 code or a #skin= link is a
-// skin (src/skin.ts decodeSkin), anything else goes to decodeLevel exactly as before. A link must
-// carry exactly one level or exactly one skin; both, or either twice, is ambiguous.
-export function codeKind(text: string): "level" | "skin" {
-  if (text.length > MAX_CODE) throw Error("This code is too large.");
+// skin (src/skin.ts decodeSkin), a cdb1 code or a #save= link a whole save (src/backup.ts, #124),
+// anything else goes to decodeLevel exactly as before. A link must carry exactly one of them;
+// two kinds, or one twice, is ambiguous and refused before choosing.
+export function codeKind(text: string): "level" | "skin" | "save" {
+  // a whole save may be far larger than a level or skin; decodeBackup holds its own bound
+  if (text.length > MAX_CODE && !/^\s*(cdb|https?:\/\/[^#]*#(.*&)?save=)/i.test(text.slice(0, 4096)))
+    throw Error("This code is too large.");
   const code = text.trim();
   if (/^https?:\/\//i.test(code)) {
     let params: URLSearchParams;
     try {
       params = new URLSearchParams(new URL(code).hash.slice(1));
     } catch {
-      throw Error("This link does not contain one level or one skin.");
+      throw Error("This link does not contain one level, skin or save.");
     }
     const levels = params.getAll("level").length,
-      skins = params.getAll("skin").length;
-    if (levels + skins !== 1)
-      throw Error("This link does not contain one level or one skin.");
-    return skins ? "skin" : "level";
+      skins = params.getAll("skin").length,
+      saves = params.getAll("save").length;
+    if (levels + skins + saves !== 1)
+      throw Error("This link does not contain one level, skin or save.");
+    return saves ? "save" : skins ? "skin" : "level";
   }
-  return code.startsWith("cds1.") ? "skin" : "level";
+  return code.startsWith("cdb") ? "save" : code.startsWith("cds1.") ? "skin" : "level";
 }
 
 export function levelLink(code: string, address: string): string {

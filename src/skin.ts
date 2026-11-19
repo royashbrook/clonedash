@@ -2,7 +2,7 @@
 // here reaches the engine's state, step or collisions. The model, its one validator, storage
 // under its own key, the cds1 share codec and the editor's pure helpers.
 import { SIZE } from "./engine.ts";
-import { MAX_CODE, base64, boundedBytes } from "./transfer.ts";
+import { MAX_CODE, packCode, unpackCode } from "./transfer.ts";
 import type { GameState } from "./types.ts";
 
 export const SKINS = "clonedash.skins.v1";
@@ -363,29 +363,7 @@ const portable = (skin: Skin) => validateSkin(skin); // the five fields, nothing
 
 export async function encodeSkin(input: Skin): Promise<string> {
   const raw = new TextEncoder().encode(JSON.stringify(portable(input)));
-  if (raw.byteLength > MAX_SKIN_BYTES) throw Error("This skin is too large.");
-  let payload = raw,
-    flag = "0";
-  let compressor: CompressionStream | undefined;
-  if (typeof CompressionStream !== "undefined") {
-    try {
-      compressor = new CompressionStream("deflate-raw");
-    } catch {
-      /* Older browsers may implement gzip but not deflate-raw. */
-    }
-  }
-  if (compressor) {
-    const compressed = await boundedBytes(
-      new Blob([raw]).stream().pipeThrough(compressor),
-      MAX_SKIN_BYTES,
-      "skin",
-    );
-    if (compressed.length < raw.length) {
-      payload = compressed;
-      flag = "1";
-    }
-  }
-  return PREFIX + flag + base64(payload);
+  return packCode(PREFIX, raw, MAX_SKIN_BYTES, "skin");
 }
 
 export async function decodeSkin(text: string): Promise<Skin> {
@@ -398,27 +376,7 @@ export async function decodeSkin(text: string): Promise<Skin> {
     code = params.get("skin")!;
   }
   if (!code.startsWith(PREFIX)) throw Error("Use a Cube Dash skin code or link (cds1).");
-  const flag = code[PREFIX.length],
-    encoded = code.slice(PREFIX.length + 1);
-  if (!/[01]/.test(flag ?? "") || !/^[\w-]+$/.test(encoded)) throw Error("Invalid skin code.");
-  // a code longer than the largest skin could ever encode to is refused before decoding it
-  if (encoded.length > Math.ceil((MAX_SKIN_BYTES * 4) / 3)) throw Error("This skin is too large.");
-  const bytes = Uint8Array.from(atob(encoded.replaceAll("-", "+").replaceAll("_", "/")), (c) =>
-    c.charCodeAt(0),
-  );
-  if (base64(bytes) !== encoded) throw Error("Invalid skin code.");
-  if (bytes.length > MAX_SKIN_BYTES) throw Error("This skin is too large.");
-  let decoded = bytes;
-  if (flag === "1") {
-    if (typeof DecompressionStream === "undefined")
-      throw Error("Update your browser to open compressed skins.");
-    decoded = await boundedBytes(
-      new Blob([bytes]).stream().pipeThrough(new DecompressionStream("deflate-raw")),
-      MAX_SKIN_BYTES,
-      "skin",
-    );
-  }
-  return portable(JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(decoded)));
+  return portable(JSON.parse(await unpackCode(code, PREFIX, MAX_SKIN_BYTES, "skin")));
 }
 
 export function skinLink(code: string, address: string): string {
