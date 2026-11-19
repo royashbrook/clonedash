@@ -75,8 +75,10 @@ skins live under their own localStorage key, `clonedash.skins.v1`, never inside 
    its bottom on the body's bottom edge (feet on the floor), or its top on the body's top edge when
    gravity is flipped (head on the ceiling), and its right edge on a W wall's face when a W holds
    the run. so a 16x8 skin sits on the floor, not floating in the middle of the box, and 4x32 and
-   32x4 skins behave the same way. spin in the air, the gravity flip and reduced motion follow the
-   cube exactly. the hook is guarded by square mode alone: pogo, every other mode, and the default
+   32x4 skins behave the same way. the turn (`src/spin.ts`, #120), the gravity flip and reduced
+   motion follow the cube exactly. resting on its side, the turned picture stands in the swapped
+   box (a 16x8 skin stands 8 wide and 16 tall), anchored the same way, so its feet stay on the
+   floor; landing slides the anchor over with the turn's own ease. the hook is guarded by square mode alone: pogo, every other mode, and the default
    (no skin) path keep their exact draw commands.
 3. **the drawn footprint is not the hitbox.** the creator preview draws the skin with the real
    renderer, outlines the drawn footprint, and draws the unchanged collision box, with the kid

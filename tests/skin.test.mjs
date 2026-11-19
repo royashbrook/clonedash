@@ -33,7 +33,8 @@ import { SAVE } from "../src/library.ts";
 import { createState, SIZE, STEP } from "../src/engine.ts";
 import { LEVELS } from "../src/levels.ts";
 import { Run } from "../src/run.ts";
-import { render, AVATAR } from "../src/render.ts";
+import { AVATAR } from "../src/render.ts";
+import { canvasLog, player } from "./canvas-log.mjs";
 
 // docs/skins.md is the contract these pin.
 const skin = (over = {}) => ({
@@ -391,52 +392,6 @@ test("the editor's pure helpers: resize keeps the top-left, fill, contiguous str
 
 // ---- drawing ----
 
-Object.assign(globalThis, { innerWidth: 932, innerHeight: 430, devicePixelRatio: 2 });
-// A canvas context that logs commands and tracks the current transform, so a drawn image's
-// rectangle can be read back in screen pixels.
-function canvasLog(options) {
-  const log = [],
-    stack = [];
-  let m = [1, 0, 0, 1, 0, 0];
-  const ops = {
-    setTransform: (a, b, c, d, e, f) => (m = [a, b, c, d, e, f]),
-    save: () => stack.push(m),
-    restore: () => (m = stack.pop()),
-    translate: (x, y) => (m = [m[0], m[1], m[2], m[3], m[4] + m[0] * x + m[2] * y, m[5] + m[1] * x + m[3] * y]),
-    scale: (x, y) => (m = [m[0] * x, m[1] * x, m[2] * y, m[3] * y, m[4], m[5]]),
-    rotate: (r) => {
-      const [a, b, c, d] = m,
-        cos = Math.cos(r),
-        sin = Math.sin(r);
-      m = [a * cos + c * sin, b * cos + d * sin, c * cos - a * sin, d * cos - b * sin, m[4], m[5]];
-    },
-    drawImage: (image, x, y, w, h) => {
-      const at = (px, py) => [(m[0] * px + m[2] * py + m[4]) / 2, (m[1] * px + m[3] * py + m[5]) / 2];
-      const [p, q] = [at(x, y), at(x + w, y + h)];
-      log.push(["screen", Math.min(p[0], q[0]), Math.min(p[1], q[1]), Math.max(p[0], q[0]), Math.max(p[1], q[1])]);
-    },
-  };
-  const values = {};
-  const ctx = new Proxy(values, {
-    set(target, key, value) {
-      target[key] = value;
-      log.push(["set", key, value]);
-      return true;
-    },
-    get(target, key) {
-      if (key in target) return target[key];
-      return (...args) => {
-        log.push([key, ...args]);
-        ops[key]?.(...args);
-        if (key === "createLinearGradient") return { addColorStop() {} };
-      };
-    },
-  });
-  const view = render({ width: 1864, height: 860, getContext: () => ctx }, options);
-  return { log: JSON.parse(JSON.stringify(log)), view };
-}
-// the player is the last thing drawn inside its own save/restore
-const player = (log) => log.slice(log.findLastIndex((c) => c[0] === "save"));
 const art = (width, height) => ({ image: { tiny: `${width}x${height}` }, width, height });
 const pose = (over = {}) => ({ ...createState(LEVELS[0]), mode: "square", gravity: -1, x: 9, y: 2, grounded: true, ...over });
 const frame = (state, skinArt, extra = {}) =>
@@ -481,9 +436,14 @@ test("a skin's drawn rectangle keeps its aspect, fits the one-block box, and anc
         assert.ok(log.some((c) => c[0] === "set" && c[1] === "imageSmoothingEnabled" && c[2] === false), "nearest-neighbour");
         assert.ok(!player(log).some((c) => c[0] === "rotate"), "grounded: no spin");
       }
-  // spin in the air and reduced motion follow the cube
-  const air = pose({ grounded: false, time: 0.3 });
-  const spin = (reduced, skinArt) => player(frame(air, skinArt, { reduced }).log).filter((c) => c[0] === "rotate");
+  // spin in the air and reduced motion follow the cube: each run takes off on its first airborne
+  // frame and turns from there (src/spin.ts), so a run is seen at take-off, then 0.3 s on
+  const spin = (reduced, skinArt) => {
+    const air = pose({ grounded: false, time: 0 });
+    frame(air, skinArt, { reduced });
+    air.time = 0.3;
+    return player(frame(air, skinArt, { reduced }).log).filter((c) => c[0] === "rotate");
+  };
   assert.equal(spin(false).length, 1);
   assert.deepEqual(spin(false, art(16, 8)), spin(false));
   assert.deepEqual(spin(true, art(16, 8)), []);
