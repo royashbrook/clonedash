@@ -180,7 +180,7 @@
   });
 </script>
 
-<section id="loops" class="screen" aria-label="My loops">
+<section id="loops" class="screen" class:editing={view !== "list"} aria-label="My loops">
   {#if view === "list"}
     <header class="home-head">
       <button id="loops-back" onclick={() => (silence(), back())}>← MENU</button>
@@ -245,6 +245,8 @@
       >
       <button id="save-loop" onclick={save}>SAVE</button>
     </header>
+    <!-- the toolbar above stays put; the controls and the grid scroll here (#133) -->
+    <div class="loop-body">
     <div class="loop-controls">
       <label class="start-from"
         ><span class="sr">Start from a song</span><select id="loop-song" onchange={startFrom}>
@@ -323,6 +325,7 @@
         {/each}
       </div>
     </div>
+    </div>
   {/if}
   <p id="loop-message" class:failed role="status" hidden={!message}>{message}</p>
 </section>
@@ -339,6 +342,21 @@
   }
   .home-head {
     flex-wrap: wrap;
+  }
+  /* editing a loop: the name, PLAY and SAVE stay on screen; only the body below them scrolls */
+  #loops.editing {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  #loops.editing > .loop-head {
+    flex: none;
+  }
+  .loop-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
   }
   h1 {
     font-size: 32px;

@@ -611,7 +611,6 @@
   }
   function more() {
     sheet("More", "", [
-      ["＋ LEVEL EDITOR", openEditor],
       ["HOW TO PLAY", how],
       ...(installVisible ? [["INSTALL", () => installer?.prompt()] as Action] : []),
       ["ABOUT, UPDATES AND YOUR SAVE", about],
@@ -1918,7 +1917,7 @@
       </p>
       <button id="play" class="primary big" onclick={() => start(current)}
         >PLAY {LEVELS[current].name.toUpperCase()} <span>▶</span></button
-      >
+      ><button id="editor-open" class="editor-open" onclick={openEditor}>＋ LEVEL EDITOR</button>
       <p id="progress-copy" class="fine">
         {completed
           ? `${completed} trails complete. Every trail is always open.`

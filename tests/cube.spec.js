@@ -1,4 +1,4 @@
-import { test, expect } from "./quiet.mjs";
+import { test, expect, openAbout } from "./quiet.mjs";
 
 // Coins, group ids, move and colour triggers, and the Cube Dash name (#101).
 const stored = page => page.evaluate(() => JSON.parse(localStorage.getItem('clonedash.v1')));
@@ -44,7 +44,7 @@ test('the visible name is Cube Dash: title, header, about, install name', async 
   await expect(page.getByRole('link', { name: 'Cube Dash home' })).toBeVisible();
   const manifest = await page.evaluate(() => fetch('/manifest.json').then(r => r.json()));
   expect([manifest.name, manifest.short_name, manifest.id]).toEqual(['Cube Dash', 'Cube Dash', '/']);
-  await page.locator('#about').click();
+  await openAbout(page);
   await expect(page.locator('#sheet-title')).toHaveText('Cube Dash');
   // the one Clone Dash left on screen is the seventh warmup trail's own name, kept with its save index
   await page.locator('#sheet-close').click();

@@ -1,4 +1,4 @@
-import { test, expect } from "./quiet.mjs";
+import { test, expect, openAbout } from "./quiet.mjs";
 import { COURSES } from '../src/courses.ts';
 import { REMIX } from '../src/remix.ts';
 import { Run } from '../src/run.ts';
@@ -94,7 +94,7 @@ test('every licensed recording decodes to distinct non-silent audio and has offl
   },RECORDINGS);
   for(const r of result) { expect(r.duration).toBeGreaterThan(29); expect(r.rms).toBeGreaterThan(.02); expect(r.peak).toBeLessThan(1); }
   expect(new Set(result.map(r=>r.signature)).size).toBe(RECORDINGS.length);
-  await page.locator('#about').click();
+  await openAbout(page);
   await expect(page.getByRole('link',{name:'Songs and music credits'})).toHaveAttribute('href','/music/credits.html');
 });
 test('without newer AbortSignal helpers, a recorded soundtrack pauses, resumes at run time, and restarts at zero', async ({page}) => {
@@ -218,7 +218,7 @@ test('a recording download failure uses an original without freezing gameplay',a
 // the svg heart standing in for the word love (kept as screen-reader text), centred on every row
 test('the about maker mark reads made with, heart, by, and sits centred when it wraps', async ({page}) => {
   await page.goto('/');
-  await page.locator('#about').click();
+  await openAbout(page);
   const mark = page.locator('.maker');
   await expect(mark).toBeVisible();
   const order = await mark.evaluate(el => {

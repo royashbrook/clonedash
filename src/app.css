@@ -169,6 +169,8 @@ a {
   align-items: center;
   gap: 60px;
   padding: 24px 0;
+  /* a short screen scrolls what does not fit here, between the header and the bottom bar */
+  overflow-y: auto;
 }
 .eyebrow {
   color: var(--accent);
@@ -201,6 +203,13 @@ h1 span {
 }
 .fine {
   font-size: 14px;
+}
+/* the editor stays one tap from home, under PLAY */
+.editor-open {
+  display: block;
+  width: 100%;
+  max-width: 390px;
+  margin-top: 12px;
 }
 .level-panel {
   background: var(--surface-sunk);
@@ -657,6 +666,11 @@ body[data-mode="editor"] #world {
   .home-content .level-panel {
     max-height: none;
     flex: none;
+  }
+  /* the whole column scrolls here, so the list is not a scroller of its own: one that holds a
+     finger's scroll and has nowhere to go would stop the page scrolling under the trails */
+  .home-content #levels {
+    overflow: visible;
   }
   .intro {
     width: 100%;
