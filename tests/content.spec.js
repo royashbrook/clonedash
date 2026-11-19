@@ -200,6 +200,12 @@ test('a recording download failure uses an original without freezing gameplay',a
   await page.addInitScript(()=>{
     window.loopDurations=[];const start=AudioBufferSourceNode.prototype.start;
     AudioBufferSourceNode.prototype.start=function(...args){if(this.loop&&this.buffer)window.loopDurations.push(this.buffer.duration);return start.apply(this,args);};
+    // an original renders at once to the length its offline context was made with: the test is
+    // about falling back to an original, not about how fast a slow machine renders one (#113)
+    OfflineAudioContext.prototype.startRendering=function(){
+      const {length,sampleRate,numberOfChannels}=this;
+      return Promise.resolve(new AudioBuffer({length,sampleRate,numberOfChannels}));
+    };
   });
   await page.goto('/');await page.locator('#sound').click();
   await expect(page.locator('#notice')).toContainText('original soundtrack');
