@@ -3,7 +3,7 @@
 // a second. Landing eases it onto the nearest flat side in SETTLE seconds, and it stays on that
 // side, upright, on its side or upside down, until the next jump turns on from there. Under
 // upside-down gravity the drawing is mirrored, so the turn is too. Only square and pogo turn;
-// any other mode puts it back upright for the next time it is a cube.
+// any other mode puts it back upright, and a cube first seen in the air takes off from there.
 import type { GameState } from "./types.ts";
 
 export const TURN = Math.PI * 2,
@@ -16,40 +16,38 @@ export interface Spin {
   takeoff: number;
   from: number; // the angle it landed at
   rest: number; // the flat side it settles on, a whole quarter in [0, TURN)
-  was: number; // the side it rested on before this landing
+  side: number; // how far onto an odd side it was when it took off, carried through the air
   at: number; // when it landed
 }
-export const newSpin = (): Spin => ({ time: -Infinity, air: false, base: 0, takeoff: 0, from: 0, rest: 0, was: 0, at: -Infinity });
+export const newSpin = (): Spin => ({ time: -Infinity, air: false, base: 0, takeoff: 0, from: 0, rest: 0, side: 0, at: -Infinity });
 
 const ease = (k: number) => 1 - (1 - k) ** 3;
-const settle = (s: Spin, t: number) => Math.min(1, (t - s.at) / SETTLE);
+const odd = (a: number) => Math.round(a / QUARTER) % 2;
 
 // Advances to this state's moment and returns the angle to draw (clockwise on screen, before the
-// gravity mirror) and how far it has moved onto an odd side (0 upright or upside down, 1 on its
-// side), which a skin that is not square needs to keep its feet on the ground.
+// gravity mirror) and how far it is onto an odd side (0 upright or upside down, 1 on its side),
+// which a skin that is not square needs to keep its feet on the ground. Both are continuous: a
+// take-off during the landing's ease starts from where the ease had got to, angle and side alike.
 export function spinAt(s: Spin, state: GameState): { angle: number; side: number } {
   const t = state.time;
-  if (t < s.time || (state.mode !== "square" && state.mode !== "pogo")) Object.assign(s, newSpin());
+  if (t < s.time || (state.mode !== "square" && state.mode !== "pogo")) {
+    Object.assign(s, newSpin(), { time: t });
+    return { angle: 0, side: 0 };
+  }
   s.time = t;
-  const odd = (a: number) => Math.round(a / QUARTER) % 2;
+  const k = ease(Math.min(1, (t - s.at) / SETTLE)),
+    angle = s.from + (s.rest - s.from) * k,
+    side = s.side + (odd(s.rest) - s.side) * k;
   if (!state.grounded) {
-    if (!s.air) {
-      s.air = true;
-      s.base = s.from + (s.rest - s.from) * ease(settle(s, t));
-      s.takeoff = t;
-    }
-    return { angle: s.base + (t - s.takeoff) * TURN, side: odd(s.rest) };
+    if (!s.air) Object.assign(s, { air: true, base: angle, takeoff: t, side });
+    return { angle: s.base + (t - s.takeoff) * TURN, side: s.side };
   }
   if (s.air) {
-    s.air = false;
     const landed = s.base + (t - s.takeoff) * TURN,
       rest = Math.round(landed / QUARTER) * QUARTER,
       whole = Math.floor(rest / TURN) * TURN;
-    s.was = s.rest;
-    s.from = landed - whole;
-    s.rest = rest - whole;
-    s.at = t;
+    Object.assign(s, { air: false, from: landed - whole, rest: rest - whole, at: t });
+    return { angle: s.from, side: s.side };
   }
-  const k = ease(settle(s, t));
-  return { angle: s.from + (s.rest - s.from) * k, side: odd(s.was) + (odd(s.rest) - odd(s.was)) * k };
+  return { angle, side };
 }

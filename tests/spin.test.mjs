@@ -73,6 +73,30 @@ test("another mode puts it upright for the next time it is a cube, and pogo turn
   near(pogo[2].angle, QUARTER, "pogo turns too");
 });
 
+test("a portal into the cube in mid-air takes off upright from there, however long the other mode flew", () => {
+  const out = drive([[0, true], [1, false, { mode: "plane" }], [1.1, false, { mode: "square" }], [1.35, false]]);
+  near(out[1].angle, 0, "a plane never turns the cube");
+  near(out[2].angle, 0, "the first cube moment in the air starts upright");
+  near(out[3].angle, QUARTER, "and turns from there");
+});
+
+test("a take-off during the landing's ease carries the angle and the side, and the next landing starts from them", () => {
+  const s = newSpin(), state = cube();
+  const at = (time, grounded) => spinAt(s, Object.assign(state, { time, grounded }));
+  at(0, true);
+  at(1, false);
+  at(1.25, true); // onto its side: the side eases 0 -> 1
+  const before = at(1.25 + SETTLE / 3, true);
+  assert.ok(before.side > 0 && before.side < 1, `mid-ease ${before.side}`);
+  const lift = at(1.25 + SETTLE / 3, false);
+  near(lift.angle, before.angle, "the angle carries through take-off");
+  near(lift.side, before.side, "and so does the side");
+  near(at(1.4, false).side, before.side, "the side holds in the air");
+  const land = at(1.5, true);
+  near(land.side, before.side, "the landing starts from the side carried in the air");
+  assert.ok(at(1.5 + SETTLE / 2, true).side !== before.side, "then eases on");
+});
+
 test("a run that starts again starts upright", () => {
   const s = newSpin(), state = cube();
   spinAt(s, Object.assign(state, { time: 1, grounded: false }));
@@ -118,6 +142,23 @@ test("under upside-down gravity the drawing mirrors before it turns, so the turn
   const mirror = log.findIndex((c) => c[0] === "scale" && c[1] === 1 && c[2] === -1),
     turn = log.findIndex((c) => c[0] === "rotate");
   assert.ok(mirror >= 0 && turn > mirror);
+});
+
+test("a 16x8 skin taking off mid-ease keeps its drawn centre: no jump at take-off or at the next landing", () => {
+  const art = { image: { tiny: "16x8" }, width: 16, height: 8 };
+  const state = cube();
+  const centre = (time, grounded) => {
+    const [, left, top, right, bottom] = frame(Object.assign(state, { time, grounded }), { skin: art }).log.find((c) => c[0] === "screen");
+    return [(left + right) / 2, (top + bottom) / 2];
+  };
+  centre(0, true);
+  centre(1, false);
+  centre(1.25, true);
+  const ground = centre(1.26, true), air = centre(1.26, false);
+  near(air[0], ground[0], "x at take-off");
+  near(air[1], ground[1], "y at take-off");
+  const high = centre(1.5, false), down = centre(1.5, true);
+  near(down[0], high[0], "x at the next landing");
 });
 
 test("a skin on its side stands in the swapped box: feet on the ground, centred on the body", () => {
