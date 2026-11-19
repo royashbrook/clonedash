@@ -471,11 +471,16 @@ test("candidate download failure keeps the current build; consent installs a ful
       `clonedash-${oldBuild}`,
     );
     await other.close();
-    await page.evaluate(() =>
-      document.dispatchEvent(new Event("visibilitychange")),
-    );
+    // The worker cleans only once this is the one open tab, and a closed tab can take a moment to
+    // leave its client list; a visibility change that comes first is rightly skipped. So each look
+    // is the player coming back to the tab again, which is when the cleanup is meant to run.
     await expect
-      .poll(() => page.evaluate(() => caches.keys()))
+      .poll(async () => {
+        await page.evaluate(() =>
+          document.dispatchEvent(new Event("visibilitychange")),
+        );
+        return page.evaluate(() => caches.keys());
+      })
       .toEqual(["clonedash-fedcba987654"]);
     server.offline();
     await page.reload();
