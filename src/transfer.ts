@@ -1,6 +1,7 @@
 import { usesNew, validateLevel } from "./engine.ts";
 import { SAVE, readSave, selectLevel } from "./library.ts";
 import type { Level, SaveData } from "./types.ts";
+import { MAX_LOOP_BYTES } from "./loop-schema.ts";
 
 export const MAX_CODE = 192 * 1024;
 export const MAX_LEVEL_BYTES = 128 * 1024;
@@ -10,9 +11,12 @@ export const MAX_SAVE_BYTES = 5 * 1024 * 1024,
   MAX_SAVE_TEXT = Math.ceil((MAX_SAVE_BYTES * 4) / 3) + 1024;
 // A level that uses width and height, touch triggers or multi touch (#117) travels as cdl2, which a
 // copy of the game from before them refuses instead of playing a different level. Every other
-// level is the same cdl1 code it always was.
+// level is the same cdl1 code it always was. A level that carries its own loop (#121) is cdl3,
+// whatever else it uses: a copy from before loops refuses cdl3, where a cdl1 or cdl2 reader would
+// quietly drop the loop and play another song.
 const PREFIX = "cdl1.",
-  PREFIX2 = "cdl2.";
+  PREFIX2 = "cdl2.",
+  PREFIX3 = "cdl3.";
 const DECODE_MS = 5000;
 
 // A level, never a save. Whitelist fields even when a valid level carries extras. A whole save
@@ -31,7 +35,8 @@ export function portableLevel(input: unknown): Level {
     name: level.name,
     length: level.length,
     ...(level.height === undefined ? {} : { height: level.height }),
-    song: level.song ?? 9,
+    // one song source: its own loop, or a numbered song (the original when none was picked)
+    ...(level.loop ? { loop: level.loop } : { song: level.song ?? 9 }),
     ...(level.note === undefined ? {} : { note: level.note }),
     ...(level.color === undefined ? {} : { color: level.color }),
     objects: level.objects.map(
@@ -199,7 +204,7 @@ export async function encodeLevel(input: Level): Promise<string> {
       flag = "1";
     }
   }
-  return (level.objects.some(usesNew) ? PREFIX2 : PREFIX) + flag + base64(payload);
+  return (level.loop ? PREFIX3 : level.objects.some(usesNew) ? PREFIX2 : PREFIX) + flag + base64(payload);
 }
 
 export async function decodeLevel(text: string): Promise<Level> {
@@ -212,9 +217,10 @@ export async function decodeLevel(text: string): Promise<Level> {
       throw Error("This link does not contain one level.");
     code = params.get("level")!;
   }
-  const second = code.startsWith(PREFIX2);
-  if (!code.startsWith(PREFIX) && !second)
-    throw Error("Use a Cube Dash level code or link (cdl1 or cdl2).");
+  const second = code.startsWith(PREFIX2),
+    third = code.startsWith(PREFIX3);
+  if (!code.startsWith(PREFIX) && !second && !third)
+    throw Error("Use a Cube Dash level code or link (cdl1, cdl2 or cdl3).");
   const flag = code[PREFIX.length],
     encoded = code.slice(PREFIX.length + 1);
   if (!/[01]/.test(flag ?? "") || !/^[\w-]+$/.test(encoded))
@@ -235,9 +241,16 @@ export async function decodeLevel(text: string): Promise<Level> {
         .pipeThrough(new DecompressionStream("deflate-raw")),
     );
   }
-  const level = portableLevel(
-    JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(decoded)),
-  );
+  const raw = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(decoded));
+  // a loop is checked on the raw data, before the whitelist could drop it: cdl1 and cdl2 never
+  // carry one (null or malformed included), and cdl3 always does
+  if ((raw !== null && typeof raw === "object" && "loop" in raw) !== third) throw Error("Invalid level code.");
+  const level = portableLevel(raw);
+  if (third) {
+    if (!level.loop || new TextEncoder().encode(JSON.stringify(level.loop)).byteLength > MAX_LOOP_BYTES)
+      throw Error("Invalid level code.");
+    return level;
+  }
   // each prefix means one thing: a cdl1 never carries the #117 fields, a cdl2 always does
   if (level.objects.some(usesNew) !== second) throw Error("Invalid level code.");
   return level;

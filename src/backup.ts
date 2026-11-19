@@ -74,7 +74,7 @@ export function checkBackup(input: unknown, trailCount: number): Backup {
   // readSave keeps piece fields it does not know, so each level is also held to the share
   // whitelist; the one difference allowed is the default song a level from before songs lacks
   for (const level of [readGame.draft, ...readGame.customLevels.map((e) => e.level)])
-    if (!same(portableLevel(level), { ...level, song: level.song ?? 9 })) throw Error(NEWER);
+    if (!same(portableLevel(level), level.loop ? level : { ...level, song: level.song ?? 9 })) throw Error(NEWER);
   if (!("loops" in top)) return { game: readGame, skins: readSkinStore };
   const loops = fields(top.loops, ["version", "next", "loops"], ["version", "next", "loops"]);
   if (!Array.isArray(loops.loops)) throw Error(DAMAGED);

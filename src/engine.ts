@@ -9,6 +9,7 @@ import type {
   Transform,
 } from "./types.ts";
 import { recordingFor } from "./recordings.ts";
+import { validateLoop } from "./loop-schema.ts";
 // Quarter-block clearance makes a two-block ledge landable, not just reachable at one instant.
 export const SPEED = 5,
   GRAVITY = 16,
@@ -890,6 +891,12 @@ export function validateLevel(input: unknown): Level {
   // Renamed ids are mapped on the copy before any check, so a legacy piece is measured and
   // bounded as what it is now; the input itself is never written to.
   const level = structuredClone(raw);
+  // A level's own loop (#121) is its one song source: never beside a numbered song, and kept as
+  // the validated copy, so nothing a loop does not hold rides along in it.
+  if (raw.loop !== undefined) {
+    if (raw.song !== undefined) throw Error("Invalid level settings");
+    level.loop = validateLoop(raw.loop);
+  }
   for (const o of level.objects) {
     if (o && typeof o === "object" && LEGACY_TYPES[o.type])
       o.type = LEGACY_TYPES[o.type]!;

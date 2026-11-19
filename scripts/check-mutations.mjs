@@ -204,7 +204,7 @@ try {
     // a whole save (#124)
     ["backup.ts", "if (Object.keys(v).some((k) => !known.includes(k))) throw Error(NEWER);", "", "every field is one this version knows", "backup.test.mjs"],
     ["backup.ts", "if (typeof game.sound !== \"boolean\" || ", "if (", "every field is one this version knows", "backup.test.mjs"],
-    ["backup.ts", "if (!same(portableLevel(level), { ...level, song: level.song ?? 9 })) throw Error(NEWER);", "", "every field is one this version knows", "backup.test.mjs"],
+    ["backup.ts", "if (!same(portableLevel(level), level.loop ? level : { ...level, song: level.song ?? 9 })) throw Error(NEWER);", "", "every field is one this version knows", "backup.test.mjs"],
     ["backup.ts", "if (!same(readGame, game) || !same(readSkinStore, skins)) throw Error(DAMAGED);", "", "every field is one this version knows", "backup.test.mjs"],
     ["backup.ts", "const checked = checkBackup({ v: 1, ...backup }, trailCount);\n  // each part", "const checked = backup;\n  // each part", "the writer checks the whole save itself", "backup.test.mjs"],
     ["backup.ts", "if (parts.some(([key, value]) => storage.getItem(key) !== value))", "if (false)", "any failed write or readback", "backup.test.mjs"],
@@ -217,7 +217,7 @@ try {
     ["backup.ts", "for (const entry of loops.loops) fields(fields(entry, [\"id\", \"loop\"], [\"id\", \"loop\"]).loop, LOOP_FIELDS, LOOP_FIELDS);", "", "loop field this version does not know", "backup.test.mjs"],
     ["backup.ts", "    [LOOPS, checked.loops ? JSON.stringify(checked.loops) : null, \"loops\"],\n", "", "replaces this device's loops", "backup.test.mjs"],
     ["backup.ts", "if (value === null) storage.removeItem(key);\n      else storage.setItem(key, value);", "if (value !== null) storage.setItem(key, value);", "replaces this device's loops", "backup.test.mjs"],
-    ["loop.ts", "v.every((x, i) => i === 0 || (x as number) > (v[i - 1] as number))", "true", "exactly its eight fields", "loop.test.mjs"],
+    ["loop-schema.ts", "v.every((x, i) => i === 0 || (x as number) > (v[i - 1] as number))", "true", "exactly its eight fields", "loop.test.mjs"],
     ["loop.ts", "if (!int(s.next, 1, MAX_ID)) throw Error(\"Invalid loops\");", "", "refuses rather than drop", "loop.test.mjs"],
     ["loop.ts", "if (storage.getItem(LOOPS) !== raw) throw Error", "if (false) throw Error", "refuses rather than drop", "loop.test.mjs"],
     ["loop.ts", "await unpackCode(code, PREFIX, MAX_LOOP_BYTES, \"loop\")", "await unpackCode(code, PREFIX, MAX_LOOP_BYTES * 100, \"loop\")", "bounded and refuse", "loop.test.mjs"],
