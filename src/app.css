@@ -636,7 +636,9 @@ body[data-mode="editor"] #world {
 }
 @media (max-width: 700px) and (orientation: portrait) {
   #home {
-    padding: 20px;
+    /* a phone held upright has the notch and home indicator at top and bottom: keep clear of them */
+    padding: max(20px, env(safe-area-inset-top)) max(20px, env(safe-area-inset-right))
+      max(20px, env(safe-area-inset-bottom)) max(20px, env(safe-area-inset-left));
   }
   .home-content {
     /* a phone held upright scrolls the whole page instead */
@@ -685,8 +687,8 @@ body[data-mode="editor"] #world {
 }
 @media (max-height: 520px) and (orientation: landscape) {
   #home {
-    padding-top: 10px;
-    padding-bottom: 10px;
+    padding-top: max(10px, env(safe-area-inset-top));
+    padding-bottom: max(10px, env(safe-area-inset-bottom));
   }
   .brand {
     font-size: 18px;
