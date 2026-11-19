@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { labelOf } from '../src/types.ts';
+import { pauseClock } from './paused-clock.mjs';
 
 test('wheel rejects midair taps and held landing flips, accepts fresh surface taps, and resets on retry', async ({ browser, baseURL }) => {
   const context = await browser.newContext({ viewport: { width: 932, height: 430 }, hasTouch: true });
@@ -70,7 +71,8 @@ test('new editor objects place, transform, persist and black blocks paint black'
 });
 
 test('bonus trail uses real wheel taps, both gravity directions, and finishes without a death', async ({ page }) => {
-  await page.clock.install(); await page.goto('/');
+  // a closed loop of 20ms steps; paused, so only the steps move the run (#113)
+  await page.clock.install({ time: 0 }); await page.goto('/'); await pauseClock(page, test.info());
   await page.getByRole('button', { name: 'Play Gravity Flip', exact: true }).click();
   let flipped = false, jumped = false, ceilingSeen = false;
   for (let i = 0; i < 650; i++) {
