@@ -66,6 +66,12 @@ test('a loop level plays exactly what PLAY plays: the same events, step for step
   assert.ok(offline.length > 1000);
   assert.ok(played.length >= offline.length, 'PLAY scheduled at least the 16 bars');
   assert.deepEqual(played.slice(0, offline.length), offline);
+  // and the prefix is all 16 bars, no fewer and no more: 128 steps 0.2 s apart, the last at 25.4 s
+  const starts = (log) => log.filter((e) => e[0] === 'start').map((e) => e[2]);
+  const steps = (log) => new Set(starts(log).map((t) => Math.round(t / 0.2)));
+  assert.deepEqual([...steps(offline)].sort((a, b) => a - b), Array.from({ length: 128 }, (_, i) => i));
+  assert.ok(starts(offline).every((t) => t < 25.6));
+  assert.ok(starts(played.slice(offline.length)).every((t) => t >= 25.6), 'nothing PLAY scheduled before 25.6 s is missing');
   // and it is the loop's music, not a song's: a different loop builds a different log
   assert.notDeepEqual(voiceEvents(await composeLoop(other, RecordingContext), 0), offline);
 });
