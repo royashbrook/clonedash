@@ -28,6 +28,7 @@
     resized,
   } from "./engine.ts";
   import { LEVELS, COLLECTIONS, COURSE_ORDER, courseSong } from "./levels.ts";
+  import { easeFraming } from "./framing.ts";
   import { render } from "./render.ts";
   import { Run } from "./run.ts";
   import { labelOf } from "./types.ts";
@@ -326,7 +327,7 @@
   const completed = $derived(
     LEVELS.filter((_, i) => save.best[i] === 100).length,
   );
-  // a phone held upright plays (#138 preview); the editor still asks to turn the phone
+  // a phone held upright plays (#138); only the level editor asks to turn it
   const rotate = $derived(portrait && mode === "editor");
   // upright play: the view looks further ahead, at a zoom the player picks while paused
   const LEAD = 1.5,
@@ -334,6 +335,16 @@
     ZOOM_MAX = 1.5;
   let zoom = $state(1);
   const upright = () => portrait && mode === "play";
+  // what the camera shows: the upright lead and zoom, eased only across a turn (#138, rule 6)
+  let framing = { lead: 0, zoom: 1 },
+    turning = false;
+  function frameCamera(dt: number) {
+    const to = upright() ? { lead: LEAD, zoom } : { lead: 0, zoom: 1 };
+    framing = turning && !reduced ? easeFraming(framing, to, dt) : to;
+    if (framing.lead === to.lead && framing.zoom === to.zoom) turning = false;
+    const shown = `${framing.lead.toFixed(2)} ${framing.zoom.toFixed(2)}`;
+    if (canvas.dataset.framing !== shown) canvas.dataset.framing = shown;
+  }
   function zoomBy(step: number) {
     zoom = Math.round(Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, zoom + step)) * 10) / 10;
   }
@@ -778,15 +789,19 @@
       false,
     );
   }
+  // the shape is read fresh (rule 1); a turn mid-run pauses it where it is (rule 3) and a turn under
+  // the pause sheet rebuilds it so the zoom buttons follow the shape (rule 4)
   function orientation() {
-    portrait = innerHeight > innerWidth;
-    if (
-      mode === "play" &&
-      paused &&
-      !panel &&
-      run.state.status === "playing"
-    )
-      pause();
+    const next = innerHeight > innerWidth,
+      turned = next !== portrait;
+    portrait = next;
+    if (turned) {
+      turning = true;
+      fingers.clear();
+    }
+    if (mode !== "play" || run.state.status === "complete") return;
+    if (turned && !paused) pause();
+    else if (paused && (!panel || (turned && panel.title === "Paused"))) pause();
   }
   function interrupt() {
     endStroke(); // the window lost focus or the page went away: the stroke ends (rule 6d)
@@ -950,8 +965,8 @@
       level,
       state: live() ? run.state : mode === "home" ? attract : null,
       skin: wornArt,
-      camera: live() ? run.camera + (upright() ? LEAD : 0) : mode === "editor" ? pan : 0,
-      zoom: upright() ? zoom : 1,
+      camera: live() ? run.camera + framing.lead : mode === "editor" ? pan : 0,
+      zoom: framing.zoom,
       cameraY: live() ? run.cameraY : mode === "editor" ? panY : 0,
       editing: mode === "editor",
       layer,
@@ -980,6 +995,8 @@
     }
     const dt = Math.min(0.05, (now - (last || now)) / 1000);
     last = now;
+    if (innerHeight > innerWidth !== portrait) orientation(); // a resize that never came (rule 1)
+    frameCamera(dt);
     if (live() && !paused && !rotate && !document.hidden) {
       const event = run.advance(dt);
       if (event.died) {
@@ -2353,16 +2370,9 @@
 </section>
 <section id="rotate" hidden={!rotate}>
   <img src="/icon.svg" alt="" width="72" height="72" />
-  <h2>Turn sideways to dash</h2>
-  <p>More room to see your next jump.</p>
-  <button
-    id="rotate-menu"
-    onclick={() =>
-      mode === "editor" || (mode === "play" && custom) ? library() : home()}
-    >{mode === "editor" || (mode === "play" && custom)
-      ? "MY LEVELS"
-      : "MAIN MENU"}</button
-  >
+  <h2>Turn sideways to build</h2>
+  <p>The level editor needs the room.</p>
+  <button id="rotate-menu" onclick={library}>MY LEVELS</button>
 </section>
 <dialog
   id="sheet"

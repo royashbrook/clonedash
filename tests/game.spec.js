@@ -27,8 +27,9 @@ test('home is a twenty-three-trail picker; play fills the screen; pause and rota
   const p = await page.locator('#run-progress').evaluate(e => e.value);
   await page.waitForTimeout(700); expect(await page.locator('#run-progress').evaluate(e => e.value)).toBe(p);
   await page.getByRole('button', { name: 'RESUME', exact: true }).click();
-  await page.setViewportSize({ width: 430, height: 932 }); await expect(page.locator('#rotate')).toBeVisible();
-  await page.locator('#rotate-menu').click(); await expect(page.locator('#home')).toBeVisible();
+  // upright pauses the run where it is (#138), no prompt; its pause menu leaves for home
+  await page.setViewportSize({ width: 430, height: 932 }); await expect(page.getByRole('heading', { name: 'Paused' })).toBeVisible(); await expect(page.locator('#rotate')).toBeHidden();
+  await page.locator('#sheet').getByRole('button', { name: 'MAIN MENU', exact: true }).click(); await expect(page.locator('#home')).toBeVisible();
   await page.screenshot({ path: 'test-results/home-portrait.png' });
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(430); expect(errors).toEqual([]);
 });

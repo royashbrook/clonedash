@@ -36,6 +36,7 @@ try {
     "music-lifetime.test.mjs",
     "spin.test.mjs",
     "canvas-log.mjs",
+    "framing.test.mjs",
     "loop-length.test.mjs",
     "loop-song.test.mjs",
   ]) {
@@ -258,6 +259,9 @@ try {
     ["spin.ts", "return { angle: s.from, side: s.side };", "return { angle: s.from, side: odd(s.rest) };", "carries the angle and the side", "spin.test.mjs"],
     ["render.ts", "(X(cx + (sx - cx) * turn.side) - x) / k,\n          ((Y(cy + (sy - cy) * turn.side) - y) / k) * flip,", "(X(cx) - x) / k,\n          ((Y(cy) - y) / k) * flip,", "swapped box", "spin.test.mjs"],
     ["render.ts", "      if (!reduced) {\n        let s = SPINS.get(state);", "      if (true) {\n        let s = SPINS.get(state);", "render turns the cube", "spin.test.mjs"],
+    // the upright framing eases across a turn (#138)
+    ["framing.ts", "a + (b - a) * k", "b", "settles in about a third", "framing.test.mjs"],
+    ["framing.ts", "const TAU = 0.06;", "const TAU = 0.3;", "settles in about a third", "framing.test.mjs"],
     // loops from 8 to 32 steps (#140)
     ["loop-schema.ts", "!LENGTHS.includes(notes.length)", "notes.length < 8", "8, 16, 24 or 32", "loop-length.test.mjs"],
     ["loop-schema.ts", "const step = (s: unknown) => int(s, 0, notes.length - 1);", "const step = (s: unknown) => int(s, 0, 31);", "8, 16, 24 or 32", "loop-length.test.mjs"],

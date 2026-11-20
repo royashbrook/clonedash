@@ -36,9 +36,11 @@ test('custom test returns to My Levels from HUD, pause, completion and portrait 
       await page.clock.runFor(4700); await expect(page.getByRole('heading', { name: 'Level Complete!' })).toBeVisible();
       await page.locator('#sheet').getByRole('button', { name: 'MY LEVELS', exact: true }).click();
     } else {
+      // upright pauses the run (#138), no prompt; its pause menu leaves for My Levels
       await page.setViewportSize({ width: 430, height: 932 });
-      await expect(page.locator('#rotate')).toBeVisible(); await expect(page.locator('#rotate-menu')).toHaveText('MY LEVELS');
-      await page.locator('#rotate-menu').click(); await expect(page.locator('#rotate')).toBeHidden();
+      await expect(page.getByRole('heading', { name: 'Paused' })).toBeVisible(); await expect(page.locator('#rotate')).toBeHidden();
+      await page.locator('#sheet').getByRole('button', { name: 'MY LEVELS', exact: true }).click();
+      await page.setViewportSize({ width: 932, height: 430 });
     }
     await expect(page.locator('#library')).toBeVisible(); await expect(page.locator('.custom-card')).toHaveCount(2);
     expect(await page.evaluate(() => localStorage.getItem('clonedash.v1'))).toBe(saved);
@@ -52,6 +54,7 @@ test('custom test returns to My Levels from HUD, pause, completion and portrait 
   await page.locator('#menu').click(); await expect(page.getByRole('heading', { name: 'Paused' })).toBeVisible();
   await expect(page.locator('#sheet').getByRole('button', { name: 'MY LEVELS', exact: true })).toHaveCount(0);
   await page.getByRole('button', { name: 'RESUME', exact: true }).click();
-  await page.setViewportSize({ width: 430, height: 932 }); await expect(page.locator('#rotate-menu')).toHaveText('MAIN MENU');
+  await page.setViewportSize({ width: 430, height: 932 }); await expect(page.getByRole('heading', { name: 'Paused' })).toBeVisible();
+  await expect(page.locator('#sheet').getByRole('button', { name: 'MAIN MENU', exact: true })).toBeVisible(); await expect(page.locator('#rotate')).toBeHidden();
   expect(errors).toEqual([]);
 });
