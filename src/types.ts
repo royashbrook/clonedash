@@ -20,6 +20,8 @@ const LABELS: Partial<Record<string, string>> = {
   "black-pad": "BLACK BOOSTER",
   "gray-pad": "GRAY BOOSTER",
   "drop-ring": "BLACK RING",
+  "teleport-ring": "TELEPORT RING",
+  "teleport-trigger": "TELEPORT TRIGGER",
   "stop-ring": "GRAY RING",
 };
 export const labelOf = (id: string): string => LABELS[id] ?? id.toUpperCase();
@@ -55,6 +57,7 @@ export type ObjectType =
   | "coin"
   | "move-trigger"
   | "color-trigger"
+  | "teleport-trigger"
   | "yellow-pad"
   | "pink-pad"
   | "red-pad"
@@ -63,7 +66,8 @@ export type ObjectType =
   | "black-pad"
   | "gray-pad"
   | "drop-ring"
-  | "stop-ring";
+  | "stop-ring"
+  | "teleport-ring";
 export type Point = [number, number];
 export type Transform =
   "left" | "right" | "up" | "down" | "cw" | "ccw" | "flipX" | "flipY";
@@ -91,7 +95,7 @@ export interface Piece {
   roofPass?: true; // blocks: a head hit bumps instead of crashing, like an R
   edges?: Edges; // outlined blocks only, which sides get the white line; absent means all four
   group?: number; // 1..99, what a trigger aims at; any piece but a trigger, absent means none
-  target?: number; // triggers only, the group it works on; absent means it does nothing
+  target?: number; // triggers and the teleport ring: the group it works on; absent means it does nothing
   moveX?: number; // move triggers only, whole blocks right (negative is left); absent means 0
   moveY?: number; // move triggers only, whole blocks up (negative is down); absent means 0
   duration?: number; // triggers only, seconds the move or fade takes; absent means instant
@@ -155,6 +159,12 @@ export interface RunEffects {
   tinted: Uint8Array;
   boosters: number[]; // booster indices, in authored order, built once per run
   pads: number[]; // boosters the body touched at the end of the last step; one fires on first touch
+  // teleports (#139, docs/teleport.md): crossing triggers a teleport jumped over, uncounted until the
+  // player is behind them again; whether this step already teleported; a trigger teleport waiting
+  // for the end of the step
+  skipped: Uint8Array;
+  hopped: boolean;
+  jump: [number, number] | null;
 }
 export interface SaveData {
   version: 1;
