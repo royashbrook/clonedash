@@ -47,6 +47,8 @@ The **Layer** selector switches between PLAY and BACKGROUND. Background blocks p
 
 ## Coins and triggers
 
+**ADV FOLLOW** moves a group with the player or another group. Pick **Both axes**, **X only** or **Y only** under **EDIT OBJECT**. Pieces keep their spacing. [Build a following group](docs/advanced-follow.md).
+
 **COINS** places a coin; touch it in a run to pick it up. A level holds up to 10, the run shows how many you have, and your best is the most you picked up in one finished run. **EDIT OBJECT** gives any piece a GROUP ID (1 to 99). **TRIGGERS** places a MOVE or COLOR trigger: invisible in play, each fires once when you pass it and works on every piece with its group id, moving them some whole blocks or painting them a colour, instantly or over a time you set. Restarting puts everything back. The rules are in [coins and triggers](docs/coins-and-triggers.md).
 
 ## Wheel and gravity

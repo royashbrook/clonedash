@@ -7,6 +7,7 @@ import {
   SIZE,
   SPEED,
   ringReady,
+  destination,
   levelHeight,
   tintOf,
   TRIGGERS,
@@ -46,8 +47,10 @@ export const PAD_LOOK: Record<string, string> = {
   "gray-pad": "#9a9a9a",
 };
 const TRIGGER_LOOK: Record<string, [string, string]> = {
+  "follow-trigger": ["#9aff6b", "FOLLOW"],
   "move-trigger": ["#53e3ff", "MOVE"],
   "color-trigger": ["#ff8ac4", "COLOR"],
+  "teleport-trigger": ["#b388ff", "TELEPORT"],
 };
 const portalLook: Record<string, [string, string, string]> = {
   plane: ["#ffd166", "FLY", "▷"],
@@ -277,7 +280,8 @@ export function render(
       if (o.hidden) ctx.globalAlpha *= 0.3; // faint, so it can still be found and edited
       if (RINGS.includes(o.type)) {
         const drop = o.type === "drop-ring",
-          stop = o.type === "stop-ring";
+          stop = o.type === "stop-ring",
+          tele = o.type === "teleport-ring";
         const active = state && ringReady(state, o, index),
           used = state?.usedRings.includes(index),
           c = over(o.color ?? "#ffd166", tint);
@@ -294,7 +298,7 @@ export function render(
         ctx.beginPath();
         ctx.arc(X(mx), Y(my), unit * 0.6 * s, 0, Math.PI * 2);
         ctx.stroke();
-        if (o.flipsGravity || o.dash || drop || stop) {
+        if (o.flipsGravity || o.dash || drop || stop || tele) {
           // gravity rings, the dash orb and the black and gray rings are orbs: filled, so they read
           // apart from the jump rings
           ctx.fillStyle = `${c}88`;
@@ -325,12 +329,14 @@ export function render(
           ctx.stroke();
         } else {
           const down = (state?.gravity ?? -1) < 0;
-          ctx.fillStyle = o.flipsGravity || drop || stop ? "#ffffff" : c;
+          ctx.fillStyle = o.flipsGravity || drop || stop || tele ? "#ffffff" : c;
           ctx.font = `bold ${unit * 0.4 * s}px system-ui`;
           ctx.textAlign = "center";
           ctx.textBaseline = "middle";
           ctx.fillText(
-            o.flipsGravity
+            tele
+              ? "⇥"
+              : o.flipsGravity
               ? o.boost
                 ? "⇈"
                 : "⇅"
@@ -532,6 +538,29 @@ export function render(
           ctx.strokeStyle = "#ffffff";
           ctx.lineWidth = 2;
           ctx.stroke();
+        }
+      }
+      if (editing && (index === selected || group.includes(index)) && (o.type === "teleport-trigger" || o.type === "teleport-ring")) {
+        // a selected teleport shows where it lands (docs/teleport.md rule 6): a dashed line to the
+        // destination cell, or NO DESTINATION over the piece
+        const to = destination(level, o.target),
+          [fx, fy] = pointOf(o, 0.5, 0.5);
+        ctx.globalAlpha = 1;
+        ctx.strokeStyle = ctx.fillStyle = "#b388ff";
+        ctx.lineWidth = 2;
+        if (to) {
+          ctx.setLineDash([6, 4]);
+          ctx.beginPath();
+          ctx.moveTo(X(fx), Y(fy));
+          ctx.lineTo(X(to[0] + 0.5), Y(to[1] + 0.5));
+          ctx.stroke();
+          ctx.setLineDash([]);
+          ctx.strokeRect(X(to[0]), Y(to[1] + 1), unit, unit);
+        } else {
+          ctx.font = `bold ${Math.max(10, unit * 0.26)}px system-ui`;
+          ctx.textAlign = "center";
+          ctx.textBaseline = "bottom";
+          ctx.fillText("NO DESTINATION", X(fx), Y(fy + 0.75));
         }
       }
       if (editing && (index === selected || group.includes(index))) {

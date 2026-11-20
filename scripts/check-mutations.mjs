@@ -18,6 +18,7 @@ try {
     "version.test.mjs",
     "pogo.test.mjs",
     "door.test.mjs",
+    "follow.test.mjs",
     "coins.test.mjs",
     "triggers.test.mjs",
     "parity.test.mjs",
@@ -37,6 +38,7 @@ try {
     "music-lifetime.test.mjs",
     "spin.test.mjs",
     "canvas-log.mjs",
+    "teleport.test.mjs",
     "edges.test.mjs",
     "framing.test.mjs",
     "loop-length.test.mjs",
@@ -61,6 +63,8 @@ try {
       { encoding: "utf8" },
     );
   for (const [file, from, to, pattern, testFile = "migration.test.mjs"] of [
+    ["engine.ts", 'bind.axis === "y" ? 0 : x - bind.x', 'x - bind.x', "player follow preserves", "follow.test.mjs"],
+    ["engine.ts", "if (fx.follows) followAll(s, fx, oldX, oldY);", "", "player follow preserves", "follow.test.mjs"],
     ["engine.ts", "mode: level.startMode ?? \"square\"", "mode: \"square\"", "every starting mode", "start-settings.test.mjs"],
     ["engine.ts", "speed: level.startSpeed ?? 1", "speed: 1", "every starting mode", "start-settings.test.mjs"],
     ["engine.ts", "s.x >= s.level.length", "s.x >= s.level.length + (s.level.offMap ? 32 : 0)", "same finish", "start-settings.test.mjs"],
@@ -142,11 +146,11 @@ try {
     ["engine.ts", "fx.move[m] = p.x;", "fx.move[m] = fx.movers.includes(i) ? fx.move[m] : p.x;", "overlap", "triggers.test.mjs"],
     // a step's two contact passes (settle): fire on resolved reach, redo on the moved pose from the
     // state before contact, fire nothing in the redo
-    ["engine.ts", "  fx.picked.length = 0;\n  contact(s, oldX, oldY, wasGrounded, height, forward, dt);\n  if (!runTriggers(s, fx)) return;", "  fx.picked.length = 0;\n  runTriggers(s, fx);\n  contact(s, oldX, oldY, wasGrounded, height, forward, dt);\n  if (s) return;", "a trigger fires on where the run really is", "triggers.test.mjs"],
-    ["engine.ts", "  if (!runTriggers(s, fx)) return;", "  runTriggers(s, fx);\n  if (s) return;", "an instant move clears the way in the very step it fires", "triggers.test.mjs"],
+    ["engine.ts", "  fx.picked.length = 0;\n  contact(s, oldX, oldY, wasGrounded, height, forward, dt);\n  if (runTriggers(s, fx)) {", "  fx.picked.length = 0;\n  runTriggers(s, fx);\n  contact(s, oldX, oldY, wasGrounded, height, forward, dt);\n  if (!s) {", "a trigger fires on where the run really is", "triggers.test.mjs"],
+    ["engine.ts", "  if (runTriggers(s, fx)) {", "  runTriggers(s, fx);\n  if (!s) {", "an instant move clears the way in the very step it fires", "triggers.test.mjs"],
     ["engine.ts", "gravity, mode, touchingPortals, dash });", "gravity, mode, dash });", "a second contact pass starts from the state before the step", "triggers.test.mjs"],
-    ["engine.ts", "  for (const i of fx.picked) fx.got[i] = 0;\n  fx.coins = coins;\n", "", "a portal or a coin moved away", "triggers.test.mjs"],
-    ["engine.ts", "  contact(s, oldX, oldY, wasGrounded, height, forward, dt);\n}\nfunction contact(", "  contact(s, oldX, oldY, wasGrounded, height, forward, dt);\n  runTriggers(s, fx);\n}\nfunction contact(", "a cascade waits a step", "triggers.test.mjs"],
+    ["engine.ts", "    for (const i of fx.picked) fx.got[i] = 0;\n    fx.coins = coins;\n", "", "a portal or a coin moved away", "triggers.test.mjs"],
+    ["engine.ts", "    contact(s, oldX, oldY, wasGrounded, height, forward, dt);\n  }\n  // a teleport trigger moves you last", "    contact(s, oldX, oldY, wasGrounded, height, forward, dt);\n    runTriggers(s, fx);\n  }\n  // a teleport trigger moves you last", "a cascade waits a step", "triggers.test.mjs"],
     ["transfer.ts", "...(group === undefined ? {} : { group }),", "group,", "old share codes captured on main", "parity.test.mjs"],
     ["library.ts", "s.coins !== undefined &&", "true &&", "old saves captured on main", "parity.test.mjs"],
     // #106, docs/ramps-and-boosters.md: each rule of the round fails its own test.
@@ -164,7 +168,7 @@ try {
     ["engine.ts", "else if (e.stop) s.vy = 0;", "else if (e.stop) s.vy += 0;", "a black ring sends you down", "boosters.test.mjs"],
     ["engine.ts", "    !halt &&\n", "", "a drop or stop ring is the step", "boosters.test.mjs"],
     ["engine.ts", "      s.dash = null;\n      halt = true;", "      halt = true;", "a drop or stop ring is the step", "boosters.test.mjs"],
-    ["engine.ts", 'if (s.mode === "angle" && o.type !== "ring") return false;', "", "in angle mode a black or gray ring is not ready", "boosters.test.mjs"],
+    ["engine.ts", 'if (s.mode === "angle" && (o.type === "drop-ring" || o.type === "stop-ring")) return false;', "", "in angle mode a black or gray ring is not ready", "boosters.test.mjs"],
     ["engine.ts", '"drop-ring": { drop: true }', '"drop-ring": {}', "a black ring sends you down", "boosters.test.mjs"],
     // a black or gray ring is its own piece: the plain ring's fields stay refused on it
     ["engine.ts", '(o.type !== "ring" ||\n        !Number.isFinite(o.bounce)', '(!RINGS.includes(o.type) ||\n        !Number.isFinite(o.bounce)', "every reader refuses a black or gray ring mixed", "boosters.test.mjs"],
@@ -179,9 +183,9 @@ try {
     ["engine.ts", '      if (s.mode === "plane") s.vy = Math.max(-4, Math.min(4, s.vy));\n', "", "in a plane the speed limit holds in the step a booster fires", "boosters.test.mjs"],
     ["engine.ts", '"pink-pad": { bounce: 1 },', '"pink-pad": { bounce: 2 },', "each booster does what its ring does", "boosters.test.mjs"],
     ["engine.ts", "pads.find(", "pads.findLast(", "one booster a step", "boosters.test.mjs"],
-    ["engine.ts", "  fx.pads = pads;\n  for (const i of fx.picked)", "  for (const i of fx.picked)", "a booster first touched in a step where an instant move goes elsewhere", "boosters.test.mjs"],
+    ["engine.ts", "    fx.pads = pads;\n    for (const i of fx.picked)", "    for (const i of fx.picked)", "a booster first touched in a step where an instant move goes elsewhere", "boosters.test.mjs"],
     ["engine.ts", "touchingPortals, dash });", "touchingPortals });", "a booster an instant move takes away in that step", "boosters.test.mjs"],
-    ["engine.ts", "!triggers.length && !boosters.length) return null;", "!triggers.length) return null;", "a level with no booster, coin or trigger", "boosters.test.mjs"],
+    ["engine.ts", "!triggers.length && !boosters.length && !teleports) return null;", "!triggers.length && !teleports) return null;", "a level with no booster, coin or trigger", "boosters.test.mjs"],
     // 5. size
     ["engine.ts", "export const SCALABLE = TYPES.filter((t) => !TRIGGERS.includes(t));", "export const SCALABLE = TYPES.filter((t) => TURNABLE.includes(t));", "the ceiling covers sized rings", "size.test.mjs"],
     ["engine.ts", "const [cx, cy] = pointOf(o, 0.5, 0.5);", "const [cx, cy] = [o.x + 0.5, o.y + 0.5];", "a sized ring is reached at its drawn centre", "size.test.mjs"],
@@ -265,6 +269,14 @@ try {
     ["spin.ts", "return { angle: s.from, side: s.side };", "return { angle: s.from, side: odd(s.rest) };", "carries the angle and the side", "spin.test.mjs"],
     ["render.ts", "(X(cx + (sx - cx) * turn.side) - x) / k,\n          ((Y(cy + (sy - cy) * turn.side) - y) / k) * flip,", "(X(cx) - x) / k,\n          ((Y(cy) - y) / k) * flip,", "swapped box", "spin.test.mjs"],
     ["render.ts", "      if (!reduced) {\n        let s = SPINS.get(state);", "      if (true) {\n        let s = SPINS.get(state);", "render turns the cube", "spin.test.mjs"],
+    // teleports: one destination rule for the trigger and the ring (#139)
+    ["engine.ts", "if (!b || o.x < b.x || (o.x === b.x && o.y < b.y)) best = i;", "if (!b || o.x < b.x) best = i;", "the destination", "teleport.test.mjs"],
+    ["engine.ts", "    else if (!fx.fired[t] && o.x > from && o.x < s.x) fx.skipped[t] = 1;", "", "arriving is not crossing", "teleport.test.mjs"],
+    ["engine.ts", "    if (o.touch) fx.inside[t] = intersects(playerPolygon(s), polygon(o)) ? 1 : 0;\n    else if", "    if (o.touch) continue;\n    else if", "landing inside a touch", "teleport.test.mjs"],
+    ["engine.ts", "      if (fx.hopped || fx.jump) {", "      if (false) {", "crossed in one step", "teleport.test.mjs"],
+    ["engine.ts", "  if (o.type === \"teleport-ring\" && !destination(s.level, o.target, s.fx?.groups)) return false;\n", "", "nowhere to go", "teleport.test.mjs"],
+    ["engine.ts", "    if (o.x < area.left || o.x > area.right || o.y < 0 || o.y > area.top) continue;\n", "", "outside the trail is no landing spot", "teleport.test.mjs"],
+    ["engine.ts", "o.x > area.right || o.y < 0 ||", "o.x > area.right || o.y < area.bottom ||", "outside the trail is no landing spot", "teleport.test.mjs"],
     // the three-sided outline (#139)
     ["render.ts", "                        ? [[bl, tl, tr, br]] // left, top and right, the bottom open (#139)", "                        ? [[tl, tr, br]] // left, top and right, the bottom open (#139)", "a variant strokes only", "edges.test.mjs"],
     ["engine.ts", "\"inner\", \"three\", \"none\"]", "\"inner\", \"none\"]", "six values", "edges.test.mjs"],

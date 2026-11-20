@@ -80,7 +80,7 @@ export const SOFT = ["plane", "pogo", "angle"];
 // on every piece whose group is its target. Triggers carry no group themselves, so nothing can
 // move a trigger and the order they fire in is always the authored one.
 export const MAX_COINS = 10;
-export const TRIGGERS = ["move-trigger", "color-trigger"];
+export const TRIGGERS = ["move-trigger", "color-trigger", "teleport-trigger", "follow-trigger"];
 export const MAX_GROUP = 99;
 export const MAX_TRIGGER_TIME = 30; // seconds, so every move and fade finishes inside a run
 // Boosters (#106): flat pads that fire on touch, no tap, each doing what one ring does (the
@@ -108,9 +108,9 @@ export const DROP_SPEED = 24;
 type Effect = Pick<Piece, "bounce" | "flipsGravity" | "boost"> & { drop?: true; stop?: true };
 // The black and gray rings (#106) are their own pieces, not fields on "ring", so an older copy of
 // the game refuses them as pieces it does not know instead of reading them as plain rings.
-export const RINGS = ["ring", "drop-ring", "stop-ring"];
+export const RINGS = ["ring", "drop-ring", "stop-ring", "teleport-ring"];
 const RING_EFFECTS: Record<string, Effect> = { "drop-ring": { drop: true }, "stop-ring": { stop: true } };
-export const TYPES = [...BLOCKS, ...ZONES, ...SPIKES, ...PORTALS, ...SLOPES, "ring", "coin", ...TRIGGERS, ...PADS, "drop-ring", "stop-ring"];
+export const TYPES = [...BLOCKS, ...ZONES, ...SPIKES, ...PORTALS, ...SLOPES, "ring", "coin", ...TRIGGERS, ...PADS, "drop-ring", "stop-ring", "teleport-ring"];
 // Ids that were renamed after they had been stored. validateLevel accepts the old id and returns
 // the new one, so an old save, share code or link still loads; nothing writes the old id again.
 export const LEGACY_TYPES: Partial<Record<string, ObjectType>> = {
@@ -145,9 +145,11 @@ export const ringSpeed = (o: Pick<Piece, "bounce">) =>
 export const levelHeight = (level: Level) => level.height ?? 7;
 // Authoring room only. The simulation still uses the actual length and height.
 export const BUILD_MARGIN = 32;
+// The trail a run plays on: where a normal level's pieces go, and the only place a teleport lands.
+export const playArea = (level: Level) => ({ left: 3, right: level.length - 2, bottom: -0.5, top: levelHeight(level) - 1 });
 export const buildBounds = (level: Level) => level.offMap
   ? { left: -BUILD_MARGIN, right: level.length + BUILD_MARGIN, bottom: -BUILD_MARGIN, top: levelHeight(level) + BUILD_MARGIN }
-  : { left: 3, right: level.length - 2, bottom: -0.5, top: levelHeight(level) - 1 };
+  : playArea(level);
 export const COIN_RADIUS = 0.3; // a coin is a disc in the middle of its cell
 export const coinCount = (level: Level) => {
   let n = 0;
@@ -280,15 +282,17 @@ export function effects(level: Level): { fx: RunEffects; level: Level } | null {
     triggers: number[] = [],
     groups = new Map<number, number[]>();
   let coinTotal = 0,
-    moves = false;
+    moves = false,
+    teleports = false;
   const boosters: number[] = [];
   for (let i = 0; i < n; i++) {
     const o = level.objects[i];
     if (o.type === "coin") coinTotal++;
     if (PADS.includes(o.type)) boosters.push(i);
+    if (o.type === "teleport-ring") teleports = true;
     if (TRIGGERS.includes(o.type)) {
       triggers.push(i);
-      if (o.type === "move-trigger") moves = true;
+      if (o.type === "move-trigger" || o.type === "follow-trigger") moves = true;
     }
     if (o.group !== undefined) {
       const members = groups.get(o.group);
@@ -296,7 +300,7 @@ export function effects(level: Level): { fx: RunEffects; level: Level } | null {
       else groups.set(o.group, [i]);
     }
   }
-  if (!coinTotal && !triggers.length && !boosters.length) return null;
+  if (!coinTotal && !triggers.length && !boosters.length && !teleports) return null;
   return {
     fx: {
       coinTotal,
@@ -314,6 +318,9 @@ export function effects(level: Level): { fx: RunEffects; level: Level } | null {
       tinted: new Uint8Array(n),
       boosters,
       pads: [],
+      skipped: new Uint8Array(n),
+      hopped: false,
+      jump: null,
     },
     level: moves ? { ...level, objects: level.objects.map((o) => ({ ...o })) } : level,
   };
@@ -346,10 +353,49 @@ function baseState(level: Level): GameState {
 }
 // A ring is reached when the player's box comes within its reach of the ring's centre. A sized ring
 // has its centre where its drawing has it (grown from its base) and a reach as many times as large.
-// The black and gray rings are not ready in angle mode (#106 rule 3b).
+// The black and gray rings are not ready in angle mode (#106 rule 3b). A teleport ring with nowhere
+// to go is not a ring at all (docs/teleport.md rule 4): never ready, never spent.
 export function ringReady(s: GameState, o: Piece, index: number) {
-  if (s.mode === "angle" && o.type !== "ring") return false;
+  if (s.mode === "angle" && (o.type === "drop-ring" || o.type === "stop-ring")) return false;
+  if (o.type === "teleport-ring" && !destination(s.level, o.target, s.fx?.groups)) return false;
   return !o.noTouch && !s.usedRings.includes(index) && inReach(s, o);
+}
+// Where a teleport aimed at a group sends you (docs/teleport.md rule 2), shared by the trigger, the
+// ring and the editor's preview: of the group's pieces where they stand now (moves included) and
+// inside the trail (playArea; off-map building room never counts), the one furthest left, then
+// lowest, then first placed; its x and y. Null when the group is unset or has no such piece.
+export function destination(level: Level, target: number | undefined, groups?: Map<number, number[]>): Point | null {
+  if (target === undefined) return null;
+  const objects = level.objects,
+    area = playArea(level),
+    members = groups ? (groups.get(target) ?? []) : objects.flatMap((o, i) => (o.group === target ? [i] : []));
+  let best = -1;
+  for (const i of members) {
+    const o = objects[i],
+      b = best < 0 ? null : objects[best];
+    // the anchor box lets a piece sit half a block into the floor; a landing never does
+    if (o.x < area.left || o.x > area.right || o.y < 0 || o.y > area.top) continue;
+    if (!b || o.x < b.x || (o.x === b.x && o.y < b.y)) best = i;
+  }
+  return best < 0 ? null : [objects[best].x, objects[best].y];
+}
+// The arrival (rules 3 and 5): you stand in the destination's cell, still moving forward, with no
+// rise or fall. Arriving is not crossing: a passing trigger the jump went over is skipped until you
+// are behind it again, and a touch trigger you land in counts as already touched.
+function arrive(s: GameState, fx: RunEffects, to: Point) {
+  const from = s.x;
+  s.x = to[0];
+  s.y = to[1];
+  s.vy = 0;
+  s.grounded = false;
+  s.dash = null;
+  if (s.doorLift) delete s.doorLift;
+  fx.hopped = true;
+  for (const t of fx.triggers) {
+    const o = s.level.objects[t];
+    if (o.touch) fx.inside[t] = intersects(playerPolygon(s), polygon(o)) ? 1 : 0;
+    else if (!fx.fired[t] && o.x > from && o.x < s.x) fx.skipped[t] = 1;
+  }
 }
 // Whether the player's box is within a ring's reach. A width and height ring's reach is an
 // ellipse in its own turned frame (#117): the whole box is taken into that frame and squeezed
@@ -422,6 +468,48 @@ function moveAll(s: GameState, fx: RunEffects) {
     }
   }
 }
+// Track deltas, not absolute positions: binding never piles a group onto its leader.
+function bindFollow(s: GameState, fx: RunEffects, o: Piece) {
+  const target = o.target!;
+  const anchor = o.leader === undefined ? -1 : fx.groups.get(o.leader)?.[0];
+  if (anchor === undefined) return;
+  const follows = fx.follows ??= new Map();
+  for (let id = o.leader; id !== undefined; id = follows.get(id)?.leader) {
+    if (id === target) return; // no feedback loops, including indirect ones
+  }
+  const p = anchor < 0 ? s : s.level.objects[anchor];
+  follows.set(target, { leader: o.leader, anchor, axis: o.axis, x: p.x, y: p.y });
+  // Put parents first once at bind time. The frame loop then visits each bound group once.
+  const ordered: NonNullable<RunEffects["follows"]> = new Map();
+  function visit(id: number) {
+    if (ordered.has(id)) return;
+    const binding = follows.get(id);
+    if (!binding) return;
+    if (binding.leader !== undefined) visit(binding.leader);
+    ordered.set(id, binding);
+  }
+  for (const id of follows.keys()) visit(id);
+  fx.follows = ordered;
+}
+function followAll(s: GameState, fx: RunEffects, playerX?: number, playerY?: number) {
+  for (const [id, bind] of fx.follows!) {
+    const p = s.level.objects[bind.anchor];
+    if (!p && playerX === undefined) continue; // second contact only updates object sources
+    const x = p?.x ?? playerX!, y = p?.y ?? playerY!;
+    const dx = bind.axis === "y" ? 0 : x - bind.x, dy = bind.axis === "x" ? 0 : y - bind.y;
+    bind.x = x;
+    bind.y = y;
+    if (!dx && !dy) continue;
+    for (const i of fx.groups.get(id)!) {
+      const piece = s.level.objects[i];
+      piece.x += dx;
+      piece.y += dy;
+      // A running move interpolates from this origin; carry it too, so the two motions add.
+      fx.move[i * 6] += dx;
+      fx.move[i * 6 + 1] += dy;
+    }
+  }
+}
 const SCRATCH = new Float64Array(4);
 // The colour laid over an object right now, as r, g, b (0 to 255) and how much of the piece it
 // covers (0 none, 1 all), or null when no colour trigger has reached it. A fade runs from what
@@ -455,10 +543,29 @@ export function runTriggers(s: GameState, fx: RunEffects) {
         entered = touching && !fx.inside[t];
       fx.inside[t] = touching ? 1 : 0;
       if (!entered || (fx.fired[t] && !o.multi)) continue;
+    } else if (fx.skipped[t]) {
+      // a teleport jumped over it (docs/teleport.md rule 5): it counts again once you are behind it
+      if (s.x < o.x) fx.skipped[t] = 0;
+      continue;
     } else if (fx.fired[t] || s.x < o.x) continue;
+    if (o.type === "teleport-trigger") {
+      // one teleport a step (rule 5): a second one waits, unfired, and a touch one is entered again
+      if (fx.hopped || fx.jump) {
+        if (o.touch) fx.inside[t] = 0;
+        continue;
+      }
+      fx.fired[t] = 1;
+      // the jump happens once this step's contact is final (settle); nowhere to go is nothing (rule 4)
+      fx.jump = destination(s.level, o.target, fx.groups);
+      continue;
+    }
     fx.fired[t] = 1;
     const members = o.target === undefined ? undefined : fx.groups.get(o.target);
     if (!members) continue;
+    if (o.type === "follow-trigger") {
+      bindFollow(s, fx, o);
+      continue;
+    }
     for (let j = 0; j < members.length; j++) {
       const i = members[j];
       if (o.type === "move-trigger") {
@@ -561,6 +668,7 @@ export function step(
     oldX = s.x,
     wasGrounded = s.grounded,
     height = levelHeight(s.level);
+  if (s.fx) s.fx.hopped = false;
   // A dash orb starts on a hold, not only a fresh tap, and lasts until the hold ends.
   if (!held) s.dash = null;
   // a MULTI TOUCH ring (#117) works again once the player has left the reach that fired it, so it
@@ -584,6 +692,9 @@ export function step(
       s.dash = dashClimb(o);
       if (o.flipsGravity) s.gravity *= -1;
       s.grounded = false;
+    } else if (o.type === "teleport-ring") {
+      // ready means it has a destination (ringReady); the step then runs on from the landing
+      arrive(s, s.fx!, destination(s.level, o.target, s.fx!.groups)!);
     } else launch(s, RING_EFFECTS[o.type] ?? o);
     if (o.type !== "ring") {
       s.dash = null;
@@ -652,6 +763,7 @@ function settle(
   dt: number,
 ) {
   if (fx.movers.length) moveAll(s, fx);
+  if (fx.follows) followAll(s, fx, oldX, oldY);
   // the boosters touched before the step and the dash a booster ends go back too, so a booster
   // fires in the second pass exactly when it really touches the moved pose (#106 rule 4f)
   const { x, y, vy, grounded, status, wall, speed, gravity, mode, touchingPortals, dash } = s,
@@ -660,14 +772,20 @@ function settle(
     pads = fx.pads;
   fx.picked.length = 0;
   contact(s, oldX, oldY, wasGrounded, height, forward, dt);
-  if (!runTriggers(s, fx)) return;
-  Object.assign(s, { x, y, vy, grounded, status, wall, speed, gravity, mode, touchingPortals, dash });
-  if (doorLift) s.doorLift = true; // the first contact pass may have cancelled the jump
-  fx.pads = pads;
-  for (const i of fx.picked) fx.got[i] = 0;
-  fx.coins = coins;
-  fx.picked.length = 0;
-  contact(s, oldX, oldY, wasGrounded, height, forward, dt);
+  if (runTriggers(s, fx)) {
+    if (fx.follows) followAll(s, fx);
+    Object.assign(s, { x, y, vy, grounded, status, wall, speed, gravity, mode, touchingPortals, dash });
+    if (doorLift) s.doorLift = true; // the first contact pass may have cancelled the jump
+    fx.pads = pads;
+    for (const i of fx.picked) fx.got[i] = 0;
+    fx.coins = coins;
+    fx.picked.length = 0;
+    contact(s, oldX, oldY, wasGrounded, height, forward, dt);
+  }
+  // a teleport trigger moves you last, from where the step really ended, if you are still running
+  const to = fx.jump;
+  fx.jump = null;
+  if (to && s.status === "playing") arrive(s, fx, to);
 }
 function contact(
   s: GameState,
@@ -1000,8 +1118,10 @@ export function validateLevel(input: unknown): Level {
     const groupId = (v: unknown) => Number.isInteger(v) && (v as number) >= 1 && (v as number) <= MAX_GROUP;
     if (o.group !== undefined && (trigger || !groupId(o.group)))
       throw Error("Invalid group");
-    if (o.target !== undefined && (!trigger || !groupId(o.target)))
+    if (o.target !== undefined && ((!trigger && o.type !== "teleport-ring") || !groupId(o.target)))
       throw Error("Invalid trigger group");
+    if (o.leader !== undefined && (o.type !== "follow-trigger" || !groupId(o.leader))) throw Error("Invalid follow source");
+    if (o.axis !== undefined && (o.type !== "follow-trigger" || (o.axis !== "x" && o.axis !== "y"))) throw Error("Invalid follow axis");
     // whole blocks, and never further than the level is long or tall
     for (const [key, limit] of [["moveX", raw.length], ["moveY", height]] as const) {
       const v = o[key];
@@ -1014,6 +1134,7 @@ export function validateLevel(input: unknown): Level {
     if (
       o.duration !== undefined &&
       (!trigger ||
+        o.type === "teleport-trigger" || o.type === "follow-trigger" ||
         !Number.isFinite(o.duration) ||
         o.duration < 0 ||
         o.duration > MAX_TRIGGER_TIME)

@@ -91,7 +91,7 @@ test('the TRIGGERS tab places a move and a colour trigger, and EDIT OBJECT sets 
   await page.goto('/'); await page.locator('#editor-open').click();
   const cell = await grid(page);
   await page.getByRole('tab', { name: 'TRIGGERS', exact: true }).click();
-  await expect(page.locator('#palette button')).toHaveText(['⇄ MOVE', '◐ COLOR']);
+  await expect(page.locator('#palette button')).toHaveText(['⇄ MOVE', '↝ ADV FOLLOW', '◐ COLOR', '⇥ TELEPORT']);
   await page.getByRole('button', { name: '⇄ MOVE', exact: true }).click();
   await cell(5, 0);
   await page.getByRole('button', { name: '◐ COLOR', exact: true }).click();

@@ -185,7 +185,30 @@
   // the phone layout (#140): TOOLS and HELP open over the grid; a longer loop shows 8 steps a page
   let panel = $state<"tools" | "help" | null>(null),
     page = $state(0);
-  const shown = $derived(Array.from({ length: 8 }, (_, i) => page * 8 + i).filter((s) => s < loop.notes.length));
+  let roomWidth = $state(0), roomHeight = $state(0);
+  const bars = $derived(loop.notes.length / 8);
+  const layout = $derived.by(() => {
+    let best = { across: 1, down: 1, count: 1, target: 0 };
+    // A bar keeps eight 30px-wide pads. Only wrap when another row of 13 pads
+    // fits above the dock. On a narrow phone keep one bar, even if it's tall.
+    for (let across = 2; across <= bars; across++) {
+      const padWidth = ((roomWidth - (across - 1) * 6) / across - 7) / 8;
+      for (let down = 1; down <= 2; down++) {
+        if (down > 1 && across >= bars) continue;
+        const count = Math.min(bars, across * down);
+        const gridHeight = roomHeight - (count < bars ? 50 : 0);
+        const padHeight = ((gridHeight - (down - 1) * 6) / down - 62) / 13;
+        const target = Math.min(44, padWidth, padHeight);
+        if (padWidth < 30 || padHeight < 24) continue;
+        if (count > best.count || (count === best.count && (target > best.target || (target === best.target && down < best.down))))
+          best = { across, down, count, target };
+      }
+    }
+    return best;
+  });
+  const firstBar = $derived(Math.floor(page / layout.count) * layout.count);
+  const shownBars = $derived(Array.from({ length: Math.min(layout.count, bars - firstBar) }, (_, i) => i + firstBar));
+  const steps = (bar: number) => Array.from({ length: 8 }, (_, i) => bar * 8 + i);
   $effect(() => {
     if (page * 8 >= loop.notes.length) page = 0;
   });
@@ -354,17 +377,18 @@
       >
       <button id="loop-swipe" aria-pressed={swipe} onclick={() => (swipe = !swipe)}>{swipe ? "SWIPE ON" : "SWIPE OFF"}</button>
       <button id="loop-help" aria-expanded={panel === "help"} onclick={() => (panel = panel === "help" ? null : "help")}>HELP</button>
-      {#if loop.notes.length > 8}
+    </div>
+    <div class="loop-workspace" bind:clientWidth={roomWidth} bind:clientHeight={roomHeight}>
+      {#if bars > layout.count}
         <div class="pages" role="group" aria-label="Steps shown">
-          {#each { length: loop.notes.length / 8 } as _, p}<button
-              id={`loop-page-${p + 1}`}
-              aria-label={`Steps ${p * 8 + 1} to ${p * 8 + 8}`}
-              aria-pressed={page === p}
-              onclick={() => (page = p)}>{p * 8 + 1}</button
+          {#each { length: Math.ceil(bars / layout.count) } as _, p}<button
+              id={`loop-page-${p * layout.count + 1}`}
+              aria-label={`Steps ${p * layout.count * 8 + 1} to ${Math.min(bars, (p + 1) * layout.count) * 8}`}
+              aria-pressed={firstBar === p * layout.count}
+              onclick={() => (page = p * layout.count)}>{p * layout.count * 8 + 1}</button
             >{/each}
         </div>
       {/if}
-    </div>
     <div class="loop-stage">
       {#if panel === "tools"}
         <div class="loop-panel" id="loop-tools-panel" role="group" aria-label="Loop tools">
@@ -426,7 +450,7 @@
           <p>The top ten rows are notes, high at the top, low at the bottom.</p>
           <p>The last three rows are drums: hi-hat, then snare, then kick.</p>
           <p>Tap a square to turn it on or off. With SWIPE on, drag to fill or clear many.</p>
-          <p>A longer loop shows its steps eight at a time. Tap the step numbers above to move.</p>
+          <p>Each bar has eight steps. Read bars from left to right, then down. When more bars fit on another page, use the step numbers above.</p>
           <button class="primary" onclick={() => (panel = null)}>GOT IT</button>
         </div>
       {/if}
@@ -435,12 +459,18 @@
           id="loop-grid"
           role="group"
           aria-label="Loop steps"
+          style:--across={layout.across}
+          style:--down={layout.down}
+          class:expanded={layout.count > 1}
           onpointerdown={strokeDown}
           onpointermove={strokeMove}
           onpointerup={strokeEnd}
           onpointercancel={strokeEnd}
           onlostpointercapture={strokeEnd}
         >
+          {#each shownBars as bar (bar)}
+            {@const shown = steps(bar)}
+            <div class="loop-bar" role="group" aria-label={`Bar ${bar + 1}`}>
           {#each shown as s}<b class="step" class:now={now === s}>{s + 1}</b>{/each}
           {#each [...DEGREES].reverse() as degree, r}
             {#each shown as s}<button
@@ -469,8 +499,11 @@
                 onclick={(e) => press(e, kind, s)}
               ></button>{/each}
           {/each}
+            </div>
+          {/each}
         </div>
       </div>
+    </div>
     </div>
   {/if}
   <p id="loop-message" class:failed role="status" hidden={!message}>{message}</p>
@@ -629,11 +662,17 @@
     padding-inline: 6px;
     font-size: 13px;
   }
-  /* a longer loop's pages get their own row, so the toolbar never squeezes */
+  .loop-workspace {
+    flex: 1 1 0;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
   .pages {
     display: flex;
     gap: 6px;
-    flex-basis: 100%;
+    flex: none;
   }
   .pages button {
     flex: 1 1 0;
@@ -677,12 +716,26 @@
   #loop-grid {
     flex: 1 1 auto;
     display: grid;
+    grid-template-columns: repeat(var(--across), minmax(0, 1fr));
+    grid-template-rows: repeat(var(--down), minmax(348px, 1fr));
+    gap: 6px;
+    --bar-width: 373px;
+    max-width: calc(var(--across) * var(--bar-width) + (var(--across) - 1) * 6px);
+    max-height: calc(var(--down) * 634px + (var(--down) - 1) * 6px);
+  }
+  #loop-grid.expanded {
+    --bar-width: 359px;
+  }
+  .expanded .loop-bar {
+    column-gap: 1px;
+  }
+  .loop-bar {
+    display: grid;
     grid-template-columns: repeat(8, minmax(0, 1fr));
     /* rows never below 22px: a phone held upright fits them all; a short sideways screen scrolls */
     grid-template-rows: 16px repeat(10, minmax(22px, 1fr)) 4px repeat(3, minmax(22px, 1fr));
     gap: 3px;
-    max-width: calc(8 * 44px + 7 * 3px);
-    max-height: calc(16px + 4px + 13 * 44px + 14 * 3px);
+
   }
   /* SWIPE on: a finger on the cells paints instead of scrolling the page */
   .loop-grid-box.swiping .cell {

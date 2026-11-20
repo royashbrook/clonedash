@@ -44,7 +44,7 @@ export function portableLevel(input: unknown): Level {
     ...(level.note === undefined ? {} : { note: level.note }),
     ...(level.color === undefined ? {} : { color: level.color }),
     objects: level.objects.map(
-      ({ type, x, y, rotation, flipX, flipY, layer, scale, scaleX, scaleY, color, bounce, flipsGravity, boost, dash, noTouch, hidden, wallPass, roofPass, edges, group, target, moveX, moveY, duration, touch, multi }) => ({
+      ({ type, x, y, rotation, flipX, flipY, layer, scale, scaleX, scaleY, color, bounce, flipsGravity, boost, dash, noTouch, hidden, wallPass, roofPass, edges, group, target, leader, axis, moveX, moveY, duration, touch, multi }) => ({
         type,
         x,
         y,
@@ -67,6 +67,8 @@ export function portableLevel(input: unknown): Level {
         // decodes exactly as it did, and the envelope did not change
         ...(group === undefined ? {} : { group }),
         ...(target === undefined ? {} : { target }),
+        ...(leader === undefined ? {} : { leader }),
+        ...(axis === undefined ? {} : { axis }),
         ...(moveX === undefined ? {} : { moveX }),
         ...(moveY === undefined ? {} : { moveY }),
         ...(duration === undefined ? {} : { duration }),

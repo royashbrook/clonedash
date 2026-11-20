@@ -139,6 +139,7 @@
       ["gravity-dash-ring", "➤ YELLOW · DASH + GRAVITY"],
       ["black-ring", "◉ BLACK · DROP"],
       ["gray-ring", "◉ GRAY · STOP"],
+      ["teleport-ring", "⇥ VIOLET · TELEPORT"],
       ["w-block", "W · WALL PASS"],
       ["r-block", "R · ROOF PASS"],
     ],
@@ -167,7 +168,9 @@
     // invisible in play; each fires once when you pass it and works on one group id
     triggers: [
       ["move-trigger", "⇄ MOVE"],
+      ["follow-trigger", "↝ ADV FOLLOW"],
       ["color-trigger", "◐ COLOR"],
+      ["teleport-trigger", "⇥ TELEPORT"],
     ],
   } satisfies Record<string, [string, string][]>;
   // Palette presets stamp fields onto a ring; the stored type stays "ring". The original yellow
@@ -180,6 +183,9 @@
     // a new trigger works on group 1 straight away; EDIT OBJECT changes any of it
     "move-trigger": { type: "move-trigger", target: 1, moveY: 2, duration: 1 },
     "color-trigger": { type: "color-trigger", target: 1, color: "#ff5c7a", duration: 1 },
+    "teleport-trigger": { type: "teleport-trigger", target: 1 },
+    "follow-trigger": { type: "follow-trigger", target: 1 },
+    "teleport-ring": { type: "teleport-ring", target: 1, color: "#b388ff" },
     "purple-ring": { type: "ring", color: "#c77dff", bounce: 1 },
     "red-ring": { type: "ring", color: "#ff5c7a", bounce: 5 },
     "white-ring": { type: "ring", color: "#ffffff" },
@@ -222,13 +228,19 @@
   const article = (name: string) => (/^[aeiou]/.test(name) ? "an " : "a ") + name;
   // what a selected trigger will do, for the editor's status line
   const triggerText = (o: Piece) =>
-    !TRIGGERS.includes(o.type)
+    o.type === "teleport-ring"
+      ? ` · TO GROUP ${o.target ?? "NONE"}`
+      : !TRIGGERS.includes(o.type)
       ? ""
       : ` · GROUP ${o.target ?? "NONE"}` +
-        (o.type === "move-trigger"
-          ? ` · MOVE ${o.moveX ?? 0}, ${o.moveY ?? 0}`
-          : ` · ${RING_COLORS.find(([hex]) => hex === (o.color ?? RING_COLORS[0][0]))?.[1] ?? o.color}`) +
-        ` · ${o.duration ? `${o.duration}S` : "INSTANT"}` +
+        (o.type === "follow-trigger"
+          ? ` · FOLLOWS ${o.leader ? "GROUP " + o.leader : "PLAYER"} · ${o.axis ? o.axis.toUpperCase() + " ONLY" : "BOTH AXES"}`
+          : o.type === "teleport-trigger"
+          ? " · TELEPORT"
+          : (o.type === "move-trigger"
+              ? ` · MOVE ${o.moveX ?? 0}, ${o.moveY ?? 0}`
+              : ` · ${RING_COLORS.find(([hex]) => hex === (o.color ?? RING_COLORS[0][0]))?.[1] ?? o.color}`) +
+            ` · ${o.duration ? `${o.duration}S` : "INSTANT"}`) +
         (o.touch ? (o.multi ? " · TOUCH · MULTI" : " · TOUCH") : "");
   const typeOf = (t: string): ObjectType =>
     presets[t]?.type ?? (t as ObjectType);
@@ -1613,25 +1625,28 @@
   // The trigger fields (EDIT OBJECT on a trigger). Zero moves and an instant time are stored as
   // "no field", like the other defaults.
   function setTrigger(
-    key: "target" | "moveX" | "moveY" | "duration" | "color",
+    key: "target" | "leader" | "axis" | "moveX" | "moveY" | "duration" | "color",
     input: HTMLInputElement | HTMLSelectElement,
+    value = input.value.trim(),
   ) {
-    const value = input.value.trim(),
-      n = key === "duration" ? Math.round(Number(value || 0) * 100) / 100 : Number(value || 0);
+    const n = key === "duration" ? Math.round(Number(value || 0) * 100) / 100 : Number(value || 0);
     const kind =
-      key === "moveX" || key === "moveY" ? "move-trigger" : key === "color" ? "color-trigger" : "";
+      key === "moveX" || key === "moveY" ? "move-trigger" : key === "color" ? "color-trigger" : key === "leader" || key === "axis" ? "follow-trigger" : "";
     const next = changed((piece) => {
-      if (key === "color") piece.color = value;
+      if (key === "axis") {
+        if (value === "x" || value === "y") piece.axis = value;
+        else delete piece.axis;
+      } else if (key === "color") piece.color = value;
       else if (n) piece[key] = n;
       else delete piece[key];
-    }, (o) => (kind ? o.type === kind : TRIGGERS.includes(o.type)));
+    }, (o) => (kind ? o.type === kind : TRIGGERS.includes(o.type) || (key === "target" && o.type === "teleport-ring")));
     try {
-      if (key !== "color" && !Number.isFinite(n)) throw Error("not a number");
+      if (key !== "color" && key !== "axis" && !Number.isFinite(n)) throw Error("not a number");
       validateLevel(next);
     } catch {
       input.value = String(selection?.[key] ?? "");
       toast(
-        key === "target"
+        key === "target" || key === "leader"
           ? `Pick a group id from 1 to ${MAX_GROUP}.`
           : key === "duration"
             ? `Time is 0 (instant) to ${MAX_TRIGGER_TIME} seconds.`
@@ -1761,7 +1776,7 @@
     void sheet(
       "One button. Find your flow.",
       "Door: tap for the square's hop. Hold from takeoff to clear up to four blocks. Release to shorten the jump. " +
-      "Square: tap or press Space to jump onto two-block ledges. Hold for another jump when you land. Pogo: same as square, but every fresh tap lets you jump again in midair. Jump before a wall to clear it. Try Air Steps! Plane: hold to fly against gravity; release to fall. Landings and ceiling contact are safe while flying, but wall impacts kill. Angle: hold to climb at 45 degrees, release to dive at 45 degrees. The floor and the ceiling are safe to slide along; touching any block, ramp or curve is a crash, unless a W stops you at its side or an R bumps your head. Wheel: land on a block, floor or ceiling, then tap or press Space to flip gravity. Midair taps are ignored; holding does not flip again when you land. Croissant: land, then tap to teleport straight across to the floor, ceiling or block on the other side, with gravity flipped. UP and DOWN portals set gravity without changing your shape. Speed portals change how fast you move forward: SLOW, 1X, FAST and FASTER. Shape and gravity stay the same. Under upside-down gravity, land and jump on ceilings. All spikes kill, including the tiny quarter-size ones. Outline blocks are transparent but solid. Hitting a wall kills in ALL modes, including the vertical face of a ramp. Your smaller hazard hitbox still forgives edge grazes. Background blocks never collide. Rings: tap or press Space while reaching a glowing ring for a midair jump, once per ring per run. Purple and red rings bounce one and five blocks; a white ring takes any colour and height. A dark blue gravity ring flips your gravity and you drop the new way at once; a green one flips it and bounces you away from the new gravity. UP and DOWN portals drop you the new way at once too. Hold on a pink dash orb and you dash the way it points, with no gravity, until you let go: turn it with the angle slider to aim it. A yellow dash orb flips your gravity as well. A black ring sends you down fast, as if you had been falling for a while; a gray ring stops your rise or fall. Boosters are flat pads with no tap: touch one and it does what its ring does, once each time you land on it. Turn one upside down for a ceiling. The Width and Height sliders size any piece but a trigger: it stretches out both ways from its middle, and turning it keeps it in place. A pinch sizes both at once and keeps its shape.EDIT OBJECT switches a piece to NO TOUCH (seen, never touched), HIDDEN (touched, never seen in play; faint in the editor), WALL PASS (its sides stop you, like a W) or ROOF PASS (you bump your head, like an R). Wall pass (W) and roof pass (R) are invisible in play: lay them over blocks, or right where you hit them. While you touch a W, a wall stops you instead of crashing you, and a jump over it carries on; while you touch an R, you bump your head and fall back instead of crashing. Spikes still kill. Ramps: walk up or down the white diagonal slope. Curves are rounded ramps: a scoop bends up like a skate ramp, a hill bulges out: run into its side and you ride up it. Find RINGS and RAMP tabs in the editor. In the editor, pinch a selected piece with two fingers to size it and turn it, like cropping a photo; Snap holds 15 degrees and quarter sizes. MULTI selects a group: tap pieces to add them, or swipe a box over a lot of them, then move, turn, flip, copy or delete them together. Edge, parallel, outer corner, inner corner, three sides and no outline blocks are solid blocks with the white line on only some sides (or none, for the middle of a shape), so a big shape reads as one piece: turn them to face the outside, and pick EDGES on any selected block. Coins: touch one to pick it up; a level holds up to 10, and your best is the most you picked up in one finished run. Triggers are invisible in play and fire once when you run past them. Tick TOUCH to fire one when you touch it instead, and MULTI to fire it every time you touch it again. MULTI TOUCH in EDIT OBJECT lets a ring work again every time you come back to it. Give pieces a GROUP ID in EDIT OBJECT, then a MOVE trigger slides every piece in that group some blocks over a time you choose, and a COLOR trigger paints them a colour. Find them on the COINS and TRIGGERS tabs.",
+      "Square: tap or press Space to jump onto two-block ledges. Hold for another jump when you land. Pogo: same as square, but every fresh tap lets you jump again in midair. Jump before a wall to clear it. Try Air Steps! Plane: hold to fly against gravity; release to fall. Landings and ceiling contact are safe while flying, but wall impacts kill. Angle: hold to climb at 45 degrees, release to dive at 45 degrees. The floor and the ceiling are safe to slide along; touching any block, ramp or curve is a crash, unless a W stops you at its side or an R bumps your head. Wheel: land on a block, floor or ceiling, then tap or press Space to flip gravity. Midair taps are ignored; holding does not flip again when you land. Croissant: land, then tap to teleport straight across to the floor, ceiling or block on the other side, with gravity flipped. UP and DOWN portals set gravity without changing your shape. Speed portals change how fast you move forward: SLOW, 1X, FAST and FASTER. Shape and gravity stay the same. Under upside-down gravity, land and jump on ceilings. All spikes kill, including the tiny quarter-size ones. Outline blocks are transparent but solid. Hitting a wall kills in ALL modes, including the vertical face of a ramp. Your smaller hazard hitbox still forgives edge grazes. Background blocks never collide. Rings: tap or press Space while reaching a glowing ring for a midair jump, once per ring per run. Purple and red rings bounce one and five blocks; a white ring takes any colour and height. A dark blue gravity ring flips your gravity and you drop the new way at once; a green one flips it and bounces you away from the new gravity. UP and DOWN portals drop you the new way at once too. Hold on a pink dash orb and you dash the way it points, with no gravity, until you let go: turn it with the angle slider to aim it. A yellow dash orb flips your gravity as well. A black ring sends you down fast, as if you had been falling for a while; a gray ring stops your rise or fall. Boosters are flat pads with no tap: touch one and it does what its ring does, once each time you land on it. Turn one upside down for a ceiling. The Width and Height sliders size any piece but a trigger: it stretches out both ways from its middle, and turning it keeps it in place. A pinch sizes both at once and keeps its shape.EDIT OBJECT switches a piece to NO TOUCH (seen, never touched), HIDDEN (touched, never seen in play; faint in the editor), WALL PASS (its sides stop you, like a W) or ROOF PASS (you bump your head, like an R). Wall pass (W) and roof pass (R) are invisible in play: lay them over blocks, or right where you hit them. While you touch a W, a wall stops you instead of crashing you, and a jump over it carries on; while you touch an R, you bump your head and fall back instead of crashing. Spikes still kill. Ramps: walk up or down the white diagonal slope. Curves are rounded ramps: a scoop bends up like a skate ramp, a hill bulges out: run into its side and you ride up it. Find RINGS and RAMP tabs in the editor. In the editor, pinch a selected piece with two fingers to size it and turn it, like cropping a photo; Snap holds 15 degrees and quarter sizes. MULTI selects a group: tap pieces to add them, or swipe a box over a lot of them, then move, turn, flip, copy or delete them together. Edge, parallel, outer corner, inner corner, three sides and no outline blocks are solid blocks with the white line on only some sides (or none, for the middle of a shape), so a big shape reads as one piece: turn them to face the outside, and pick EDGES on any selected block. Coins: touch one to pick it up; a level holds up to 10, and your best is the most you picked up in one finished run. Triggers are invisible in play and fire once when you run past them. Tick TOUCH to fire one when you touch it instead, and MULTI to fire it every time you touch it again. MULTI TOUCH in EDIT OBJECT lets a ring work again every time you come back to it. Give pieces a GROUP ID in EDIT OBJECT, then a MOVE trigger slides every piece in that group some blocks over a time you choose, and a COLOR trigger paints them a colour. A TELEPORT trigger sends you to its group when you pass it, and a violet TELEPORT RING when you tap in reach: you land on the group's piece furthest left (the lowest, if two line up), so give the landing spot a group id, a NO TOUCH piece works well. A selected teleport shows its landing spot in the editor, or NO DESTINATION; one with nowhere to go does nothing. Find them on the COINS and TRIGGERS tabs.",
     );
   }
   // Every check says what it found, so a tap never looks like nothing happened. A pull is
@@ -2467,8 +2482,20 @@
     {#if panel}<h2 id="sheet-title">{panel.title}</h2>
       {#if panel.text}<p>{panel.text}</p>{/if}
       {#if panel.extra === "object" && selection}<div class="object-settings">
+          {#if selection.type === "teleport-ring"}<label
+              >Group id it sends you to<input
+                id="ring-target"
+                type="number"
+                inputmode="numeric"
+                min="1"
+                max={MAX_GROUP}
+                step="1"
+                value={selection.target ?? ""}
+                onchange={(e) => setTrigger("target", e.currentTarget)}
+              /></label
+            >{/if}
           {#if TRIGGERS.includes(selection.type)}<label
-              >Group id it works on<input
+              >{selection.type === "follow-trigger" ? "Group that follows" : "Group id it works on"}<input
                 id="trigger-target"
                 type="number"
                 inputmode="numeric"
@@ -2496,7 +2523,16 @@
                   value={selection.moveY ?? 0}
                   onchange={(e) => setTrigger("moveY", e.currentTarget)}
                 /></label
-              >{:else}<label
+              >{:else if selection.type === "follow-trigger"}<label
+                >Follow<select id="follow-source" value={selection.leader === undefined ? "player" : "group"}
+                  onchange={(e) => setTrigger("leader", e.currentTarget, e.currentTarget.value === "player" ? "" : selection?.target === 1 ? "2" : "1")}>
+                  <option value="player">Player</option><option value="group">Group</option>
+                </select></label>
+                {#if selection.leader !== undefined}<label>Group to follow<input id="follow-leader" type="number" inputmode="numeric" min="1" max={MAX_GROUP} step="1" value={selection.leader} onchange={(e) => setTrigger("leader", e.currentTarget)}/></label>{/if}
+                <label>Follow on<select id="follow-axis" value={selection.axis ?? ""} onchange={(e) => setTrigger("axis", e.currentTarget)}>
+                  <option value="">Both axes</option><option value="x">X only</option><option value="y">Y only</option>
+                </select></label>
+              {:else if selection.type === "color-trigger"}<label
                 >Colour<select
                   id="trigger-color"
                   value={selection.color ?? RING_COLORS[0][0]}
@@ -2504,7 +2540,7 @@
                   >{#each RING_COLORS as [hex, name]}<option value={hex}>{name}</option
                     >{/each}</select
                 ></label
-              >{/if}<label
+              >{/if}{#if selection.type === "move-trigger" || selection.type === "color-trigger"}<label
               >Time (seconds, 0 is instant)<input
                 id="trigger-time"
                 type="number"
@@ -2515,7 +2551,7 @@
                 value={selection.duration ?? 0}
                 onchange={(e) => setTrigger("duration", e.currentTarget)}
               /></label
-            ><label class="check"
+            >{/if}<label class="check"
               ><input
                 id="trigger-touch"
                 type="checkbox"
