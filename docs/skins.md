@@ -22,7 +22,9 @@ a skin is pure data, the same shape in storage and in a share code:
 ```
 
 - `name`: a string of at most 40 characters (empty shows as "Untitled skin").
-- `width`, `height`: whole numbers 4 to 32, each on its own (a 16x8 skin is fine).
+- `width`, `height`: whole numbers 4 to 100, each on its own (a 100x4 skin is fine). Type
+  the size, or step by one. Beyond 32 on either side, tap the whole picture to open up to
+  12 by 12 pixels for drawing; WHOLE SKIN picks a different spot. The first tap only zooms.
 - `palette`: at most 16 distinct colours, each `#rrggbb` in lowercase hex. empty is not a colour.
 - `pixels`: exactly `width * height` characters, rows top to bottom, left to right. each is a
   palette index from `0123456789abcdefg`: `0` is empty (see-through), `1` is `palette[0]`,
@@ -101,10 +103,13 @@ IMPORT, from Skins or from My Levels, takes any of them.
   their contracts.
 - **file**: `cube-dash-skin.clonedash.txt`, holding the code.
 - **import** reads the text once, looks at the prefix (or the link's one parameter) and hands it
-  to the skin decoder or the level decoder; there is no whole-save importer. the skin decoder
-  bounds input at 192 KiB like levels and the decoded JSON at 8 KiB, counts bytes while inflating
+  to the skin decoder or the level decoder. The separate whole-save importer uses the same skin
+  validator. The skin decoder bounds input at 192 KiB like levels and the decoded JSON at
+  11 KiB (10,000 pixels plus metadata), counts bytes while inflating
   and cancels at that bound, has the same five-second deadline, and refuses a compressed code on
   a browser without decompression. a raw (`0`) code always works.
+- Small skins keep their original bytes. A copy limited to 32 per side refuses bigger skins
+  instead of cropping them. Whole saves still use their separate 5 MiB bound.
 - **preview first.** an import shows the skin, its size and name, then ADD TO MY SKINS adds a new
   skin with a new id. it never replaces a skin with the same name and never starts wearing it, and
   a link only opens the preview. the export carries the five skin fields only: no local id,
