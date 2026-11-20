@@ -85,6 +85,7 @@ export interface RenderOptions {
   skin?: SkinArt | null; // a chosen skin, drawn in square mode only (docs/skins.md)
   view?: { width: number; height: number }; // a smaller canvas than the window (the skin preview)
   zoom?: number; // scales the block size; 1 everywhere but a phone held upright (the player picks it)
+  showCeiling?: boolean;
 }
 export function render(
   canvas: HTMLCanvasElement,
@@ -106,6 +107,7 @@ export function render(
     skin = null,
     view,
     zoom = 1,
+    showCeiling = false,
   }: RenderOptions,
 ) {
   const w = view?.width ?? innerWidth,
@@ -216,11 +218,16 @@ export function render(
   }
   ctx.fillStyle = color;
   ctx.fillRect(0, ground, w, 2);
-  if (hasGravity) {
+  const ceiling = Y(height);
+  if (showCeiling && ceiling > 0) {
+    ctx.fillStyle = "#07101b66";
+    ctx.fillRect(0, 0, w, Math.min(h, ceiling));
+  }
+  if ((hasGravity || showCeiling) && ceiling > 0 && ceiling - 12 < h) {
     ctx.fillStyle = "#0a111c";
-    ctx.fillRect(0, Y(height) - 12, w, 12);
-    ctx.fillStyle = color;
-    ctx.fillRect(0, Y(height) - 2, w, 2);
+    ctx.fillRect(0, ceiling - 12, w, 12);
+    ctx.fillStyle = hasGravity ? color : "#afc2d4";
+    ctx.fillRect(0, ceiling - 2, w, 2);
   }
   for (const background of [true, false])
     level.objects.forEach((o, index) => {

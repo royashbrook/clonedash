@@ -755,17 +755,33 @@
     }
   }
   function resume() {
+    if (save.sound) music.unlock(true);
     closeSheet();
     paused = false;
     run.interrupt();
     last = performance.now();
     orientation();
   }
+  function hudMenu() {
+    if (custom) library();
+    else pause();
+  }
+  // A gameplay finger can still be down. That second tap need not produce a click.
+  function hudTouch(e: TouchEvent, action: () => void) {
+    e.preventDefault();
+    const button = e.currentTarget as HTMLButtonElement;
+    for (const touch of e.changedTouches) {
+      if (button.contains(document.elementFromPoint(touch.clientX, touch.clientY))) {
+        action();
+        return;
+      }
+    }
+  }
   function pause() {
     if (mode !== "play" || run.state.status === "complete") return;
     run.interrupt();
     paused = true;
-    music.stop();
+    music.interrupt();
     void sheet(
       "Paused",
       "Your run is right where you left it.",
@@ -975,6 +991,7 @@
       skin: wornArt,
       camera: live() ? run.camera + framing.lead : mode === "editor" ? pan : 0,
       zoom: framing.zoom,
+      showCeiling: live(),
       cameraY: live() ? run.cameraY : mode === "editor" ? panY : 0,
       editing: mode === "editor",
       layer,
@@ -2136,7 +2153,8 @@
     id="menu"
     class:back-to-levels={custom}
     aria-label={custom ? "Return to My Levels" : "Pause and open menu"}
-    onclick={() => (custom ? library() : pause())}
+    ontouchend={(e) => hudTouch(e, hudMenu)}
+    onclick={hudMenu}
     >{custom ? "← MY LEVELS" : "☰"}</button
   >
   <div class="run-label">
@@ -2152,6 +2170,7 @@
   ><span id="attempt">TRY {hud.attempt}</span><button
     id="pause"
     aria-label="Pause"
+    ontouchend={(e) => hudTouch(e, pause)}
     onclick={pause}>Ⅱ</button
   >
 </section>
@@ -2502,6 +2521,11 @@
             class:primary
             onclick={handler}>{label}</button
           >{/each}
+        {#if panel.title === "Paused"}
+          <button aria-label={save.sound ? "Turn sound off" : "Turn sound on"}
+            aria-pressed={save.sound} onclick={toggleSound}
+          >{save.sound ? "SOUND ON" : "SOUND OFF"}</button>
+        {/if}
       </div>
       {#if panel.extra === "transfer"}{#key transfer}<LevelTransfer
             {...transfer}
