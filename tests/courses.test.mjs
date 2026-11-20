@@ -224,8 +224,8 @@ test("copy re-reads the latest library and selects the new entry in one verified
 
 test("long editor levels remain bounded and unknown soundtrack IDs are refused", () => {
   const base = { ...COURSES[0], length: MAX_LENGTH };
-  assert.equal(validateLevel(base).length, 600);
-  assert.throws(() => validateLevel({ ...base, length: 601 }));
+  assert.equal(validateLevel(base).length, 1000);
+  assert.throws(() => validateLevel({ ...base, length: 1001 }));
   assert.throws(() => validateLevel({ ...base, song: 123 })); // first id past the recordings
   assert.equal(validateLevel({ ...base, song: 108 }).song, 108);
 });

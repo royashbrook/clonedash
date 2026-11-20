@@ -9,6 +9,7 @@
     duplicateObject,
     levelHeight,
     MAX_LENGTH,
+    MAX_HEIGHT,
     SCALABLE,
     TURNABLE,
     PADS,
@@ -1257,7 +1258,7 @@
       validateLevel({ ...draft, height: n });
     } catch {
       input.value = String(levelHeight(draft));
-      toast("Height must be 7–40 whole blocks and include every object.");
+      toast(`Height must be 7–${MAX_HEIGHT} whole blocks and fit every piece and move.`);
       return;
     }
     draft = { ...draft, height: n };
@@ -1267,19 +1268,25 @@
   function changeLength(e: Event) {
     const input = e.currentTarget as HTMLInputElement,
       n = Number(input.value);
-    if (
-      n < 20 ||
-      n > MAX_LENGTH ||
-      !Number.isFinite(n) ||
-      draft.objects.some((o) => o.x > n - 2)
-    ) {
+    try {
+      validateLevel({ ...draft, length: n });
+    } catch {
       input.value = String(draft.length);
-      toast(`Length must be 20–${MAX_LENGTH} and include every object.`);
+      toast(`Length must be 20–${MAX_LENGTH} and fit every piece and move.`);
       return;
     }
     draft = { ...draft, length: n };
     pan = Math.min(pan, n - 8);
     saveDraft();
+  }
+  function jumpView(e: Event, axis: 'x' | 'y') {
+    const input = e.currentTarget as HTMLInputElement;
+    if (!input.validity.valid || !Number.isFinite(input.valueAsNumber)) {
+      input.value = String(axis === 'x' ? pan : panY);
+      return;
+    }
+    if (axis === 'x') pan = input.valueAsNumber;
+    else panY = input.valueAsNumber;
   }
   function chooseTab(next: Tab) {
     tab = next;
@@ -2505,16 +2512,21 @@
           />{/key}{/if}
       {#if panel.extra === "settings"}<div class="level-settings">
           <label
-            >Height (7–40 blocks)<input
+            >Height (7–{MAX_HEIGHT} blocks)<input
               id="level-height"
               type="number"
               min="7"
-              max="40"
+              max={MAX_HEIGHT}
               step="1"
               value={levelHeight(draft)}
               onchange={changeHeight}
             /></label
-          ><label
+          >{#if draft.length > 600 || levelHeight(draft) > 40}
+            <label>Scroll to left edge (x)<input id="jump-x" type="number" min="0" max={draft.length - 8}
+              step="0.5" value={pan} onchange={(e) => jumpView(e, 'x')} /></label>
+            {#if levelHeight(draft) > 7}<label>Scroll to bottom edge (y)<input id="jump-y" type="number"
+              min="0" max={levelHeight(draft) - 7} step="0.5" value={panY} onchange={(e) => jumpView(e, 'y')} /></label>{/if}
+          {/if}<label
             >Song<select
               id="level-song"
               value={draft.loop ? "this-loop" : String(draftSong())}

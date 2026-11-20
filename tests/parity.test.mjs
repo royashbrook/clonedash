@@ -18,12 +18,12 @@ import { REMIX_INPUTS } from './remix-inputs.mjs';
 const MAIN = 'bdf5958';
 const FIXTURE = JSON.parse(await readFile(new URL('./fixtures/main-bdf5958.json', import.meta.url), 'utf8'));
 
-async function withMain(check) {
+async function withMain(check, ref = MAIN) {
   const dir = await mkdtemp(join(tmpdir(), 'clonedash-main-'));
   try {
-    const files = execFileSync('git', ['ls-tree', '--name-only', `${MAIN}:src`], { encoding: 'utf8' }).split('\n').filter((f) => f.endsWith('.ts'));
+    const files = execFileSync('git', ['ls-tree', '--name-only', `${ref}:src`], { encoding: 'utf8' }).split('\n').filter((f) => f.endsWith('.ts'));
     for (const file of files)
-      await writeFile(join(dir, file), execFileSync('git', ['show', `${MAIN}:src/${file}`], { encoding: 'utf8' }));
+      await writeFile(join(dir, file), execFileSync('git', ['show', `${ref}:src/${file}`], { encoding: 'utf8' }));
     const load = (name) => import(pathToFileURL(join(dir, name)).href);
     await check({ run: await load('run.ts'), levels: await load('levels.ts'), transfer: await load('transfer.ts'), library: await load('library.ts') });
   } finally {
@@ -31,6 +31,22 @@ async function withMain(check) {
   }
 }
 const frame = (s) => [s.x, s.y, s.vy, s.mode, s.gravity, s.speed, s.wall, s.dash, s.grounded, s.status, s.time, s.touchingPortals.join(), s.usedRings.join()];
+
+test('bigger trails round-trip; the last released reader refuses them instead of shortening them', async () => {
+  await withMain(async (old) => {
+    const usual = { name: 'Range', length: 600, height: 40, song: 9, objects: [] };
+    assert.equal(await encodeLevel(usual), await old.transfer.encodeLevel(usual));
+    for (const [length, height] of [[601, 7], [20, 41], [1000, 1000]]) {
+      const level = { ...usual, length, height, objects: [object('block', length - 2, height - 1)] };
+      const code = await encodeLevel(level);
+      assert.deepEqual(await decodeLevel(code), level);
+      await assert.rejects(old.transfer.decodeLevel(code), /Invalid level/);
+      const saved = JSON.stringify({ version: 1, best: {}, sound: false, draft: level });
+      assert.deepEqual(readSave(saved, 1).draft, level);
+      assert.throws(() => old.library.readSave(saved, 1), /Invalid level/);
+    }
+  }, '153f4a923e29a2e20e769a0ee1336be33329983e');
+});
 
 test('a level without coins or triggers plays exactly as on main, frame by frame, through deaths and restarts', async () => {
   await withMain(async (main) => {
