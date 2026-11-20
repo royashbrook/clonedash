@@ -18,6 +18,7 @@ try {
     "version.test.mjs",
     "pogo.test.mjs",
     "door.test.mjs",
+    "follow.test.mjs",
     "coins.test.mjs",
     "triggers.test.mjs",
     "parity.test.mjs",
@@ -62,6 +63,8 @@ try {
       { encoding: "utf8" },
     );
   for (const [file, from, to, pattern, testFile = "migration.test.mjs"] of [
+    ["engine.ts", 'bind.axis === "y" ? 0 : x - bind.x', 'x - bind.x', "player follow preserves", "follow.test.mjs"],
+    ["engine.ts", "if (fx.follows) followAll(s, fx, oldX, oldY);", "", "player follow preserves", "follow.test.mjs"],
     ["engine.ts", "mode: level.startMode ?? \"square\"", "mode: \"square\"", "every starting mode", "start-settings.test.mjs"],
     ["engine.ts", "speed: level.startSpeed ?? 1", "speed: 1", "every starting mode", "start-settings.test.mjs"],
     ["engine.ts", "s.x >= s.level.length", "s.x >= s.level.length + (s.level.offMap ? 32 : 0)", "same finish", "start-settings.test.mjs"],

@@ -47,6 +47,7 @@ export const PAD_LOOK: Record<string, string> = {
   "gray-pad": "#9a9a9a",
 };
 const TRIGGER_LOOK: Record<string, [string, string]> = {
+  "follow-trigger": ["#9aff6b", "FOLLOW"],
   "move-trigger": ["#53e3ff", "MOVE"],
   "color-trigger": ["#ff8ac4", "COLOR"],
   "teleport-trigger": ["#b388ff", "TELEPORT"],

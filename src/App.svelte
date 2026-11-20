@@ -168,6 +168,7 @@
     // invisible in play; each fires once when you pass it and works on one group id
     triggers: [
       ["move-trigger", "⇄ MOVE"],
+      ["follow-trigger", "↝ ADV FOLLOW"],
       ["color-trigger", "◐ COLOR"],
       ["teleport-trigger", "⇥ TELEPORT"],
     ],
@@ -183,6 +184,7 @@
     "move-trigger": { type: "move-trigger", target: 1, moveY: 2, duration: 1 },
     "color-trigger": { type: "color-trigger", target: 1, color: "#ff5c7a", duration: 1 },
     "teleport-trigger": { type: "teleport-trigger", target: 1 },
+    "follow-trigger": { type: "follow-trigger", target: 1 },
     "teleport-ring": { type: "teleport-ring", target: 1, color: "#b388ff" },
     "purple-ring": { type: "ring", color: "#c77dff", bounce: 1 },
     "red-ring": { type: "ring", color: "#ff5c7a", bounce: 5 },
@@ -231,7 +233,9 @@
       : !TRIGGERS.includes(o.type)
       ? ""
       : ` · GROUP ${o.target ?? "NONE"}` +
-        (o.type === "teleport-trigger"
+        (o.type === "follow-trigger"
+          ? ` · FOLLOWS ${o.leader ? "GROUP " + o.leader : "PLAYER"} · ${o.axis ? o.axis.toUpperCase() + " ONLY" : "BOTH AXES"}`
+          : o.type === "teleport-trigger"
           ? " · TELEPORT"
           : (o.type === "move-trigger"
               ? ` · MOVE ${o.moveX ?? 0}, ${o.moveY ?? 0}`
@@ -1621,25 +1625,28 @@
   // The trigger fields (EDIT OBJECT on a trigger). Zero moves and an instant time are stored as
   // "no field", like the other defaults.
   function setTrigger(
-    key: "target" | "moveX" | "moveY" | "duration" | "color",
+    key: "target" | "leader" | "axis" | "moveX" | "moveY" | "duration" | "color",
     input: HTMLInputElement | HTMLSelectElement,
+    value = input.value.trim(),
   ) {
-    const value = input.value.trim(),
-      n = key === "duration" ? Math.round(Number(value || 0) * 100) / 100 : Number(value || 0);
+    const n = key === "duration" ? Math.round(Number(value || 0) * 100) / 100 : Number(value || 0);
     const kind =
-      key === "moveX" || key === "moveY" ? "move-trigger" : key === "color" ? "color-trigger" : "";
+      key === "moveX" || key === "moveY" ? "move-trigger" : key === "color" ? "color-trigger" : key === "leader" || key === "axis" ? "follow-trigger" : "";
     const next = changed((piece) => {
-      if (key === "color") piece.color = value;
+      if (key === "axis") {
+        if (value === "x" || value === "y") piece.axis = value;
+        else delete piece.axis;
+      } else if (key === "color") piece.color = value;
       else if (n) piece[key] = n;
       else delete piece[key];
     }, (o) => (kind ? o.type === kind : TRIGGERS.includes(o.type) || (key === "target" && o.type === "teleport-ring")));
     try {
-      if (key !== "color" && !Number.isFinite(n)) throw Error("not a number");
+      if (key !== "color" && key !== "axis" && !Number.isFinite(n)) throw Error("not a number");
       validateLevel(next);
     } catch {
       input.value = String(selection?.[key] ?? "");
       toast(
-        key === "target"
+        key === "target" || key === "leader"
           ? `Pick a group id from 1 to ${MAX_GROUP}.`
           : key === "duration"
             ? `Time is 0 (instant) to ${MAX_TRIGGER_TIME} seconds.`
@@ -2488,7 +2495,7 @@
               /></label
             >{/if}
           {#if TRIGGERS.includes(selection.type)}<label
-              >Group id it works on<input
+              >{selection.type === "follow-trigger" ? "Group that follows" : "Group id it works on"}<input
                 id="trigger-target"
                 type="number"
                 inputmode="numeric"
@@ -2516,7 +2523,16 @@
                   value={selection.moveY ?? 0}
                   onchange={(e) => setTrigger("moveY", e.currentTarget)}
                 /></label
-              >{:else if selection.type === "color-trigger"}<label
+              >{:else if selection.type === "follow-trigger"}<label
+                >Follow<select id="follow-source" value={selection.leader === undefined ? "player" : "group"}
+                  onchange={(e) => setTrigger("leader", e.currentTarget, e.currentTarget.value === "player" ? "" : selection?.target === 1 ? "2" : "1")}>
+                  <option value="player">Player</option><option value="group">Group</option>
+                </select></label>
+                {#if selection.leader !== undefined}<label>Group to follow<input id="follow-leader" type="number" inputmode="numeric" min="1" max={MAX_GROUP} step="1" value={selection.leader} onchange={(e) => setTrigger("leader", e.currentTarget)}/></label>{/if}
+                <label>Follow on<select id="follow-axis" value={selection.axis ?? ""} onchange={(e) => setTrigger("axis", e.currentTarget)}>
+                  <option value="">Both axes</option><option value="x">X only</option><option value="y">Y only</option>
+                </select></label>
+              {:else if selection.type === "color-trigger"}<label
                 >Colour<select
                   id="trigger-color"
                   value={selection.color ?? RING_COLORS[0][0]}
@@ -2524,7 +2540,7 @@
                   >{#each RING_COLORS as [hex, name]}<option value={hex}>{name}</option
                     >{/each}</select
                 ></label
-              >{/if}{#if selection.type !== "teleport-trigger"}<label
+              >{/if}{#if selection.type === "move-trigger" || selection.type === "color-trigger"}<label
               >Time (seconds, 0 is instant)<input
                 id="trigger-time"
                 type="number"
