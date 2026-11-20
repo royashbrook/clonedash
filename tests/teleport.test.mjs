@@ -147,7 +147,7 @@ test('a teleport ring onto a block top: the step starts at the landing, so you s
 // (docs/teleport.md rule 2), whatever the group holds and wherever a move left it
 const offMap = (objects) => ({ name: 'Off map', length: 30, height: 10, offMap: true, objects });
 test('a landing spot outside the trail is no landing spot: past the finish, below the floor, a mixed group, a moved marker', () => {
-  for (const [x, y, where] of [[40, 2, 'past the finish'], [12, -4, 'below the floor'], [-5, 2, 'before the start'], [12, 20, 'above the ceiling']]) {
+  for (const [x, y, where] of [[40, 2, 'past the finish'], [12, -4, 'below the floor'], [12, -0.5, 'half a block into the floor'], [-5, 2, 'before the start'], [12, 20, 'above the ceiling']]) {
     const level = validateLevel(offMap([trigger(3, 1), marker(x, y, 1)]));
     const s = createState(level);
     assert.deepEqual(run(s), [], `${where}: no teleport`);
