@@ -373,7 +373,8 @@ export function destination(level: Level, target: number | undefined, groups?: M
   for (const i of members) {
     const o = objects[i],
       b = best < 0 ? null : objects[best];
-    if (o.x < area.left || o.x > area.right || o.y < area.bottom || o.y > area.top) continue;
+    // the anchor box lets a piece sit half a block into the floor; a landing never does
+    if (o.x < area.left || o.x > area.right || o.y < 0 || o.y > area.top) continue;
     if (!b || o.x < b.x || (o.x === b.x && o.y < b.y)) best = i;
   }
   return best < 0 ? null : [objects[best].x, objects[best].y];
