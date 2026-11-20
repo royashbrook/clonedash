@@ -111,6 +111,7 @@
       ["pogo", "⇈ POGO"],
       ["angle", "◢ ANGLE"],
       ["croissant", "☾ CROISSANT"],
+      ["door", "⚿ DOOR"],
     ],
     gravity: [
       ["gravity-up", "↑ UPSIDE DOWN"],
@@ -940,7 +941,7 @@
               ? "LAND FIRST · THEN TAP"
               : s.mode === "pogo"
                 ? "TAP AGAIN IN MIDAIR"
-                : "HOLD TO KEEP JUMPING",
+                : s.mode === "door" ? "HOLD TO JUMP HIGHER" : "HOLD TO KEEP JUMPING",
       showCue:
         !paused &&
         !rotate &&
@@ -1707,6 +1708,7 @@
   function how() {
     void sheet(
       "One button. Find your flow.",
+      "Door: tap for the square's hop. Hold from takeoff to clear up to four blocks. Release to shorten the jump. " +
       "Square: tap or press Space to jump onto two-block ledges. Hold for another jump when you land. Pogo: same as square, but every fresh tap lets you jump again in midair. Jump before a wall to clear it. Try Air Steps! Plane: hold to fly against gravity; release to fall. Landings and ceiling contact are safe while flying, but wall impacts kill. Angle: hold to climb at 45 degrees, release to dive at 45 degrees. The floor and the ceiling are safe to slide along; touching any block, ramp or curve is a crash, unless a W stops you at its side or an R bumps your head. Wheel: land on a block, floor or ceiling, then tap or press Space to flip gravity. Midair taps are ignored; holding does not flip again when you land. Croissant: land, then tap to teleport straight across to the floor, ceiling or block on the other side, with gravity flipped. UP and DOWN portals set gravity without changing your shape. Speed portals change how fast you move forward: SLOW, 1X, FAST and FASTER. Shape and gravity stay the same. Under upside-down gravity, land and jump on ceilings. All spikes kill, including the tiny quarter-size ones. Outline blocks are transparent but solid. Hitting a wall kills in ALL modes, including the vertical face of a ramp. Your smaller hazard hitbox still forgives edge grazes. Background blocks never collide. Rings: tap or press Space while reaching a glowing ring for a midair jump, once per ring per run. Purple and red rings bounce one and five blocks; a white ring takes any colour and height. A dark blue gravity ring flips your gravity and you drop the new way at once; a green one flips it and bounces you away from the new gravity. UP and DOWN portals drop you the new way at once too. Hold on a pink dash orb and you dash the way it points, with no gravity, until you let go: turn it with the angle slider to aim it. A yellow dash orb flips your gravity as well. A black ring sends you down fast, as if you had been falling for a while; a gray ring stops your rise or fall. Boosters are flat pads with no tap: touch one and it does what its ring does, once each time you land on it. Turn one upside down for a ceiling. The Width and Height sliders size any piece but a trigger: it stretches out both ways from its middle, and turning it keeps it in place. A pinch sizes both at once and keeps its shape.EDIT OBJECT switches a piece to NO TOUCH (seen, never touched), HIDDEN (touched, never seen in play; faint in the editor), WALL PASS (its sides stop you, like a W) or ROOF PASS (you bump your head, like an R). Wall pass (W) and roof pass (R) are invisible in play: lay them over blocks, or right where you hit them. While you touch a W, a wall stops you instead of crashing you, and a jump over it carries on; while you touch an R, you bump your head and fall back instead of crashing. Spikes still kill. Ramps: walk up or down the white diagonal slope. Curves are rounded ramps: a scoop bends up like a skate ramp, a hill bulges out: run into its side and you ride up it. Find RINGS and RAMP tabs in the editor. In the editor, pinch a selected piece with two fingers to size it and turn it, like cropping a photo; Snap holds 15 degrees and quarter sizes. MULTI selects a group: tap pieces to add them, or swipe a box over a lot of them, then move, turn, flip, copy or delete them together. Edge, parallel, outer corner, inner corner and no outline blocks are solid blocks with the white line on only some sides (or none, for the middle of a shape), so a big shape reads as one piece: turn them to face the outside, and pick EDGES on any selected block. Coins: touch one to pick it up; a level holds up to 10, and your best is the most you picked up in one finished run. Triggers are invisible in play and fire once when you run past them. Tick TOUCH to fire one when you touch it instead, and MULTI to fire it every time you touch it again. MULTI TOUCH in EDIT OBJECT lets a ring work again every time you come back to it. Give pieces a GROUP ID in EDIT OBJECT, then a MOVE trigger slides every piece in that group some blocks over a time you choose, and a COLOR trigger paints them a colour. Find them on the COINS and TRIGGERS tabs.",
     );
   }

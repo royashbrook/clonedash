@@ -15,12 +15,12 @@ const skin = (name, fill = '1') => ({ name, width: 4, height: 4, palette: ['#ffd
 // everything a player can have: progress and coins on built-in levels, sound, several custom
 // levels with coins and every piece type (round 3 width/height, touch and multi included), a draft
 // that is the active level, and skins with one worn
-function fullSave() {
+function fullSave(types = TYPES) {
   const game = readSave(null, N);
   game.best = { 0: 100, 3: 47 }; game.coins = { 0: 2 }; game.sound = true;
   const level = newLevel(game);
   level.name = 'Everything'; level.length = 120;
-  level.objects = TYPES.map((t, i) => object(t, 4 + i * 1.5, 0));
+  level.objects = types.map((t, i) => object(t, 4 + i * 1.5, 0));
   level.objects.push({ ...object('grid', 8, 1), scaleX: 2, scaleY: 0.5 });
   level.objects.push({ ...object('ring', 9, 2), multi: true });
   level.objects.push({ ...object('move-trigger', 10, 0), touch: true, multi: true });
@@ -294,8 +294,11 @@ test('the 1.0.85 reader itself refuses a save that carries loops', async () => {
   await writeFile(join(dir, 'src.tar'), execFileSync('git', ['archive', '--format=tar', '6b7071e03bd080be63d1a3ebe00cb5524e8cdc91', 'src']));
   execFileSync('tar', ['-xf', join(dir, 'src.tar'), '-C', dir]);
   const old = await import(join(dir, 'src', 'backup.ts'));
-  const code = await encodeBackup(withLoops(), N);
+  // Isolate the loop field: use only pieces this archived reader could have authored.
+  const { TYPES: oldTypes } = await import(join(dir, 'src', 'engine.ts'));
+  const plain = fullSave(oldTypes);
+  const code = await encodeBackup({ ...plain, loops: withLoops().loops }, N);
   await assert.rejects(() => old.decodeBackup(code, N), /newer Cube Dash/);
   // and still opens one without them
-  assert.deepEqual(await old.decodeBackup(await encodeBackup(fullSave(), N), N), fullSave());
+  assert.deepEqual(await old.decodeBackup(await encodeBackup(plain, N), N), plain);
 });

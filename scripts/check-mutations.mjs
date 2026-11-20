@@ -17,6 +17,7 @@ try {
     "remix-inputs.mjs",
     "version.test.mjs",
     "pogo.test.mjs",
+    "door.test.mjs",
     "coins.test.mjs",
     "triggers.test.mjs",
     "parity.test.mjs",
@@ -259,6 +260,9 @@ try {
     ["spin.ts", "return { angle: s.from, side: s.side };", "return { angle: s.from, side: odd(s.rest) };", "carries the angle and the side", "spin.test.mjs"],
     ["render.ts", "(X(cx + (sx - cx) * turn.side) - x) / k,\n          ((Y(cy + (sy - cy) * turn.side) - y) / k) * flip,", "(X(cx) - x) / k,\n          ((Y(cy) - y) / k) * flip,", "swapped box", "spin.test.mjs"],
     ["render.ts", "      if (!reduced) {\n        let s = SPINS.get(state);", "      if (true) {\n        let s = SPINS.get(state);", "render turns the cube", "spin.test.mjs"],
+    // door lift comes from one continuous ground press (#139)
+    ["engine.ts", "GRAVITY / 2 : GRAVITY", "GRAVITY / 3 : GRAVITY", "door starts with the square hop", "door.test.mjs"],
+    ["run.ts", "if (this.state.doorLift) delete this.state.doorLift;", "", "release between ticks", "door.test.mjs"],
     // the upright framing eases across a turn (#138)
     ["framing.ts", "a + (b - a) * k", "b", "settles in about a third", "framing.test.mjs"],
     ["framing.ts", "const TAU = 0.06;", "const TAU = 0.3;", "settles in about a third", "framing.test.mjs"],

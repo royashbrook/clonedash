@@ -1,5 +1,5 @@
 import type { Loop } from "./loop-schema.ts";
-export type GameMode = "square" | "plane" | "wheel" | "pogo" | "angle" | "croissant";
+export type GameMode = "square" | "plane" | "wheel" | "pogo" | "angle" | "croissant" | "door";
 // What the player SEES for an id whose upper-cased form is not the label. Stored ids that were
 // renamed for real (jumper became pogo) are mapped on read instead: engine.ts LEGACY_TYPES.
 const LABELS: Partial<Record<string, string>> = {
@@ -119,6 +119,7 @@ export interface GameState {
   speed: number; // forward speed multiplier, 1 until a speed portal changes it
   wall: number | null; // the wall face a W is holding the run against this step, else null
   dash: number | null; // the climb (rise per block forward) of the dash orb being held, else null
+  doorLift?: true; // only the uninterrupted hold that started this door jump can lift it
   inputHeld: boolean;
   grounded: boolean;
   status: "playing" | "dead" | "complete";

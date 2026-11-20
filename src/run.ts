@@ -24,9 +24,10 @@ export class Run {
   }
   release() {
     this.held = false;
+    if (this.state.doorLift) delete this.state.doorLift;
   }
   interrupt() {
-    this.held = false;
+    this.release();
     this.jumpBuffer = 0;
     this.acc = 0;
   }
