@@ -126,10 +126,14 @@ test('camera follows a high pogo without shrinking the character or pinning it o
   await page.clock.install();
   await page.addInitScript(() => {
     localStorage.setItem('clonedash.v1', JSON.stringify({ version: 1, best: {}, sound: false, draft: { name: 'Tall flight', length: 100, height: 20, objects: [{ type: 'pogo', x: 3, y: 0, rotation: 0, flipX: false, flipY: false }] } }));
-    const fill = CanvasRenderingContext2D.prototype.fillRect;
+    // a tall trail's ceiling line looks like the ground line (#145 draws it only when on screen), so
+    // the ground is the first such line of each frame
+    const fill = CanvasRenderingContext2D.prototype.fillRect, raf = window.requestAnimationFrame;
+    let lines = [];
+    window.requestAnimationFrame = (cb) => raf((t) => { lines = []; cb(t); if (lines.length) window.groundY = lines[0]; });
     CanvasRenderingContext2D.prototype.fillRect = function(x, y, w, h) {
       if (this.fillStyle === '#9aff6b' && w === h && w > 20 && w < 60) window.playerPaint = { y: this.getTransform().f, width: w };
-      if (this.fillStyle === '#9aff6b' && w === innerWidth && h === 2) window.groundY = y;
+      if (this.fillStyle === '#9aff6b' && w === innerWidth && h === 2) lines.push(y);
       return fill.call(this, x, y, w, h);
     };
   });
