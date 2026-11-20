@@ -36,6 +36,7 @@ try {
     "music-lifetime.test.mjs",
     "spin.test.mjs",
     "canvas-log.mjs",
+    "loop-length.test.mjs",
     "loop-song.test.mjs",
   ]) {
     const testSource = (await readFile(join("tests", testFile), "utf8"))
@@ -239,8 +240,8 @@ try {
     // so dropping the snapshot is equivalent today; it guards a future await before that point)
     ["music.ts", "(typeof music === \"number\" ? music : `l${JSON.stringify(music)}`)", "(typeof music === \"number\" ? music : \"loop\")", "renders as it was", "loop-song.test.mjs"],
     ["loop-player.ts", "  const root = loop.root + chordAt(bar);", "  const root = loop.root;", "1.0.96 player and this one", "loop-song.test.mjs"],
-    ["music.ts", "  for (let bar = 0; bar < BARS; bar++)\n    for (let step = 0; step < 8; step++) playLoopStep", "  for (let bar = 0; bar < BARS - 1; bar++)\n    for (let step = 0; step < 8; step++) playLoopStep", "exactly what PLAY plays", "loop-song.test.mjs"],
-    ["music.ts", "  for (let bar = 0; bar < BARS; bar++)\n    for (let step = 0; step < 8; step++) playLoopStep", "  for (let bar = 0; bar < BARS + 1; bar++)\n    for (let step = 0; step < 8; step++) playLoopStep", "exactly what PLAY plays", "loop-song.test.mjs"],
+    ["music.ts", "for (let g = 0; g < total; g++)", "for (let g = 0; g < total - 8; g++)", "exactly what PLAY plays", "loop-song.test.mjs"],
+    ["music.ts", "for (let g = 0; g < total; g++)", "for (let g = 0; g < total + 8; g++)", "exactly what PLAY plays", "loop-song.test.mjs"],
     // a resume the close rejects after unmount (lifecycle, WebKit)
     ["music.ts", "        if (!this.disposed) throw e;", "        throw e;", "rejected while the game lives", "music-lifetime.test.mjs"],
     ["music.ts", "        if (!this.disposed) throw e;", "        void e;", "rejected while the game lives", "music-lifetime.test.mjs"],
@@ -257,6 +258,14 @@ try {
     ["spin.ts", "return { angle: s.from, side: s.side };", "return { angle: s.from, side: odd(s.rest) };", "carries the angle and the side", "spin.test.mjs"],
     ["render.ts", "(X(cx + (sx - cx) * turn.side) - x) / k,\n          ((Y(cy + (sy - cy) * turn.side) - y) / k) * flip,", "(X(cx) - x) / k,\n          ((Y(cy) - y) / k) * flip,", "swapped box", "spin.test.mjs"],
     ["render.ts", "      if (!reduced) {\n        let s = SPINS.get(state);", "      if (true) {\n        let s = SPINS.get(state);", "render turns the cube", "spin.test.mjs"],
+    // loops from 8 to 32 steps (#140)
+    ["loop-schema.ts", "!LENGTHS.includes(notes.length)", "notes.length < 8", "8, 16, 24 or 32", "loop-length.test.mjs"],
+    ["loop-schema.ts", "const step = (s: unknown) => int(s, 0, notes.length - 1);", "const step = (s: unknown) => int(s, 0, 31);", "8, 16, 24 or 32", "loop-length.test.mjs"],
+    ["loop.ts", "notes: Array.from({ length }, (_, s) => loop.notes[s] ?? []),", "notes: Array.from({ length }, () => []),", "growing appends", "loop-length.test.mjs"],
+    ["loop.ts", "|| DRUMS.some((d) => loop[d].some((s) => s >= length));", ";", "growing appends", "loop-length.test.mjs"],
+    ["music.ts", "Math.max(BARS * 8, (64 * steps) / gcd(64, steps))", "BARS * 8", "whole passes", "loop-length.test.mjs"],
+    ["loop-player.ts", "    if (this.step >= this.loop().notes.length) this.step = 0;", "    if (this.step >= 8) this.step = 0;", "a 16 step loop", "loop-song.test.mjs"],
+    ["loop-player.ts", "  if (step % 8 === 0) play.pad(t, root, loop.drop);", "  if (step === 0) play.pad(t, root, loop.drop);", "every bar of 8", "loop-length.test.mjs"],
     // the live loop player's races (#121)
     ["loop-player.ts", "    while (this.next < c.currentTime) this.advance();\n", "", "long gap", "loop-player.test.mjs"],
     ["loop-player.ts", "for (const s of [this.session, this.preview]) if (s)", "for (const s of [this.session]) if (s)", "tapped cell is cut", "loop-player.test.mjs"],

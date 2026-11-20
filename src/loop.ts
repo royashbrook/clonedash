@@ -34,11 +34,23 @@ export function loopFromSong(index: number): Loop {
 }
 // a random melody over the current key and drums
 export function surprise(loop: Loop, random = Math.random): Loop {
-  const notes = Array.from({ length: STEPS }, (_, s) =>
+  const notes = Array.from({ length: loop.notes.length }, (_, s) =>
     random() < (s % 2 ? 0.55 : 0.85) ? [DEGREES[Math.floor(random() * DEGREES.length)]] : [],
   );
   return { ...loop, notes };
 }
+// a loop at another length (#140): growing appends silent steps, shrinking cuts the end; key,
+// wobble, drop and every kept step stay exactly as they were
+export function resize(loop: Loop, length: number): Loop {
+  return validateLoop({
+    ...loop,
+    notes: Array.from({ length }, (_, s) => loop.notes[s] ?? []),
+    ...Object.fromEntries(DRUMS.map((d) => [d, loop[d].filter((s) => s < length)])),
+  });
+}
+// whether cutting a loop to this length would throw away notes or drum hits
+export const cutLoses = (loop: Loop, length: number) =>
+  loop.notes.slice(length).some((s) => s.length > 0) || DRUMS.some((d) => loop[d].some((s) => s >= length));
 // one cell on or off, kept sorted
 export function toggleNote(loop: Loop, step: number, degree: number): Loop {
   const at = loop.notes[step];

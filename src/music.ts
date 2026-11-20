@@ -138,9 +138,15 @@ export type Music = number | Loop;
 const keyOf = (music: Music) => (typeof music === "number" ? music : `l${JSON.stringify(music)}`);
 
 // A loop level's song (#121, docs/loops.md): the loop exactly as PLAY plays it, through the same step
-// function as the live player, for 16 bars (25.6 s), then repeated by the looping source.
+// function as the live player, then repeated by the looping source. It renders a whole number of
+// loop passes and of the 64-step chord cycle, at least 16 bars, so the repeat lands where PLAY's
+// would: 128 steps (25.6 s) for 8, 16 and 32 step loops, 192 (38.4 s) for 24 (#140).
+const gcd = (a: number, b: number): number => (b ? gcd(b, a % b) : a);
+export const loopSongSteps = (steps: number) => Math.max(BARS * 8, (64 * steps) / gcd(64, steps));
 export async function composeLoop(loop: Loop, Offline = globalThis.OfflineAudioContext) {
-  const c = new Offline(2, Math.ceil(LENGTH * 44100), 44100);
+  const steps = loop.notes.length,
+    total = loopSongSteps(steps);
+  const c = new Offline(2, Math.ceil(((total * BEAT) / 2) * 44100), 44100);
   const master = c.createDynamicsCompressor();
   master.threshold.value = -12;
   master.knee.value = 15;
@@ -156,8 +162,7 @@ export async function composeLoop(loop: Loop, Offline = globalThis.OfflineAudioC
   echo.connect(feedback).connect(echo);
   echo.connect(master);
   const play = voices(c, master, noise, echo);
-  for (let bar = 0; bar < BARS; bar++)
-    for (let step = 0; step < 8; step++) playLoopStep(play, loop, bar, step, ((bar * 8 + step) * BEAT) / 2);
+  for (let g = 0; g < total; g++) playLoopStep(play, loop, Math.floor(g / 8), g % steps, (g * BEAT) / 2);
   return c.startRendering();
 }
 

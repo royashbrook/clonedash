@@ -27,10 +27,10 @@ async function sourceAt(sha) {
 }
 
 // a live player driven by a moved clock for `seconds`, its whole recorded log
-async function live(Player, seconds, t) {
+async function live(Player, seconds, t, loop = tune) {
   let now = 0;
   const { RecordingContext, log } = recorder({ live: { now: () => now } });
-  const player = new Player(() => tune, () => {}, () => new RecordingContext(2, 0, 44100));
+  const player = new Player(() => loop, () => {}, () => new RecordingContext(2, 0, 44100));
   await player.start();
   for (let s = 0.025; s <= seconds; s += 0.025) { now = s; t.mock.timers.tick(25); }
   player.stop();
@@ -74,6 +74,17 @@ test('a loop level plays exactly what PLAY plays: the same events, step for step
   assert.ok(starts(played.slice(offline.length)).every((t) => t >= 25.6), 'nothing PLAY scheduled before 25.6 s is missing');
   // and it is the loop's music, not a song's: a different loop builds a different log
   assert.notDeepEqual(voiceEvents(await composeLoop(other, RecordingContext), 0), offline);
+});
+
+test('a 16 step loop (#140): PLAY and the level song play the same events, step for step, wrapping at 16', async (t) => {
+  t.mock.timers.enable({ apis: ['setInterval'] });
+  const { RecordingContext } = recorder();
+  const long = { ...tune, notes: [...tune.notes, [], [], [], [12], [], [], [], [22]], kick: [0, 4, 15], hat: [1, 9] };
+  const offline = voiceEvents(await composeLoop(long, RecordingContext), 0);
+  const played = voiceEvents(await live(LoopPlayer, 26, t, long), 0.06);
+  assert.ok(played.length >= offline.length);
+  assert.deepEqual(played.slice(0, offline.length), offline);
+  assert.notDeepEqual(offline, voiceEvents(await composeLoop(tune, RecordingContext), 0), 'steps 9 to 16 sound');
 });
 
 // ---- the soundtrack: one render at a time, keyed by what it sounds like ----

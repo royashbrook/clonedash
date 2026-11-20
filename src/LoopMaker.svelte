@@ -12,12 +12,14 @@
     MAX_WOBBLE,
     MIN_ROOT,
     MIN_WOBBLE,
-    STEPS,
+    LENGTHS,
     addLoop,
     blankLoop,
+    cutLoses,
     deleteLoop,
     loopFromSong,
     loopName,
+    resize,
     saveLoop,
     surprise,
     toggleDrum,
@@ -93,6 +95,21 @@
       return false;
     }
   }
+  // the bottom bar's tabs leave through here (#140): a draft with changes asks first, and only LEAVE
+  // goes on; KEEP IT leaves the name and notes exactly as they were
+  export function guard(go: () => void) {
+    silence();
+    if (view === "list" || !dirty) return go();
+    confirm("Leave without saving?", "Your changes to this loop will be lost.", "LEAVE", () => {
+      dirty = false;
+      go();
+    });
+  }
+  // the MUSIC tab while a loop is open: back to the list
+  export function close() {
+    view = "list";
+    say("");
+  }
   // also called by the app before its own sheets (MORE) open over the loop list
   export function silence() {
     player.stop();
@@ -125,6 +142,8 @@
     sounding = loop;
     dirty = false;
     say("");
+    panel = null;
+    page = 0;
     view = "edit";
   }
   function leave() {
@@ -152,10 +171,84 @@
     const on = kind === "note" ? next.notes[step].includes(degree) : next[kind].includes(step);
     if (on) void player.hear(kind, kind === "note" ? degree : step).catch(() => {});
   }
+  // SWIPE NOTES (#139): off, a cell toggles on its own tap and the grid scrolls sideways as before.
+  // on, a finger stroke paints: the first cell decides paint (it was off) or erase (it was on), and
+  // every cell the stroke crosses is set to that, so coming back over a cell never flips it again.
+  // the path between two pointer events is sampled, so a fast swipe cannot jump a cell, and
+  // lifting the finger, a cancel or losing the pointer ends the stroke. a stroke belongs to the one
+  // pointer that started it (a primary press with the main button): a second finger, or any other
+  // pointer, neither starts, moves nor ends it. in swipe mode a pointer's click on a cell does
+  // nothing (strokes set cells); a keyboard press still clicks, and toggles, one cell.
+  type Kind = "note" | "kick" | "snare" | "hat";
+  let swipe = $state(false),
+    stroke: { id: number; paint: boolean; x: number; y: number } | null = null;
+  // the phone layout (#140): TOOLS and HELP open over the grid; a longer loop shows 8 steps a page
+  let panel = $state<"tools" | "help" | null>(null),
+    page = $state(0);
+  const shown = $derived(Array.from({ length: 8 }, (_, i) => page * 8 + i).filter((s) => s < loop.notes.length));
+  $effect(() => {
+    if (page * 8 >= loop.notes.length) page = 0;
+  });
+  function press(e: MouseEvent, kind: Kind, step: number, degree = 0) {
+    if (swipe && e.detail !== 0) return;
+    tap(kind, step, degree);
+  }
+  const isOn = (kind: Kind, step: number, degree: number) =>
+    kind === "note" ? loop.notes[step].includes(degree) : loop[kind].includes(step);
+  const cellAt = (x: number, y: number) =>
+    document.elementFromPoint(x, y)?.closest<HTMLElement>("#loop-grid .cell") ?? null;
+  const read = (c: HTMLElement) => [c.dataset.kind as Kind, Number(c.dataset.step), Number(c.dataset.degree)] as const;
+  function paint(c: HTMLElement) {
+    const [kind, step, degree] = read(c);
+    if (stroke && isOn(kind, step, degree) !== stroke.paint) tap(kind, step, degree);
+  }
+  function strokeDown(e: PointerEvent) {
+    if (!swipe || stroke || !e.isPrimary || e.button !== 0) return;
+    const c = cellAt(e.clientX, e.clientY);
+    if (!c) return;
+    e.preventDefault();
+    (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
+    stroke = { id: e.pointerId, paint: !isOn(...read(c)), x: e.clientX, y: e.clientY };
+    paint(c);
+  }
+  function strokeMove(e: PointerEvent) {
+    if (!stroke || e.pointerId !== stroke.id) return;
+    const dx = e.clientX - stroke.x,
+      dy = e.clientY - stroke.y,
+      n = Math.max(1, Math.ceil(Math.hypot(dx, dy) / 8));
+    for (let i = 1; i <= n; i++) {
+      const c = cellAt(stroke.x + (dx * i) / n, stroke.y + (dy * i) / n);
+      if (c) paint(c);
+    }
+    stroke.x = e.clientX;
+    stroke.y = e.clientY;
+  }
+  function strokeEnd(e: PointerEvent) {
+    if (stroke && e.pointerId === stroke.id) stroke = null;
+  }
+  // LENGTH (#140): growing adds silent steps at the end; shrinking asks first when the cut steps
+  // hold notes or drum hits (KEEP IT leaves the draft exactly as it was)
+  function setLength(n: number) {
+    const from = loop.notes.length;
+    if (n === from) return;
+    const next = resize(loop, n);
+    panel = null;
+    if (n < from && cutLoses(loop, n))
+      sheet(() =>
+        confirm(
+          `Cut the loop to ${n} steps?`,
+          `The notes and drum hits after step ${n} will be removed. This cannot be undone.`,
+          `CUT TO ${n}`,
+          () => set(next),
+        ),
+      );
+    else set(next);
+  }
   // START FROM, SURPRISE ME and CLEAR NOTES replace the notes, and there is no undo, so they ask
   // first whenever there are notes to lose; KEEP IT leaves the draft exactly as it was
   // `lose` is whether the replacement throws away anything the player made
   function replace(next: Loop, lose: boolean, title: string, yes: string, what: string) {
+    panel = null; // a tool that replaces the notes shows the grid it changes
     if (!lose) return set(next);
     sheet(() => confirm(title, `${what} will be replaced. This cannot be undone.`, yes, () => set(next)));
   }
@@ -167,6 +260,7 @@
   function startFrom(event: Event) {
     const select = event.currentTarget as HTMLSelectElement;
     if (select.value === "") return;
+    panel = null;
     const song = Number(select.value);
     select.value = "";
     replace({ ...loopFromSong(song), name: loop.name }, changed(), `Start from ${trackFor(song).name}?`, "START FROM IT", "Everything in this loop but its name");
@@ -253,86 +347,130 @@
       >
       <button id="save-loop" onclick={save}>SAVE</button>
     </header>
-    <!-- the toolbar above stays put; the controls and the grid scroll here (#133) -->
-    <div class="loop-body">
-    <div class="loop-controls">
-      <label class="start-from"
-        ><span class="sr">Start from a song</span><select id="loop-song" onchange={startFrom}>
-          <option value="">START FROM A SONG…</option>
-          {#each SONGS as index}<option value={index}>{trackFor(index).name}</option>{/each}
-        </select></label
+    <!-- the phone layout (#140): one toolbar row; the rest of the tools and the help open over the grid -->
+    <div class="loop-toolbar">
+      <button id="loop-tools" aria-expanded={panel === "tools"} onclick={() => (panel = panel === "tools" ? null : "tools")}
+        >TOOLS</button
       >
-      <div class="key" role="group" aria-label="Key">
-        <button
-          id="key-down"
-          aria-label="Key lower"
-          disabled={loop.root <= MIN_ROOT}
-          onclick={() => set({ ...loop, root: loop.root - 1 })}>−</button
-        ><output id="loop-key" aria-label="Key">{NAMES[loop.root % 12]}</output><button
-          id="key-up"
-          aria-label="Key higher"
-          disabled={loop.root >= MAX_ROOT}
-          onclick={() => set({ ...loop, root: loop.root + 1 })}>+</button
-        >
-      </div>
-      <label class="wobble"
-        >WOBBLE <input
-          id="loop-wobble"
-          type="range"
-          min={MIN_WOBBLE}
-          max={MAX_WOBBLE}
-          step="1"
-          value={loop.wobble}
-          oninput={(e) => set({ ...loop, wobble: Number(e.currentTarget.value) })}
-        /></label
-      >
-      <button id="loop-drop" aria-pressed={loop.drop} onclick={() => set({ ...loop, drop: !loop.drop })}
-        >{loop.drop ? "DROP ON" : "DROP OFF"}</button
-      >
-      <button id="loop-surprise" onclick={() => replace(surprise(loop), hasNotes(), "Make new notes?", "SURPRISE ME", "The notes in this loop")}
-        >SURPRISE ME</button
-      >
-      <button
-        id="loop-clear"
-        onclick={() =>
-          replace({ ...loop, notes: Array.from({ length: STEPS }, () => []) }, hasNotes(), "Clear the notes?", "CLEAR NOTES", "The notes in this loop")}
-        >CLEAR NOTES</button
-      >
-    </div>
-    <div class="loop-grid-box">
-      <div id="loop-grid" role="group" aria-label="Loop steps">
-        <div class="loop-row steps">
-          <span class="tag"></span>
-          {#each { length: STEPS } as _, s}<b class:now={now === s}>{s + 1}</b>{/each}
+      <button id="loop-swipe" aria-pressed={swipe} onclick={() => (swipe = !swipe)}>{swipe ? "SWIPE ON" : "SWIPE OFF"}</button>
+      <button id="loop-help" aria-expanded={panel === "help"} onclick={() => (panel = panel === "help" ? null : "help")}>HELP</button>
+      {#if loop.notes.length > 8}
+        <div class="pages" role="group" aria-label="Steps shown">
+          {#each { length: loop.notes.length / 8 } as _, p}<button
+              id={`loop-page-${p + 1}`}
+              aria-label={`Steps ${p * 8 + 1} to ${p * 8 + 8}`}
+              aria-pressed={page === p}
+              onclick={() => (page = p)}>{p * 8 + 1}</button
+            >{/each}
         </div>
-        {#each [...DEGREES].reverse() as degree, r}
-          <div class="loop-row" style:--c={COLOURS[DEGREES.length - 1 - r]}>
-            <span class="tag" aria-hidden="true"><i></i></span>
-            {#each { length: STEPS } as _, s}<button
+      {/if}
+    </div>
+    <div class="loop-stage">
+      {#if panel === "tools"}
+        <div class="loop-panel" id="loop-tools-panel" role="group" aria-label="Loop tools">
+          <label class="start-from"
+            ><span class="sr">Start from a song</span><select id="loop-song" onchange={startFrom}>
+              <option value="">START FROM A SONG…</option>
+              {#each SONGS as index}<option value={index}>{trackFor(index).name}</option>{/each}
+            </select></label
+          >
+          <div class="key" role="group" aria-label="Key">
+            KEY <button
+              id="key-down"
+              aria-label="Key lower"
+              disabled={loop.root <= MIN_ROOT}
+              onclick={() => set({ ...loop, root: loop.root - 1 })}>−</button
+            ><output id="loop-key" aria-label="Key">{NAMES[loop.root % 12]}</output><button
+              id="key-up"
+              aria-label="Key higher"
+              disabled={loop.root >= MAX_ROOT}
+              onclick={() => set({ ...loop, root: loop.root + 1 })}>+</button
+            >
+          </div>
+          <label class="wobble"
+            >WOBBLE <input
+              id="loop-wobble"
+              type="range"
+              min={MIN_WOBBLE}
+              max={MAX_WOBBLE}
+              step="1"
+              value={loop.wobble}
+              oninput={(e) => set({ ...loop, wobble: Number(e.currentTarget.value) })}
+            /></label
+          >
+          <div class="length" role="group" aria-label="Loop length in steps">
+            STEPS {#each LENGTHS as n}<button
+                id={`loop-length-${n}`}
+                aria-label={`${n} steps`}
+                aria-pressed={loop.notes.length === n}
+                onclick={() => setLength(n)}>{n}</button
+              >{/each}
+          </div>
+          <button id="loop-drop" aria-pressed={loop.drop} onclick={() => set({ ...loop, drop: !loop.drop })}
+            >{loop.drop ? "DROP ON" : "DROP OFF"}</button
+          >
+          <button id="loop-surprise" onclick={() => replace(surprise(loop), hasNotes(), "Make new notes?", "SURPRISE ME", "The notes in this loop")}
+            >SURPRISE ME</button
+          >
+          <button
+            id="loop-clear"
+            onclick={() =>
+              replace({ ...loop, notes: Array.from({ length: loop.notes.length }, () => []) }, hasNotes(), "Clear the notes?", "CLEAR NOTES", "The notes in this loop")}
+            >CLEAR NOTES</button
+          >
+          <button class="primary" onclick={() => (panel = null)}>DONE</button>
+        </div>
+      {:else if panel === "help"}
+        <div class="loop-panel" id="loop-help-panel" role="note">
+          <p>Each column is a step. The loop plays them left to right, then starts again.</p>
+          <p>The top ten rows are notes, high at the top, low at the bottom.</p>
+          <p>The last three rows are drums: hi-hat, then snare, then kick.</p>
+          <p>Tap a square to turn it on or off. With SWIPE on, drag to fill or clear many.</p>
+          <p>A longer loop shows its steps eight at a time. Tap the step numbers above to move.</p>
+          <button class="primary" onclick={() => (panel = null)}>GOT IT</button>
+        </div>
+      {/if}
+      <div class="loop-grid-box" class:swiping={swipe}>
+        <div
+          id="loop-grid"
+          role="group"
+          aria-label="Loop steps"
+          onpointerdown={strokeDown}
+          onpointermove={strokeMove}
+          onpointerup={strokeEnd}
+          onpointercancel={strokeEnd}
+          onlostpointercapture={strokeEnd}
+        >
+          {#each shown as s}<b class="step" class:now={now === s}>{s + 1}</b>{/each}
+          {#each [...DEGREES].reverse() as degree, r}
+            {#each shown as s}<button
                 class="cell"
                 class:now={now === s}
-               
+                style:--c={COLOURS[DEGREES.length - 1 - r]}
                 aria-label={`note ${DEGREES.length - r} step ${s + 1}`}
                 aria-pressed={loop.notes[s].includes(degree)}
-                onclick={() => tap("note", s, degree)}
+                data-kind="note"
+                data-step={s}
+                data-degree={degree}
+                onclick={(e) => press(e, "note", s, degree)}
               ></button>{/each}
-          </div>
-        {/each}
-        {#each DRUM_ROWS as [kind, label], r}
-          <div class="loop-row" class:gap={r === 0} style:--c={kind === "kick" ? "#ffd166" : kind === "snare" ? "#ffffff" : "#b6c5d8"}>
-            <span class="tag">{label}</span>
-            {#each { length: STEPS } as _, s}<button
+          {/each}
+          <i class="drums" aria-hidden="true"></i>
+          {#each DRUM_ROWS as [kind]}
+            {#each shown as s}<button
                 class="cell"
                 class:now={now === s}
-               
+                style:--c={kind === "kick" ? "#ffd166" : kind === "snare" ? "#ffffff" : "#b6c5d8"}
                 aria-label={`${kind} step ${s + 1}`}
                 aria-pressed={loop[kind].includes(s)}
-                onclick={() => tap(kind, s)}
+                data-kind={kind}
+                data-step={s}
+                data-degree="0"
+                onclick={(e) => press(e, kind, s)}
               ></button>{/each}
-          </div>
-        {/each}
+          {/each}
+        </div>
       </div>
-    </div>
     </div>
   {/if}
   <p id="loop-message" class:failed role="status" hidden={!message}>{message}</p>
@@ -351,20 +489,19 @@
   .home-head {
     flex-wrap: wrap;
   }
-  /* editing a loop: the name, PLAY and SAVE stay on screen; only the body below them scrolls */
+  /* editing a loop (#140, a phone held upright first): a fixed column of the header, one toolbar,
+     and the grid filling what is left above the bottom bar, so nothing scrolls and nothing is cut */
   #loops.editing {
     display: flex;
     flex-direction: column;
+    gap: 6px;
     overflow: hidden;
+    padding: max(8px, env(safe-area-inset-top)) max(8px, env(safe-area-inset-right))
+      max(8px, env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left));
   }
-  #loops.editing > .loop-head {
+  #loops.editing > .loop-head,
+  .loop-toolbar {
     flex: none;
-  }
-  .loop-body {
-    flex: 1 1 auto;
-    min-height: 0;
-    overflow-y: auto;
-    overscroll-behavior: contain;
   }
   h1 {
     font-size: 32px;
@@ -411,7 +548,12 @@
     font-size: 13px;
   }
   .loop-head {
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
+    gap: 6px;
+  }
+  .loop-head > button {
+    flex: none;
+    padding-inline: 10px;
   }
   .loop-name {
     flex: 1 1 140px;
@@ -426,13 +568,6 @@
     border-radius: 8px;
     background: var(--surface-sunk);
     color: var(--ink);
-  }
-  .loop-controls {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 8px;
-    margin: 8px 0;
   }
   /* WebKit keeps a native select short whatever its min-height, so it draws its own box */
   .start-from select {
@@ -472,50 +607,105 @@
     min-height: 44px;
     width: 120px;
   }
-  /* the grid scrolls inside its own box where 8 steps do not fit, never the page */
-  .loop-grid-box {
-    max-width: 100%;
-    overflow-x: auto;
-    padding-bottom: 8px;
-  }
-  #loop-grid {
-    display: grid;
-    gap: 4px;
-    width: max-content;
-  }
-  .loop-row {
-    display: grid;
-    grid-template-columns: 52px repeat(8, 44px);
-    gap: 4px;
+  .length {
+    display: flex;
     align-items: center;
+    gap: 4px;
+    font-weight: 800;
   }
-  .loop-row.gap {
-    margin-top: 8px;
+  .length button {
+    min-width: 44px;
+    min-height: 44px;
+    padding-inline: 8px;
   }
-  .steps b {
+  .loop-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .loop-toolbar > button {
+    flex: 1 1 0;
+    min-height: 44px;
+    padding-inline: 6px;
+    font-size: 13px;
+  }
+  /* a longer loop's pages get their own row, so the toolbar never squeezes */
+  .pages {
+    display: flex;
+    gap: 6px;
+    flex-basis: 100%;
+  }
+  .pages button {
+    flex: 1 1 0;
+    min-height: 44px;
+    font-size: 13px;
+  }
+  .loop-stage {
+    position: relative;
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    overflow-y: auto;
+  }
+  /* TOOLS and HELP open over the grid; the draft stays as it is underneath */
+  .loop-panel {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    overflow: auto;
+    display: flex;
+    flex-wrap: wrap;
+    align-content: flex-start;
+    gap: 8px;
+    padding: 12px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--surface-raised);
+  }
+  .loop-panel p {
+    flex-basis: 100%;
+    line-height: 1.45;
+  }
+  .loop-grid-box {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    justify-content: center;
+  }
+  /* 8 steps, a short row of step numbers, 10 note rows, a gap, 3 drum rows, all in the space left;
+     cells grow to 44px and no further */
+  #loop-grid {
+    flex: 1 1 auto;
+    display: grid;
+    grid-template-columns: repeat(8, minmax(0, 1fr));
+    /* rows never below 22px: a phone held upright fits them all; a short sideways screen scrolls */
+    grid-template-rows: 16px repeat(10, minmax(22px, 1fr)) 4px repeat(3, minmax(22px, 1fr));
+    gap: 3px;
+    max-width: calc(8 * 44px + 7 * 3px);
+    max-height: calc(16px + 4px + 13 * 44px + 14 * 3px);
+  }
+  /* SWIPE on: a finger on the cells paints instead of scrolling the page */
+  .loop-grid-box.swiping .cell {
+    touch-action: none;
+  }
+  .drums {
+    grid-column: 1 / -1;
+  }
+  .step {
     text-align: center;
-    font-size: 12px;
+    font-size: 11px;
+    line-height: 16px;
     border-radius: 4px;
   }
-  .steps b.now {
+  .step.now {
     background: var(--accent);
     color: var(--surface);
   }
-  .tag {
-    font-size: 11px;
-    font-weight: 800;
-  }
-  .tag i {
-    display: block;
-    width: 16px;
-    height: 16px;
-    border-radius: 50%;
-    background: var(--c);
-  }
   .cell {
-    width: 44px;
-    height: 44px;
-    min-width: 44px;
+    width: 100%;
+    height: 100%;
+    min-width: 0;
+    min-height: 0;
     padding: 0;
     border-radius: 6px;
     border: 1px solid var(--line);

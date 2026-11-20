@@ -59,6 +59,16 @@ export const test = base.extend({
 });
 export { expect };
 
+// a control in the loop editor's TOOLS panel (#140): open the panel when it is closed, use the
+// control, and close the panel again if it is still open over the grid
+export async function tool(page, id, use = (control) => control.click()) {
+  const control = page.locator(id);
+  if (!(await control.isVisible())) await page.locator("#loop-tools").click();
+  await use(control);
+  const panel = page.locator("#loop-tools-panel");
+  if (await panel.isVisible()) await panel.getByRole("button", { name: "DONE", exact: true }).click();
+}
+
 // ABOUT (updates, moving a save) lives in the bottom bar's MORE sheet
 export async function openAbout(page) {
   await page.locator("#more").click();

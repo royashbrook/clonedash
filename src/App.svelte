@@ -243,7 +243,7 @@
   let mode = $state<Screen>("home"),
     current = $state(0),
     custom = $state(false),
-    // a skin or a loop is open in its editor: the bottom bar steps aside (its tabs would leave
+    // a skin is open in its editor: the bottom bar steps aside (its tabs would leave
     // without the editor's own ask before dropping changes)
     drafting = $state(false),
     loopMaker = $state<ReturnType<typeof LoopMaker>>();
@@ -599,10 +599,16 @@
     ["loops", "loops-open", "MUSIC", "M9 18V6l10-2v12 M9 18a3 3 0 1 1-6 0a3 3 0 1 1 6 0 M19 16a3 3 0 1 1-6 0a3 3 0 1 1 6 0"],
   ] as const;
   function goTab(tab: (typeof DOCK)[number][0]) {
-    if (tab === "home") home();
-    else if (tab === "library") library();
-    else if (tab === "skins") openSkins();
-    else openLoops();
+    const go = () => {
+      if (tab === "home") home();
+      else if (tab === "library") library();
+      else if (tab === "skins") openSkins();
+      else if (mode === "loops") loopMaker?.close();
+      else openLoops();
+    };
+    // a loop open in the editor keeps the bar (#140); leaving it asks first when it has changes
+    if (mode === "loops" && loopMaker) loopMaker.guard(go);
+    else go();
   }
   function about() {
     sheet(
@@ -1965,7 +1971,7 @@
   </section>
 </main>
 <!-- the house bottom bar (kidgames STANDARD: menus only; play and the editor keep the whole screen) -->
-{#if mode === "home" || mode === "library" || ((mode === "skins" || mode === "loops") && !drafting)}
+{#if mode === "home" || mode === "library" || mode === "loops" || (mode === "skins" && !drafting)}
   <nav id="dock" aria-label="Cube Dash">
     {#each DOCK as [tab, id, label, icon]}
       <button
@@ -2061,7 +2067,6 @@
     share={(loop) => loopSheet({ loop })}
     importLoop={() => loopSheet({})}
     back={home}
-    bind:editing={drafting}
   />{/if}
 <section id="hud" hidden={mode !== "play"}>
   <button

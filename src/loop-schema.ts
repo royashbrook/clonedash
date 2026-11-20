@@ -3,7 +3,7 @@
 // or the share code (src/loop.ts re-exports all of this).
 export const MAX_NAME = 40,
   MAX_LOOP_BYTES = 8 * 1024,
-  STEPS = 8,
+  STEPS = 8, // a new loop, and one bar
   MIN_ROOT = 36,
   MAX_ROOT = 48,
   MIN_WOBBLE = 1,
@@ -11,6 +11,9 @@ export const MAX_NAME = 40,
 // the one scale every melody note comes from, low to high
 export const DEGREES = [0, 3, 5, 7, 10, 12, 15, 17, 19, 22];
 export const DRUMS = ["kick", "snare", "hat"] as const;
+// the lengths a loop can be: whole bars of 8 steps
+export const LENGTHS = [8, 16, 24, 32];
+export const stepsOf = (loop: Loop) => loop.notes.length;
 
 export interface Loop {
   name: string;
@@ -38,9 +41,11 @@ export function validateLoop(input: unknown): Loop {
     throw Error(`A loop name is at most ${MAX_NAME} letters.`);
   if (!int(root, MIN_ROOT, MAX_ROOT) || !int(wobble, MIN_WOBBLE, MAX_WOBBLE) || typeof drop !== "boolean")
     throw Error("This loop's key, wobble or drop is not one the game knows.");
-  if (!Array.isArray(notes) || notes.length !== STEPS || !notes.every((s) => set(s, (d) => DEGREES.includes(d as number))))
+  // a loop is whole bars long, 8 to 32 steps (#140); 1.0.120 and older only take 8, so they refuse
+  // a longer loop rather than cut it
+  if (!Array.isArray(notes) || !LENGTHS.includes(notes.length) || !notes.every((s) => set(s, (d) => DEGREES.includes(d as number))))
     throw Error("This loop's notes are not ones the game knows.");
-  const step = (s: unknown) => int(s, 0, STEPS - 1);
+  const step = (s: unknown) => int(s, 0, notes.length - 1);
   if (![kick, snare, hat].every((d) => set(d, step))) throw Error("This loop's drums are not ones the game knows.");
   return {
     name,
