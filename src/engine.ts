@@ -24,7 +24,7 @@ export const DEATH_INSET = 0.12; // 0.40-block hazard box; full size still suppo
 // pixel-exact, so a spike catches more of the cube while a graze on its very edge still lives.
 // Walls and blocks keep DEATH_INSET; a box past the body would kill a run standing on a block.
 export const SPIKE_INSET = 0.06;
-export const MAX_LENGTH = 600;
+export const MAX_LENGTH = 1000, MAX_HEIGHT = 1000;
 // Zones: invisible in play, never touched themselves. While the player touches a W, hitting the
 // SIDE of a block or ramp does not kill and the player goes through it; while touching an R,
 // hitting it head first does not kill and the player rises through. Laid over visible blocks they
@@ -892,7 +892,7 @@ export function validateLevel(input: unknown): Level {
   if (
     !Number.isInteger(height) ||
     height < 7 ||
-    height > 40 ||
+    height > MAX_HEIGHT ||
     (raw.song !== undefined &&
       (!Number.isInteger(raw.song) ||
         raw.song < 0 ||
