@@ -26,6 +26,13 @@ test('every starting mode and speed applies from the first step and on retry', (
   assert.deepEqual([s.mode, s.speed], ['square', 1]);
 });
 
+test('starting settings do not lock the player out of later portals', () => {
+  const level = { ...base, startMode: 'door', startSpeed: 0.8,
+    objects: [object('plane', 4), object('speed-faster', 4)] };
+  const state = new Run(validateLevel(level)).state;
+  for (let i=0; i<150 && state.x < 5; i++) step(state, false, STEP);
+  assert.deepEqual([state.mode, state.speed], ['plane', 1.5]);
+});
 test('an off-map build has the same finish, ceiling and floor as the original', () => {
   const objects = [[-3, 0], [0,-3], [5,10], [40,0]].map(([x,y]) => object('block',x,y));
   assert.throws(() => validateLevel({ ...base, objects }));

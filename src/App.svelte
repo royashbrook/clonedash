@@ -2231,11 +2231,11 @@
       onclick={() =>
         sheet(
           "Level settings",
-          "Make room above your trail. Background blocks never collide. Pick a licensed electronic track or an original loop.",
+          "Choose how the run starts, where you can build, and what plays.",
           [],
           true,
           "settings",
-        )}>HEIGHT / SONG</button
+        )}>LEVEL SETTINGS</button
     ><button
       id="try-level"
       class:primary={testing}

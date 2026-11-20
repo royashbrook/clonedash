@@ -200,17 +200,19 @@ export function render(
     ctx.fillRect(X(0), Y(height), 3 * unit, height * unit);
   }
   ctx.fillStyle = "#0a111c";
-  ctx.fillRect(0, ground, w, Math.max(0, h - ground));
+  // In the off-map editor the construction grid continues below the actual floor.
+  const openGrid = editing && level.offMap;
+  if (!openGrid) ctx.fillRect(0, ground, w, Math.max(0, h - ground));
   ctx.strokeStyle = `${color}30`;
   ctx.lineWidth = 1;
-  if (ground < h)
+  if (!openGrid && ground < h)
     for (let x = -((camera * unit) % (unit / 2)); x < w; x += unit / 2) {
       ctx.beginPath();
       ctx.moveTo(x, ground);
       ctx.lineTo(x - h * 0.2, h);
       ctx.stroke();
     }
-  for (let y = ground + 14; y < h; y += 18) {
+  for (let y = ground + 14; !openGrid && y < h; y += 18) {
     ctx.beginPath();
     ctx.moveTo(0, y);
     ctx.lineTo(w, y);

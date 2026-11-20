@@ -4,7 +4,7 @@ test('build past the finish, keep the piece and start the test run as a fast Doo
   await page.setViewportSize({ width: 844, height: 390 });
   await page.goto('/');
   await page.locator('#editor-open').click();
-  await page.locator('#level-settings').click();
+  await page.getByRole('button', { name: 'LEVEL SETTINGS', exact: true }).click();
   const outside = page.getByRole('checkbox', {name:'Build outside the trail'});
   await page.getByLabel('Starting mode').selectOption('door');
   await page.getByLabel('Starting speed').selectOption('1.5');
