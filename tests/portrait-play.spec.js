@@ -42,8 +42,9 @@ test("upright from the start: the menus take taps, a run plays, zoom is in the p
   await expect(page.locator("#rotate")).toBeHidden();
   for (const b of [page.getByRole("button", { name: "Play First Spark", exact: true }), page.locator("#my-levels")]) expect(await reachable(b)).toBe(true);
   await page.getByRole("button", { name: "Play First Spark", exact: true }).click();
-  await page.clock.runFor(300);
   await expect(page.locator("#rotate")).toBeHidden();
+  // the look-ahead grows from nothing at the start line to its full block and a half
+  for (let i = 0; i < 40 && (await framing(page)) !== "1.50 1.00"; i++) await page.clock.runFor(50);
   expect(await framing(page)).toBe("1.50 1.00");
   await page.locator("#pause").click();
   await button(page, "ZOOM IN (SEE BIGGER)").click();

@@ -339,7 +339,10 @@
   let framing = { lead: 0, zoom: 1 },
     turning = false;
   function frameCamera(dt: number) {
-    const to = upright() ? { lead: LEAD, zoom } : { lead: 0, zoom: 1 };
+    // the lead never puts the cube closer than a block to the left edge, so at the start it grows
+    // from nothing as the run gets going and the cube is on screen from the first frame
+    const lead = Math.min(LEAD, Math.max(0, run.state.x - run.camera - 1)),
+      to = upright() ? { lead, zoom } : { lead: 0, zoom: 1 };
     framing = turning && !reduced ? easeFraming(framing, to, dt) : to;
     if (framing.lead === to.lead && framing.zoom === to.zoom) turning = false;
     const shown = `${framing.lead.toFixed(2)} ${framing.zoom.toFixed(2)}`;
@@ -797,7 +800,7 @@
     portrait = next;
     if (turned) {
       turning = true;
-      fingers.clear();
+      letGo();
     }
     if (mode !== "play" || run.state.status === "complete") return;
     if (turned && !paused) pause();
@@ -1157,6 +1160,24 @@
       groupAfter: [...group],
     });
     saveDraft(true);
+  }
+  // a turn ends every editor gesture where it stands (docs/portrait.md rule 3): a stroke keeps what
+  // it painted before the turn, a pinch keeps and saves its last good shape, a box sweep is dropped,
+  // and no finger from before the turn counts again until it comes down fresh
+  function letGo() {
+    endStroke();
+    if (pinch) {
+      pinch = null;
+      saveDraft();
+    }
+    sweep = null;
+    for (const id of fingers.keys())
+      try {
+        canvas.releasePointerCapture(id);
+      } catch {
+        /* already gone */
+      }
+    fingers.clear();
   }
   function stepTo(step: Step | null, side: "before" | "after") {
     if (step) {
