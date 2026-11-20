@@ -265,6 +265,7 @@ try {
     ["loop.ts", "|| DRUMS.some((d) => loop[d].some((s) => s >= length));", ";", "growing appends", "loop-length.test.mjs"],
     ["music.ts", "Math.max(BARS * 8, (64 * steps) / gcd(64, steps))", "BARS * 8", "whole passes", "loop-length.test.mjs"],
     ["loop-player.ts", "    if (this.step >= this.loop().notes.length) this.step = 0;", "    if (this.step >= 8) this.step = 0;", "a 16 step loop", "loop-song.test.mjs"],
+    ["loop-player.ts", "  if (step % 8 === 0) play.pad(t, root, loop.drop);", "  if (step === 0) play.pad(t, root, loop.drop);", "every bar of 8", "loop-length.test.mjs"],
     // the live loop player's races (#121)
     ["loop-player.ts", "    while (this.next < c.currentTime) this.advance();\n", "", "long gap", "loop-player.test.mjs"],
     ["loop-player.ts", "for (const s of [this.session, this.preview]) if (s)", "for (const s of [this.session]) if (s)", "tapped cell is cut", "loop-player.test.mjs"],

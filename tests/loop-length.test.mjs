@@ -58,6 +58,20 @@ test('a copy of the game from before long loops refuses one, in a loop and in a 
   assert.doesNotThrow(() => validateLevel({ name: 'L', length: 60, objects: [object('block', 6, 0)], loop: long(32) }));
 });
 
+// the pad builds its own lowpass filter at 1400 (no drop), and so does each lead note: with no notes
+// the 1400 filters are the pads, so they can be counted
+const pads = (log) => log.filter((e) => e[0] === 'set' && /^filter#\d+\.frequency$/.test(e[1]) && e[3] === 1400).length;
+const silentNotes = (n) => ({ ...long(n), drop: false, notes: Array.from({ length: n }, () => []) });
+
+// a recorder's log keeps growing across renders, so each render gets its own
+const render = (loop) => composeLoop(loop, recorder().RecordingContext);
+
+test('the pad sounds at every bar of 8 steps, whatever the loop length, not once per pass', async () => {
+  assert.equal(pads(await render(silentNotes(8))), 16, 'an 8 step loop: 16 bars, 16 pads');
+  for (const n of [16, 32]) assert.equal(pads(await render(silentNotes(n))), 16, `${n} steps: still one pad per bar`);
+  assert.equal(pads(await render(silentNotes(24))), 24, '24 steps renders 24 bars');
+});
+
 test('a level song renders whole passes of the loop and of the chord cycle', () => {
   assert.deepEqual(LENGTHS.map(loopSongSteps), [128, 128, 192, 128]);
 });
