@@ -111,7 +111,7 @@ test('a large library stays movable as a code', async () => {
     storeDraft(game, level);
   }
   const skins = emptyStore();
-  for (let i = 0; i < 100; i++) addSkin(skins, { name: `S${i}`, width: 32, height: 32, palette: ['#ffd166', '#06d6a0'], pixels: Array.from({ length: 1024 }, (_, j) => ((i + j) % 3)).join('') });
+  for (let i = 0; i < 100; i++) addSkin(skins, { name: `S${i}`, width: 100, height: 100, palette: ['#ffd166', '#06d6a0'], pixels: String(i % 3).repeat(9999) + '2' });
   const save = { game: readSave(JSON.stringify(game), N), skins: readSkins(JSON.stringify(skins)) };
   const code = await encodeBackup(save, N);
   assert.deepEqual(await decodeBackup(code, N), save);

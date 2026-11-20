@@ -72,8 +72,8 @@ const cellPoint = (page, x, y) =>
   page.locator("#skin-grid").evaluate(
     (grid, [x, y]) => {
       const box = grid.getBoundingClientRect(),
-        w = +document.querySelector("#skin-width").textContent,
-        h = +document.querySelector("#skin-height").textContent;
+        w = +document.querySelector("#skin-width").value,
+        h = +document.querySelector("#skin-height").value;
       return { x: box.left + ((x + 0.5) * box.width) / w, y: box.top + ((y + 0.5) * box.height) / h };
     },
     [x, y],
@@ -219,15 +219,15 @@ test("resize, save, reload, use, blank drafts, delete back to the green cube; th
     expect(await stored(page)).toBeNull();
     await newSkin(page);
     for (let i = 0; i < 8; i++) await page.locator("#width-more").tap();
-    await expect(page.locator("#skin-width")).toHaveText("16");
+    await expect(page.locator("#skin-width")).toHaveValue("16");
     // shrinking off the starter's bottom row asks first; KEEP IT keeps it
     await page.locator("#height-less").tap();
     await expect(page.locator("#sheet")).toContainText("Make it smaller?");
     await sheetButton(page, "KEEP IT").click();
-    await expect(page.locator("#skin-height")).toHaveText("8");
+    await expect(page.locator("#skin-height")).toHaveValue("8");
     await page.locator("#height-less").tap();
     await sheetButton(page, "CUT IT OFF").click();
-    await expect(page.locator("#skin-height")).toHaveText("7");
+    await expect(page.locator("#skin-height")).toHaveValue("7");
     await page.locator("#skin-name").fill("Wide one");
     await page.locator("#save-skin").tap();
     await expect(page.locator("#skin-message")).toHaveText("Saved.");
@@ -467,6 +467,70 @@ test("a worst-case 32x32 noise skin gets no QR but its complete code and file", 
   expect(QRCode.create(link, { errorCorrectionLevel: "M" }).version).toBeGreaterThan(15);
 });
 
+test("a 320px phone can size, draw, wear and reopen the last pixel of a 100x100 skin", async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 568 });
+  await open(page);
+  await newSkin(page);
+  for (const axis of ["width", "height"]) {
+    const field = page.locator(`#skin-${axis}`);
+    await field.fill("100");
+    await field.press("Tab");
+  }
+  await page.getByRole("button", { name: "RED", exact: true }).click();
+  const grid = page.locator("#skin-grid");
+  async function corner() {
+    const box = await grid.boundingBox();
+    expect(box.x).toBeGreaterThanOrEqual(0);
+    expect(box.x + box.width).toBeLessThanOrEqual(320);
+    return { x: box.width - 1, y: box.height - 1 };
+  }
+  await grid.click({ position: await corner() });
+  await expect(grid).toHaveAttribute("aria-label", "Drawing grid, 12 wide and 12 tall");
+  const box = await grid.boundingBox();
+  expect(box.width / 12).toBeGreaterThanOrEqual(16);
+  await grid.click({ position: await corner() });
+  await page.locator("#skin-overview").click();
+  await page.locator("#use-skin").click();
+  const store = await skinsOf(page), skin = store.skins.find((s) => s.id === store.selected).skin;
+  expect([skin.width, skin.height, skin.pixels.length]).toEqual([100, 100, 10000]);
+  expect(colours(skin).at(-1)).toBe("#ff5c7a");
+  expect(colours(skin).filter(c => c === "#ff5c7a")).toHaveLength(1);
+  await page.reload();
+  await page.locator("#skins-open").click();
+  await page.getByRole("button", { name: `Edit ${skin.name}`, exact: true }).click();
+  await expect(grid).toHaveAttribute("aria-label", "Whole skin, tap an area to zoom in");
+  const width = page.locator("#skin-width");
+  await width.fill("99"); await width.press("Tab");
+  await expect(page.locator("#sheet")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(width).toHaveValue("100");
+});
+
+test("a skinny 100-pixel overview stays tappable up to its last corner", async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 568 });
+  const shapes = [[4, 100], [100, 4]].map(([width, height], i) => ({
+    id: i + 1, skin: { name: `Skin ${i}`, width, height, palette: [], pixels: "0".repeat(width * height) },
+  }));
+  await open(page, { skins: { version: 1, next: 3, skins: shapes } });
+  await page.locator("#skins-open").click();
+  const grid = page.locator("#skin-grid");
+  for (const { id, skin } of shapes) {
+    await page.getByRole("button", { name: `Edit ${skin.name}`, exact: true }).click();
+    await page.getByRole("button", { name: "RED", exact: true }).click();
+    const whole = await grid.boundingBox();
+    expect(Math.min(whole.width, whole.height)).toBeGreaterThanOrEqual(44);
+    await grid.click({ position: { x: whole.width - 1, y: whole.height - 1 } });
+    await expect(grid).toHaveAttribute("aria-label", `Drawing grid, ${Math.min(12, skin.width)} wide and ${Math.min(12, skin.height)} tall`);
+    const detail = await grid.boundingBox();
+    await grid.click({ position: { x: detail.width - 1, y: detail.height - 1 } });
+    await page.locator("#save-skin").click();
+    const saved = (await skinsOf(page)).skins.find(s => s.id === id).skin;
+    expect(colours(saved).at(-1)).toBe("#ff5c7a");
+    expect(colours(saved).filter(c => c === "#ff5c7a")).toHaveLength(1);
+    await page.locator("#skin-done").click();
+  }
+});
+
 test("the creator fits 320 wide and phone landscape: no sideways scroll, 44px targets, the whole editor reachable", async ({ browser, baseURL }) => {
   for (const [width, height] of [[320, 568], [932, 430], [844, 390]]) {
     const context = await browser.newContext({ baseURL, viewport: { width, height }, hasTouch: true });
@@ -502,8 +566,8 @@ test("the creator fits 320 wide and phone landscape: no sideways scroll, 44px ta
       expect(m.narrow).toEqual([]);
       for (const [w, h] of [[32, 4], [4, 32], [32, 32]]) {
         await page.getByRole("button", { name: `Edit Shape ${w}x${h}`, exact: true }).click();
-        await expect(page.locator("#skin-width")).toHaveText(String(w));
-        await expect(page.locator("#skin-height")).toHaveText(String(h));
+        await expect(page.locator("#skin-width")).toHaveValue(String(w));
+        await expect(page.locator("#skin-height")).toHaveValue(String(h));
         m = await measure();
         expect([m.doc, m.body, m.screenOver], `${width}x${height} ${w}x${h}`).toEqual([width, width, 0]);
         expect(m.short).toEqual([]);

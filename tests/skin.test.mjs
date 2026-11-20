@@ -64,7 +64,7 @@ function memory(initial = {}) {
 
 test("the schema: every bound and form is refused at the one validator, and it rebuilds the five fields", () => {
   assert.deepEqual(validateSkin({ ...skin(), id: 4, selected: true, html: "<b>" }), skin());
-  for (const [w, h] of [[4, 4], [32, 32], [4, 32], [32, 4], [16, 8]])
+  for (const [w, h] of [[4, 4], [32, 32], [4, 100], [100, 4], [100, 100], [16, 8]])
     assert.doesNotThrow(() => validateSkin(sized(w, h)), `${w}x${h}`);
   const bad = [
     null,
@@ -74,8 +74,8 @@ test("the schema: every bound and form is refused at the one validator, and it r
     skin({ name: "x".repeat(41) }),
     sized(3, 8),
     sized(8, 3),
-    sized(33, 8),
-    sized(8, 33),
+    sized(101, 8),
+    sized(8, 101),
     skin({ width: 8.5 }),
     skin({ width: NaN }),
     skin({ height: Infinity }),
@@ -126,7 +126,7 @@ test("the store: 100 skins, ids never reused, the worn skin must exist and have 
     JSON.stringify({ version: 2, next: 1, skins: [] }),
     JSON.stringify({ version: 1, next: 0, skins: [] }),
     JSON.stringify({ version: 1, next: 1.5, skins: [] }),
-    JSON.stringify({ version: 1, next: 2, skins: [{ id: 1, skin: sized(33, 4) }] }),
+    JSON.stringify({ version: 1, next: 2, skins: [{ id: 1, skin: sized(101, 4) }] }),
     JSON.stringify({ version: 1, next: 2, skins: [{ id: 2, skin: skin() }] }),
     JSON.stringify({ version: 1, next: 3, skins: [{ id: 1, skin: skin() }, { id: 1, skin: skin() }] }),
     JSON.stringify({ version: 1, next: 2, skins: [{ id: 1, skin: skin() }], selected: 5 }),
@@ -159,14 +159,14 @@ test("stale-tab preservation: every skin write re-reads its own key and takes th
 
 test("refused, unconfirmed and invalid writes leave every stored byte and report failure", () => {
   const good = JSON.stringify({ version: 1, next: 2, skins: [{ id: 1, skin: skin() }] });
-  for (const stored of ['{"broken":', '{"version":1,"next":1,"skins":"x"}', JSON.stringify({ version: 1, next: 2, skins: [{ id: 1, skin: sized(64, 4) }] })]) {
+  for (const stored of ['{"broken":', '{"version":1,"next":1,"skins":"x"}', JSON.stringify({ version: 1, next: 2, skins: [{ id: 1, skin: sized(101, 4) }] })]) {
     const storage = memory({ [SKINS]: stored });
     assert.throws(() => commitSkins(storage, (s) => addSkin(s, skin())), /could not be read/);
     assert.equal(storage.getItem(SKINS), stored, "invalid stored data is never replaced by fallback data");
     assert.deepEqual(storage.writes, []);
   }
   const storage = memory({ [SKINS]: good });
-  assert.throws(() => commitSkins(storage, (s) => addSkin(s, sized(40, 4))));
+  assert.throws(() => commitSkins(storage, (s) => addSkin(s, sized(4, 101))));
   assert.throws(() => commitSkins(storage, (s) => wearSkin(s, 7)));
   assert.equal(storage.getItem(SKINS), good);
   assert.throws(
@@ -225,7 +225,7 @@ test("bad, oversized, ambiguous and wrong-kind skin codes are refused", async ()
     `https://e.test/#level=${level}`,
     `https://e.test/#skin=${code}&skin=${code}`,
     `https://e.test/#skin=${code}&level=${level}`,
-    raw({ ...skin(), width: 33 }),
+    raw(sized(101, 4)),
     raw("skin"),
   ])
     await assert.rejects(() => decodeSkin(bad), undefined, bad.slice(0, 40));
