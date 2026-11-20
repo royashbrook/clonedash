@@ -36,7 +36,7 @@
   import { render } from "./render.ts";
   import { Run } from "./run.ts";
   import { GAME_MODES, labelOf, type GameMode } from "./types.ts";
-  import { Soundtrack, TRACKS, trackName } from "./music.ts";
+  import { closeGameAudio, Soundtrack, TRACKS, trackName } from "./music.ts";
   import { RECORDINGS } from "./recordings.ts";
   import {
     SAVE,
@@ -1960,7 +1960,8 @@
       installer?.dispose();
       updater?.dispose();
       music.dispose();
-      void audio?.close();
+      effects?.disconnect();
+      closeGameAudio(audio);
       dialog.close();
       delete document.body.dataset.mode;
     };

@@ -57,6 +57,12 @@ test("unmount cancels frames, listeners and pending audio; remount owns exactly 
     await context.addInitScript(() => {
       window.pendingFrames = new Set();
       window.audioContexts = [];
+      window.closeStates = [];
+      const close = AudioContext.prototype.close;
+      AudioContext.prototype.close = function (...args) {
+        window.closeStates.push(this.state);
+        return close.apply(this, args);
+      };
       window.draws = 0;
       const raf = requestAnimationFrame,
         cancel = cancelAnimationFrame;
@@ -138,9 +144,15 @@ test("unmount cancels frames, listeners and pending audio; remount owns exactly 
       page.getByRole("heading", { name: "Paused", exact: true }),
     ).toBeVisible();
     await expect(page.locator("#world")).toHaveCount(1);
+    // The first teardown may land before resume settles. Now exercise the running case too.
+    await page.getByRole("button", { name: "Turn sound on" }).click();
+    await expect.poll(() => page.evaluate(() => window.audioContexts.at(-1)?.state)).toBe("running");
+    await page.evaluate(() => { window.closeStates = []; });
     expect(await page.evaluate(() => window.pendingFrames.size)).toBe(1);
     await page.evaluate(() => window.unmountGame());
     expect(await page.evaluate(() => window.pendingFrames.size)).toBe(0);
+    await expect.poll(() => page.evaluate(() => window.closeStates)).toEqual(["suspended"]);
+    await expect.poll(() => page.evaluate(() => window.audioContexts.at(-1).state)).toBe("closed");
     expect(errors).toEqual([]);
   } finally {
     await context?.close();

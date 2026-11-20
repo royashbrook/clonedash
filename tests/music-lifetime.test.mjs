@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { Soundtrack } from '../src/music.ts';
+import { closeGameAudio, Soundtrack } from '../src/music.ts';
 const createGain = () => ({connect(){},disconnect(){},gain:{setValueAtTime(){},linearRampToValueAtTime(){}}});
 
 test('track changes fade, a delayed frame rejoins the run, and mute cuts even a fading tail', () => {
@@ -93,6 +93,28 @@ test('a resume the close rejects after unmount is expected; one rejected while t
   const live = unlocked();
   assert.throws(() => live.handler(closed), (e) => e === closed, 'while the game lives the real error goes on');
   live.music.dispose();
+});
+
+test('audio teardown suspends before closing and never strands a pending close', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  for (const end of ['ok','reject','never']) {
+    const calls = []; let done, fail;
+    const context = { state:'running', suspend() {
+      calls.push('suspend'); return new Promise((res,rej) => { done=res; fail=rej; });
+    }, close() { calls.push('close'); return Promise.resolve(); } };
+    closeGameAudio(context);
+    assert.deepEqual(calls,['suspend']);
+    if (end === 'ok') done(); else if (end === 'reject') fail(Error('interrupted')); else t.mock.timers.tick(250);
+    await Promise.resolve();
+    assert.deepEqual(calls,['suspend','close']);
+    done(); await Promise.resolve(); t.mock.timers.tick(1000);
+    assert.deepEqual(calls,['suspend','close']);
+  }
+  for (const state of ['closed','suspended']) {
+    let closes = 0;
+    closeGameAudio({state, close() { closes++; return Promise.resolve(); }});
+    assert.equal(closes, Number(state !== 'closed'));
+  }
 });
 
 test('recordings do not require the newer AbortSignal static helpers', async () => {
