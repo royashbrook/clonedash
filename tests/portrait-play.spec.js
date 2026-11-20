@@ -34,6 +34,25 @@ async function play(page) {
 const sheet = (page) => page.locator("#sheet");
 const button = (page, name) => sheet(page).getByRole("button", { name, exact: true });
 
+test("a seven-block trail paints its top edge at the actual ceiling before and after zoom", async ({ page }) => {
+  await page.clock.install();
+  await openRoad(page, UP);
+  await play(page);
+  await page.locator("#pause").click();
+  for (const zoom of [1, 1.1]) {
+    if (zoom !== 1) await button(page, "ZOOM IN (SEE BIGGER)").click();
+    await page.clock.runFor(100);
+    const rgb = await page.locator("#world").evaluate((canvas, zoom) => {
+      const floor = innerHeight - Math.max(42, innerHeight * 0.16);
+      const unit = innerWidth / 13.5 * zoom;
+      const dpr = canvas.width / innerWidth;
+      const ctx = canvas.getContext("2d");
+      return [...ctx.getImageData(Math.round(canvas.width / 2), Math.floor((floor - 7 * unit - 1) * dpr), 1, 1).data];
+    }, zoom);
+    expect(rgb).toEqual([175, 194, 212, 255]);
+  }
+});
+
 test("upright from the start: the menus take taps, a run plays, zoom is in the pause sheet only", async ({ page }) => {
   await page.clock.install();
   await page.setViewportSize(UP);

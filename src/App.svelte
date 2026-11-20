@@ -755,6 +755,7 @@
     }
   }
   function resume() {
+    if (save.sound) music.unlock(true);
     closeSheet();
     paused = false;
     run.interrupt();
@@ -765,7 +766,7 @@
     if (mode !== "play" || run.state.status === "complete") return;
     run.interrupt();
     paused = true;
-    music.stop();
+    music.interrupt();
     void sheet(
       "Paused",
       "Your run is right where you left it.",
@@ -975,6 +976,7 @@
       skin: wornArt,
       camera: live() ? run.camera + framing.lead : mode === "editor" ? pan : 0,
       zoom: framing.zoom,
+      showCeiling: live(),
       cameraY: live() ? run.cameraY : mode === "editor" ? panY : 0,
       editing: mode === "editor",
       layer,
@@ -2502,6 +2504,11 @@
             class:primary
             onclick={handler}>{label}</button
           >{/each}
+        {#if panel.title === "Paused"}
+          <button aria-label={save.sound ? "Turn sound off" : "Turn sound on"}
+            aria-pressed={save.sound} onclick={toggleSound}
+          >{save.sound ? "SOUND ON" : "SOUND OFF"}</button>
+        {/if}
       </div>
       {#if panel.extra === "transfer"}{#key transfer}<LevelTransfer
             {...transfer}
