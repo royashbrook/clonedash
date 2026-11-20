@@ -197,5 +197,5 @@ test('rule 6: cdl2 carries the new fields and only they; cdl1 stays what it was 
   const raw = (prefix, value) => prefix + '0' + Buffer.from(JSON.stringify(value)).toString('base64url');
   await assert.rejects(() => decodeLevel(raw('cdl1.', level([piece('grid', 8, 1, { scaleX: 2, scaleY: 2 })]))), /Invalid level code/);
   await assert.rejects(() => decodeLevel(raw('cdl2.', plain)), /Invalid level code/);
-  await assert.rejects(() => decodeLevel('cdl4.0AA'), /cdl1, cdl2 or cdl3/);
+  await assert.rejects(() => decodeLevel('cdl5.0AA'), /cdl1 through cdl4/);
 });

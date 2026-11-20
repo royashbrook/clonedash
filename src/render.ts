@@ -187,7 +187,7 @@ export function render(
         ctx.fillText(String(x), X(x) + 3, floor + 14);
       }
     }
-    for (let y = Math.ceil(cameraY); y <= Math.min(height, cameraY + 8); y++) {
+    for (let y = Math.ceil(cameraY); y <= (level.offMap ? cameraY + 8 : Math.min(height, cameraY + 8)); y++) {
       ctx.beginPath();
       ctx.moveTo(0, Y(y));
       ctx.lineTo(w, Y(y));
@@ -219,6 +219,11 @@ export function render(
   ctx.fillStyle = color;
   ctx.fillRect(0, ground, w, 2);
   const ceiling = Y(height);
+  if (editing && level.offMap) {
+    ctx.strokeStyle = "#b6c5d8";
+    ctx.lineWidth = 2;
+    ctx.strokeRect(X(0), ceiling, level.length * unit, height * unit);
+  }
   if (showCeiling && ceiling > 0) {
     ctx.fillStyle = "#07101b66";
     ctx.fillRect(0, 0, w, Math.min(h, ceiling));

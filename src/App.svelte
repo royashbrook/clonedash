@@ -8,6 +8,9 @@
     bounds,
     duplicateObject,
     levelHeight,
+    BUILD_MARGIN,
+    buildBounds,
+    SPEEDS,
     MAX_LENGTH,
     MAX_HEIGHT,
     SCALABLE,
@@ -32,7 +35,7 @@
   import { easeFraming } from "./framing.ts";
   import { render } from "./render.ts";
   import { Run } from "./run.ts";
-  import { labelOf } from "./types.ts";
+  import { GAME_MODES, labelOf, type GameMode } from "./types.ts";
   import { Soundtrack, TRACKS, trackName } from "./music.ts";
   import { RECORDINGS } from "./recordings.ts";
   import {
@@ -246,6 +249,9 @@
   let save = $state.raw(initialSave);
   let storageOK = $state(true);
   let draft = $state.raw(structuredClone(initialSave.draft));
+  let margin = $derived(draft.offMap ? BUILD_MARGIN : 0);
+  // Include the whole topmost off-map cell, not just its bottom edge.
+  let editorTop = $derived(levelHeight(draft) + (margin ? margin + 1 : 0));
   let mode = $state<Screen>("home"),
     current = $state(0),
     custom = $state(false),
@@ -1145,7 +1151,7 @@
     for (const [ox, oy] of cellsAlong(from, at, stepSize)) {
       if (st.stopped) return;
       const key = `${ox},${oy}`;
-      if (oy < 0 || oy >= levelHeight(draft) || st.visited.has(key)) continue;
+      if (oy < -margin || oy > buildBounds(draft).top || st.visited.has(key)) continue;
       st.visited.add(key);
       const piece: Piece = { ...object(typeOf(tool), ox, oy), ...presets[tool] };
       if (activeLayer) piece.layer = activeLayer;
@@ -1153,7 +1159,7 @@
       if (done === "placed") {
         st.changed = true;
         st.placed = draft.objects.length - 1;
-      } else if (done === "outside") say("Leave three blocks at the start and two at the finish.");
+      } else if (done === "outside") say(draft.offMap ? "That is outside the building area." : "Leave three blocks at the start and two at the finish.");
       else if (done === "invalid")
         say("That piece extends above the ceiling. Increase the height or place it lower.");
       else if (done === "full" || done === "coins") {
@@ -1376,7 +1382,7 @@
     const view = draw(),
       x = view.x(e.clientX),
       y = view.y(e.clientY);
-    if (y < 0 || y >= levelHeight(draft)) return;
+    if (y < -margin || y >= editorTop) return;
     const activeLayer = layer === "background" ? "background" : undefined;
     if (tool === "select") {
       select(pieceAt(x, y, activeLayer));
@@ -1388,8 +1394,9 @@
     }
     const ox = Math.round(x / stepSize) * stepSize,
       oy = Math.floor(y / stepSize) * stepSize;
-    if (ox < 3 || ox > draft.length - 2) {
-      toast("Leave three blocks at the start and two at the finish.");
+    const area = buildBounds(draft);
+    if (ox < area.left || ox > area.right) {
+      toast(draft.offMap ? "That is outside the building area." : "Leave three blocks at the start and two at the finish.");
       return;
     }
     if (draft.objects.length >= 600) {
@@ -2398,18 +2405,18 @@
         >Scroll <input
           id="pan"
           type="range"
-          min="0"
-          max={draft.length - 8}
+          min={-margin}
+          max={draft.length - 8 + margin}
           bind:value={pan}
           step="0.5"
         /></label
-      ><label id="vertical-scroll" hidden={levelHeight(draft) === 7}
+      ><label id="vertical-scroll" hidden={levelHeight(draft) === 7 && !margin}
         >Up <input
           id="pan-y"
           aria-label="Vertical scroll"
           type="range"
-          min="0"
-          max={levelHeight(draft) - 7}
+          min={-margin}
+          max={editorTop - 7}
           bind:value={panY}
           step="0.5"
         /></label
@@ -2558,6 +2565,28 @@
             replace={replaceSave}
           />{/key}{/if}
       {#if panel.extra === "settings"}<div class="level-settings">
+          <label>Starting mode<select id="start-mode" value={draft.startMode ?? "square"} onchange={(e) => {
+            const { startMode, ...rest } = draft, mode = e.currentTarget.value as GameMode;
+            draft = mode === "square" ? rest : { ...rest, startMode: mode }; saveDraft();
+          }}>{#each GAME_MODES as mode}<option value={mode}>{labelOf(mode)}</option>{/each}</select></label>
+          <label>Starting speed<select id="start-speed" value={draft.startSpeed ?? 1} onchange={(e) => {
+            const { startSpeed, ...rest } = draft, speed = Number(e.currentTarget.value);
+            draft = speed === 1 ? rest : { ...rest, startSpeed: speed }; saveDraft();
+          }}>{#each Object.values(SPEEDS) as speed}<option value={speed}>{speed}×</option>{/each}</select></label>
+          <label><input type="checkbox" checked={!!draft.offMap} onchange={(e) => {
+            const input = e.currentTarget, { offMap, ...rest } = draft;
+            if (input.checked) draft = { ...rest, offMap: true };
+            else {
+              try { validateLevel(rest); } catch {
+                input.checked = true; toast("Move outside pieces back inside first."); return;
+              }
+              draft = rest;
+              pan = Math.max(0, Math.min(pan, draft.length - 8));
+              panY = Math.max(0, Math.min(panY, levelHeight(draft) - 7));
+            }
+            saveDraft();
+          }} />Build outside the trail</label>
+          <small>Build up to {BUILD_MARGIN} blocks beyond each edge. The finish, floor and ceiling stay put.</small>
           <label
             >Height (7–{MAX_HEIGHT} blocks)<input
               id="level-height"
@@ -2568,11 +2597,11 @@
               value={levelHeight(draft)}
               onchange={changeHeight}
             /></label
-          >{#if draft.length > 600 || levelHeight(draft) > 40}
-            <label>Scroll to left edge (x)<input id="jump-x" type="number" min="0" max={draft.length - 8}
+          >{#if margin || draft.length > 600 || levelHeight(draft) > 40}
+            <label>Scroll to left edge (x)<input id="jump-x" type="number" min={-margin} max={draft.length - 8 + margin}
               step="0.5" value={pan} onchange={(e) => jumpView(e, 'x')} /></label>
-            {#if levelHeight(draft) > 7}<label>Scroll to bottom edge (y)<input id="jump-y" type="number"
-              min="0" max={levelHeight(draft) - 7} step="0.5" value={panY} onchange={(e) => jumpView(e, 'y')} /></label>{/if}
+            {#if margin || levelHeight(draft) > 7}<label>Scroll to bottom edge (y)<input id="jump-y" type="number"
+              min={-margin} max={editorTop - 7} step="0.5" value={panY} onchange={(e) => jumpView(e, 'y')} /></label>{/if}
           {/if}<label
             >Song<select
               id="level-song"

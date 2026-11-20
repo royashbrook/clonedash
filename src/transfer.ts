@@ -15,7 +15,9 @@ export const MAX_SAVE_BYTES = 5 * 1024 * 1024,
 // quietly drop the loop and play another song.
 const PREFIX = "cdl1.",
   PREFIX2 = "cdl2.",
-  PREFIX3 = "cdl3.";
+  PREFIX3 = "cdl3.",
+  PREFIX4 = "cdl4."; // Older readers must not discard starting settings or off-map pieces.
+const hasSetup = (value: object) => "startMode" in value || "startSpeed" in value || "offMap" in value;
 const DECODE_MS = 5000;
 
 // A level, never a save. Whitelist fields even when a valid level carries extras. A whole save
@@ -33,6 +35,9 @@ export function portableLevel(input: unknown): Level {
   return {
     name: level.name,
     length: level.length,
+    ...(level.startMode === undefined ? {} : { startMode: level.startMode }),
+    ...(level.startSpeed === undefined ? {} : { startSpeed: level.startSpeed }),
+    ...(level.offMap ? { offMap: true as const } : {}),
     ...(level.height === undefined ? {} : { height: level.height }),
     // one song source: its own loop, or a numbered song (the original when none was picked)
     ...(level.loop ? { loop: level.loop } : { song: level.song ?? 9 }),
@@ -203,7 +208,8 @@ export async function encodeLevel(input: Level): Promise<string> {
       flag = "1";
     }
   }
-  return (level.loop ? PREFIX3 : level.objects.some(usesNew) ? PREFIX2 : PREFIX) + flag + base64(payload);
+  const legacy = (level.loop ? PREFIX3 : level.objects.some(usesNew) ? PREFIX2 : PREFIX);
+  return (hasSetup(level) ? PREFIX4 : legacy) + flag + base64(payload);
 }
 
 export async function decodeLevel(text: string): Promise<Level> {
@@ -217,9 +223,9 @@ export async function decodeLevel(text: string): Promise<Level> {
     code = params.get("level")!;
   }
   const second = code.startsWith(PREFIX2),
-    third = code.startsWith(PREFIX3);
-  if (!code.startsWith(PREFIX) && !second && !third)
-    throw Error("Use a Cube Dash level code or link (cdl1, cdl2 or cdl3).");
+    third = code.startsWith(PREFIX3), fourth = code.startsWith(PREFIX4);
+  if (!code.startsWith(PREFIX) && !second && !third && !fourth)
+    throw Error("Use a Cube Dash level code or link (cdl1 through cdl4).");
   const flag = code[PREFIX.length],
     encoded = code.slice(PREFIX.length + 1);
   if (!/[01]/.test(flag ?? "") || !/^[\w-]+$/.test(encoded))
@@ -243,10 +249,11 @@ export async function decodeLevel(text: string): Promise<Level> {
   const raw = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(decoded));
   // a loop is checked on the raw data, before the whitelist could drop it: cdl1 and cdl2 never
   // carry one (null or malformed included), and cdl3 always does
-  if ((raw !== null && typeof raw === "object" && "loop" in raw) !== third) throw Error("Invalid level code.");
+  if (!raw || typeof raw !== "object" || hasSetup(raw) !== fourth) throw Error("Invalid level code.");
+  if (!fourth && (raw !== null && typeof raw === "object" && "loop" in raw) !== third) throw Error("Invalid level code.");
   const level = portableLevel(raw);
   // cdl3: the raw check above already required the loop, and validateLevel bounds and checks it
-  if (third) return level;
+  if (third || fourth) return level;
   // each prefix means one thing: a cdl1 never carries the #117 fields, a cdl2 always does
   if (level.objects.some(usesNew) !== second) throw Error("Invalid level code.");
   return level;

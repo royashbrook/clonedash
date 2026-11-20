@@ -1,4 +1,4 @@
-import { coinCount, intersects, parts, validateLevel, MAX_COINS, TRIGGERS, ZONES } from "./engine.ts";
+import { buildBounds, coinCount, intersects, parts, validateLevel, MAX_COINS, TRIGGERS, ZONES } from "./engine.ts";
 import type { Level, Piece, Point } from "./types.ts";
 
 // SWIPE (#106, docs/ramps-and-boosters.md rule 6): one finger dragged across the editor grid paints
@@ -48,7 +48,8 @@ export function cellsAlong(a: Point, b: Point, step: number): Point[] {
 export type Paint = "placed" | "taken" | "outside" | "full" | "coins" | "invalid";
 export const MAX_OBJECTS = 600;
 export function paintCell(level: Level, piece: Piece): Paint {
-  if (piece.x < 3 || piece.x > level.length - 2) return "outside";
+  const area = buildBounds(level);
+  if (piece.x < area.left || piece.x > area.right) return "outside";
   if (level.objects.length >= MAX_OBJECTS) return "full";
   if (piece.type === "coin" && coinCount(level) >= MAX_COINS) return "coins";
   const over = (type: string) => ZONES.includes(type) || TRIGGERS.includes(type),
