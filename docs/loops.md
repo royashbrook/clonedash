@@ -14,7 +14,7 @@ skins and levels are shared. It plays the same instruments every synthesized son
 | `root` | integer 36..48, the key (MIDI note of the bass) |
 | `wobble` | integer 1..8, bass wobbles per beat |
 | `drop` | boolean, the brighter, harder sound |
-| `notes` | 8 steps, each a sorted list of distinct degrees from `0 3 5 7 10 12 15 17 19 22` |
+| `notes` | 8, 16, 24 or 32 steps (whole bars), each a sorted list of distinct degrees from `0 3 5 7 10 12 15 17 19 22` |
 | `kick` `snare` `hat` | sorted lists of distinct steps 0..7 |
 
 A step is an eighth note (0.2 s at 150 BPM, `BEAT / 2`). One bar is 8 steps. The chord moves like a
@@ -22,6 +22,33 @@ song's, `[0, -5, 3, -2]` every two bars.
 
 Presets start from any of the 109 synthesized songs (`music.ts trackFor`): its key, wobble and
 melody, with the default drums. The 14 recorded songs are audio files, so they are not offered.
+
+## Length (#140)
+
+A new loop is 8 steps. TOOLS sets 8, 16, 24 or 32. Growing appends silent steps to the notes and
+every drum row; the key, wobble, drop and every kept step stay as they were. Cutting asks first only
+when the cut steps hold notes or drum hits, and KEEP IT leaves the draft exactly as it was. A bar is
+still 8 steps, so the chords move the same way at any length: the pad sounds at each bar start, the
+bass on even steps, and the loop position is the running step count modulo the length. PLAY and its
+playhead wrap at the length. A loop level renders a whole number of loop passes and of the 64-step
+chord cycle, at least 16 bars: 128 steps (25.6 s) for 8, 16 and 32, 192 (38.4 s) for 24.
+
+The length is the notes array length. 1.0.120 and older require exactly 8, so they refuse a longer
+loop (its code, link, file, save or level), never cut it short.
+
+## On a phone (#140)
+
+The editor is a fixed column: the header (back, name, PLAY, SAVE), one toolbar (TOOLS, SWIPE, HELP,
+and a row of page tabs when the loop is longer than 8), then the grid in the space left above the
+bottom bar. TOOLS (start from a song, key, wobble, length, drop, surprise, clear) and HELP open over
+the grid and leave the draft as it is; a tool that replaces the notes or the length closes the panel.
+The grid shows 8 steps, 10 note rows and 3 drum rows (hi-hat, snare, kick, top to bottom) with no
+legend; cells grow to 44px and shrink to fit a phone held upright, never below 22px tall (a short
+sideways screen scrolls the grid under the fixed toolbar). A longer loop shows its steps 8 at a time.
+
+The bottom bar stays in the loop editor. A tab leaves through the editor's own ask: with changes it
+asks "Leave without saving?", KEEP IT keeps everything, LEAVE goes to the tab that was tapped. MORE
+silences a playing loop and opens over the draft.
 
 ## Saving
 
