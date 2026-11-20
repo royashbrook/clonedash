@@ -271,7 +271,8 @@ try {
     ["engine.ts", "    else if (!fx.fired[t] && o.x > from && o.x < s.x) fx.skipped[t] = 1;", "", "arriving is not crossing", "teleport.test.mjs"],
     ["engine.ts", "    if (o.touch) fx.inside[t] = intersects(playerPolygon(s), polygon(o)) ? 1 : 0;\n    else if", "    if (o.touch) continue;\n    else if", "landing inside a touch", "teleport.test.mjs"],
     ["engine.ts", "      if (fx.hopped || fx.jump) {", "      if (false) {", "crossed in one step", "teleport.test.mjs"],
-    ["engine.ts", "  if (o.type === \"teleport-ring\" && !destination(s.level.objects, o.target, s.fx?.groups)) return false;\n", "", "nowhere to go", "teleport.test.mjs"],
+    ["engine.ts", "  if (o.type === \"teleport-ring\" && !destination(s.level, o.target, s.fx?.groups)) return false;\n", "", "nowhere to go", "teleport.test.mjs"],
+    ["engine.ts", "    if (o.x < area.left || o.x > area.right || o.y < area.bottom || o.y > area.top) continue;\n", "", "outside the trail is no landing spot", "teleport.test.mjs"],
     // the three-sided outline (#139)
     ["render.ts", "                        ? [[bl, tl, tr, br]] // left, top and right, the bottom open (#139)", "                        ? [[tl, tr, br]] // left, top and right, the bottom open (#139)", "a variant strokes only", "edges.test.mjs"],
     ["engine.ts", "\"inner\", \"three\", \"none\"]", "\"inner\", \"none\"]", "six values", "edges.test.mjs"],

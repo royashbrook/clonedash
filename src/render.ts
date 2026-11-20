@@ -542,7 +542,7 @@ export function render(
       if (editing && (index === selected || group.includes(index)) && (o.type === "teleport-trigger" || o.type === "teleport-ring")) {
         // a selected teleport shows where it lands (docs/teleport.md rule 6): a dashed line to the
         // destination cell, or NO DESTINATION over the piece
-        const to = destination(level.objects, o.target),
+        const to = destination(level, o.target),
           [fx, fy] = pointOf(o, 0.5, 0.5);
         ctx.globalAlpha = 1;
         ctx.strokeStyle = ctx.fillStyle = "#b388ff";

@@ -145,9 +145,11 @@ export const ringSpeed = (o: Pick<Piece, "bounce">) =>
 export const levelHeight = (level: Level) => level.height ?? 7;
 // Authoring room only. The simulation still uses the actual length and height.
 export const BUILD_MARGIN = 32;
+// The trail a run plays on: where a normal level's pieces go, and the only place a teleport lands.
+export const playArea = (level: Level) => ({ left: 3, right: level.length - 2, bottom: -0.5, top: levelHeight(level) - 1 });
 export const buildBounds = (level: Level) => level.offMap
   ? { left: -BUILD_MARGIN, right: level.length + BUILD_MARGIN, bottom: -BUILD_MARGIN, top: levelHeight(level) + BUILD_MARGIN }
-  : { left: 3, right: level.length - 2, bottom: -0.5, top: levelHeight(level) - 1 };
+  : playArea(level);
 export const COIN_RADIUS = 0.3; // a coin is a disc in the middle of its cell
 export const coinCount = (level: Level) => {
   let n = 0;
@@ -355,19 +357,23 @@ function baseState(level: Level): GameState {
 // to go is not a ring at all (docs/teleport.md rule 4): never ready, never spent.
 export function ringReady(s: GameState, o: Piece, index: number) {
   if (s.mode === "angle" && (o.type === "drop-ring" || o.type === "stop-ring")) return false;
-  if (o.type === "teleport-ring" && !destination(s.level.objects, o.target, s.fx?.groups)) return false;
+  if (o.type === "teleport-ring" && !destination(s.level, o.target, s.fx?.groups)) return false;
   return !o.noTouch && !s.usedRings.includes(index) && inReach(s, o);
 }
-// Where a teleport aimed at a group sends you (docs/teleport.md rule 2), shared by the trigger and
-// the ring: of the group's pieces where they stand now (moves included), the one furthest left,
-// then lowest, then first placed; its x and y. Null when the group is unset or has no pieces.
-export function destination(objects: Piece[], target: number | undefined, groups?: Map<number, number[]>): Point | null {
+// Where a teleport aimed at a group sends you (docs/teleport.md rule 2), shared by the trigger, the
+// ring and the editor's preview: of the group's pieces where they stand now (moves included) and
+// inside the trail (playArea; off-map building room never counts), the one furthest left, then
+// lowest, then first placed; its x and y. Null when the group is unset or has no such piece.
+export function destination(level: Level, target: number | undefined, groups?: Map<number, number[]>): Point | null {
   if (target === undefined) return null;
-  const members = groups ? (groups.get(target) ?? []) : objects.flatMap((o, i) => (o.group === target ? [i] : []));
+  const objects = level.objects,
+    area = playArea(level),
+    members = groups ? (groups.get(target) ?? []) : objects.flatMap((o, i) => (o.group === target ? [i] : []));
   let best = -1;
   for (const i of members) {
     const o = objects[i],
       b = best < 0 ? null : objects[best];
+    if (o.x < area.left || o.x > area.right || o.y < area.bottom || o.y > area.top) continue;
     if (!b || o.x < b.x || (o.x === b.x && o.y < b.y)) best = i;
   }
   return best < 0 ? null : [objects[best].x, objects[best].y];
@@ -507,7 +513,7 @@ export function runTriggers(s: GameState, fx: RunEffects) {
       }
       fx.fired[t] = 1;
       // the jump happens once this step's contact is final (settle); nowhere to go is nothing (rule 4)
-      fx.jump = destination(s.level.objects, o.target, fx.groups);
+      fx.jump = destination(s.level, o.target, fx.groups);
       continue;
     }
     fx.fired[t] = 1;
@@ -641,7 +647,7 @@ export function step(
       s.grounded = false;
     } else if (o.type === "teleport-ring") {
       // ready means it has a destination (ringReady); the step then runs on from the landing
-      arrive(s, s.fx!, destination(s.level.objects, o.target, s.fx!.groups)!);
+      arrive(s, s.fx!, destination(s.level, o.target, s.fx!.groups)!);
     } else launch(s, RING_EFFECTS[o.type] ?? o);
     if (o.type !== "ring") {
       s.dash = null;
