@@ -45,12 +45,16 @@ what the user chooses to send.
 
 input is capped at 192 KiB (characters for pasted text; bytes for files); decoded JSON at
 128 KiB. the decompression reader stops at the output bound and has a five-second deadline.
-the engine's existing limits still apply: 600 objects, 20–600 blocks long, 7–40 blocks high,
+the engine's limits still apply: 600 objects, 20–1000 blocks long, 7–1000 blocks high,
 known object types, transforms, layers and song IDs. the code whitelist excludes progress,
 other levels and arbitrary extra fields. old levels retain an implicit height; their source
 song is made explicit so the recipient hears the same track under a different local ID.
 recipients need the current app to open levels longer than 200 blocks or using the new
 recorded soundtracks; older versions reject those values rather than silently changing them.
+lengths above 600 and heights above 40 use the same fields. a 1.0.129 reader refuses either
+on import rather than shortening the trail; levels within the old limits keep the same codes.
+on those larger trails, **height / song** also takes exact scroll coordinates for the left and
+bottom edges of the editor, so a narrow phone slider cannot skip the row you want to edit.
 coins, group ids and triggers (#101, docs/coins-and-triggers.md) are new optional piece fields
 (`group`, `target`, `moveX`, `moveY`, `duration`, and `color` on a colour trigger) inside the
 same `cdl1.` envelope; a code made before them decodes exactly as it did, and a level without them encodes to a code an

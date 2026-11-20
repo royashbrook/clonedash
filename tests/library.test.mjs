@@ -18,7 +18,7 @@ test('legacy draft migrates intact, independent levels survive a round trip, pro
 
 test('malformed libraries and invalid dimensions/layers/songs fail closed', () => {
   const good = readSave(null, 9);
-  for (const change of [s => s.customLevels = null, s => s.customLevels = [], s => s.activeLevel = 9, s => s.customLevels.push(s.customLevels[0]), s => s.customLevels[0].level.height = 100]) {
+  for (const change of [s => s.customLevels = null, s => s.customLevels = [], s => s.activeLevel = 9, s => s.customLevels.push(s.customLevels[0]), s => s.customLevels[0].level.height = 1001]) {
     const s = structuredClone(good); change(s); assert.throws(() => readSave(JSON.stringify(s), 9));
   }
   for (const change of [l => l.height = 6, l => l.height = 40.1, l => l.height = NaN, l => l.song = -1, l => l.song = 123, l => l.objects.push({ ...object('spike', 5), layer: 'background' }), l => l.objects.push({ ...object('block', 5), layer: 'wat' })]) {
@@ -56,7 +56,7 @@ test('background blocks are not lethal, supporting or blocking in any mode; copi
 });
 
 test('tall worlds use their real ceiling for flight, inverted gravity and portals', () => {
-  for (const height of [7, 20, 40]) {
+  for (const height of [7, 20, 40, 1000]) {
     const l = { name: 'Sky', length: 200, height, objects: [] };
     for (const mode of ['plane', 'pogo', 'wheel']) {
       const s = createState(l); s.mode = mode; s.gravity = 1; s.y = height - SIZE - .01; s.vy = 2;

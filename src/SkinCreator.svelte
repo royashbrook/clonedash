@@ -112,6 +112,15 @@
     cell = $state(24),
     reduced = $state(false),
     changed = $state(0); // cells the last stroke changed (each once, however often it was crossed)
+  // A big picture fits as an overview. Tap an area to work on it at finger size instead
+  // of trying to hit a single pixel in a phone-wide 100-column grid.
+  const DETAIL = 12;
+  let origin = $state<[number, number] | null>(null);
+  const large = $derived(width > 32 || height > 32),
+    cols = $derived(origin ? Math.min(DETAIL, width) : width),
+    rows = $derived(origin ? Math.min(DETAIL, height) : height),
+    padX = $derived(large && !origin ? Math.max(0, (44 - cols * cell) / 2) : 0),
+    padY = $derived(large && !origin ? Math.max(0, (44 - rows * cell) / 2) : 0);
   let stroke: {
     pointer: number;
     last: [number, number] | null;
@@ -150,6 +159,7 @@
   }
 
   function edit(id: number | null, skin?: Skin) {
+    origin = null;
     editingId = id;
     name = skin ? skin.name : `My skin ${store.next}`.slice(0, MAX_NAME);
     width = skin?.width ?? 8;
@@ -244,10 +254,17 @@
       return;
     }
     if (!e.isPrimary || e.button > 0) return;
-    const at = cellAt(e.clientX, e.clientY, grid!.getBoundingClientRect(), width, height);
+    const at = pixelAt(e, grid!.getBoundingClientRect());
     if (!at) return;
     e.preventDefault();
     say("");
+    if (large && !origin) {
+      origin = [
+        Math.max(0, Math.min(width - DETAIL, at[0] - Math.floor(DETAIL / 2))),
+        Math.max(0, Math.min(height - DETAIL, at[1] - Math.floor(DETAIL / 2))),
+      ];
+      return; // the tap that opens an area never inks it
+    }
     if (tool === "fill") {
       changed = set(fillCells(cells, width, height, at[0], at[1], colour), colour);
       return;
@@ -267,7 +284,7 @@
     // every sample the browser merged into this event, so a fast drag skips nothing
     const samples = e.getCoalescedEvents?.() ?? [];
     for (const sample of samples.length ? samples : [e]) {
-      const at = cellAt(sample.clientX, sample.clientY, box, width, height);
+      const at = pixelAt(sample, box);
       if (!at) {
         stroke.last = null; // off the grid: the next cell back starts fresh, no line across
         continue;
@@ -278,6 +295,17 @@
   }
   function up(e: PointerEvent) {
     if (stroke && e.pointerId === stroke.pointer) endStroke();
+  }
+  function pixelAt(e: PointerEvent, box: DOMRect): [number, number] | null {
+    if (padX || padY) {
+      // Even a 4x100 overview has a finger-wide target. Its padding picks the nearest edge.
+      return [
+        Math.max(0, Math.min(cols - 1, Math.floor((e.clientX - box.left - padX) / cell))),
+        Math.max(0, Math.min(rows - 1, Math.floor((e.clientY - box.top - padY) / cell))),
+      ];
+    }
+    const at = cellAt(e.clientX, e.clientY, box, cols, rows);
+    return at && [at[0] + (origin?.[0] ?? 0), at[1] + (origin?.[1] ?? 0)];
   }
 
   function clear() {
@@ -291,6 +319,8 @@
     h = Math.max(MIN_SIDE, Math.min(MAX_SIDE, h));
     if (w === width && h === height) return;
     const apply = () => {
+      endStroke();
+      origin = null;
       cells = resizeCells(cells, width, height, w, h);
       width = w;
       height = h;
@@ -300,46 +330,55 @@
       confirm("Make it smaller?", "Some of your drawing is outside the new size and will be cut off.", "CUT IT OFF", apply);
     else apply();
   }
+  function enterSize(input: HTMLInputElement, isWidth: boolean) {
+    const n = input.valueAsNumber;
+    // A pending or cancelled cut must display the actual size until confirmed.
+    input.value = String(isWidth ? width : height);
+    if (!Number.isInteger(n) || n < MIN_SIDE || n > MAX_SIDE) {
+      say(`Use a whole number from ${MIN_SIDE} to ${MAX_SIDE}.`, true);
+      return;
+    }
+    resize(isWidth ? n : width, isWidth ? height : n);
+  }
 
   // the grid redraws when its pixels or size change, never per frame
   function fitGrid() {
     if (!gridBox) return;
     const room = gridBox.clientWidth,
       tall = Math.min(innerHeight * 0.62, 460);
-    cell = Math.max(6, Math.floor(Math.min(room / width, tall / height, 44)));
+    cell = Math.max(1, Math.floor(Math.min(room / cols, tall / rows, 44)));
   }
   $effect(() => {
-    void width;
-    void height;
+    void cols;
+    void rows;
     void view;
     fitGrid();
   });
   $effect(() => {
     if (!grid) return;
     const dpr = Math.min(devicePixelRatio || 1, 3),
-      w = cell * width,
-      h = cell * height;
+      w = cell * cols,
+      h = cell * rows;
     grid.width = Math.round(w * dpr);
     grid.height = Math.round(h * dpr);
     const ctx = grid.getContext("2d");
     if (!ctx) return;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    for (let i = 0; i < cells.length; i++) {
-      const x = (i % width) * cell,
-        y = Math.floor(i / width) * cell;
-      if (cells[i]) ctx.fillStyle = cells[i];
-      else ctx.fillStyle = (Math.floor(i / width) + i) % 2 ? "#26364a" : "#1b2939";
-      ctx.fillRect(x, y, cell, cell);
-    }
+    for (let y = 0; y < rows; y++)
+      for (let x = 0; x < cols; x++) {
+        const sx = x + (origin?.[0] ?? 0), sy = y + (origin?.[1] ?? 0);
+        ctx.fillStyle = cells[sy * width + sx] || ((sx + sy) % 2 ? "#26364a" : "#1b2939");
+        ctx.fillRect(x * cell, y * cell, cell, cell);
+      }
     if (cell >= 8) {
       ctx.strokeStyle = "#ffffff22";
       ctx.lineWidth = 1;
       ctx.beginPath();
-      for (let x = 0; x <= width; x++) {
+      for (let x = 0; x <= cols; x++) {
         ctx.moveTo(x * cell + 0.5, 0);
         ctx.lineTo(x * cell + 0.5, h);
       }
-      for (let y = 0; y <= height; y++) {
+      for (let y = 0; y <= rows; y++) {
         ctx.moveTo(0, y * cell + 0.5);
         ctx.lineTo(w, y * cell + 0.5);
       }
@@ -511,13 +550,22 @@
     </header>
     <div class="skin-editor">
       <div class="grid-box" bind:this={gridBox}>
+        {#if large}
+          {#if origin}
+            <button id="skin-overview" onclick={() => { endStroke(); origin = null; }}>← WHOLE SKIN</button>
+            <span class="hint">Columns {origin[0] + 1}–{origin[0] + cols} · rows {origin[1] + 1}–{origin[1] + rows}</span>
+          {:else}
+            <span class="hint">Tap the part you want to draw. It will zoom in.</span>
+          {/if}
+        {/if}
         <canvas
           id="skin-grid"
           bind:this={grid}
-          style:width={`${cell * width}px`}
-          style:height={`${cell * height}px`}
+          style:width={`${cell * cols}px`}
+          style:height={`${cell * rows}px`}
+          style:padding={`${padY}px ${padX}px`}
           data-changed={changed}
-          aria-label={`Drawing grid, ${width} wide and ${height} tall`}
+          aria-label={large && !origin ? "Whole skin, tap an area to zoom in" : `Drawing grid, ${cols} wide and ${rows} tall`}
           onpointerdown={down}
           onpointermove={move}
           onpointerup={up}
@@ -573,13 +621,13 @@
           <span class="stepper"
             ><span class="size-label">WIDE</span>
             <button id="width-less" aria-label="Narrower" disabled={width <= MIN_SIDE} onclick={() => resize(width - 1, height)}>−</button>
-            <output id="skin-width">{width}</output>
+            <input id="skin-width" type="number" inputmode="numeric" aria-label="Width in pixels" min={MIN_SIDE} max={MAX_SIDE} value={width} onchange={(e) => enterSize(e.currentTarget, true)} />
             <button id="width-more" aria-label="Wider" disabled={width >= MAX_SIDE} onclick={() => resize(width + 1, height)}>＋</button></span
           >
           <span class="stepper"
             ><span class="size-label">TALL</span>
             <button id="height-less" aria-label="Shorter" disabled={height <= MIN_SIDE} onclick={() => resize(width, height - 1)}>−</button>
-            <output id="skin-height">{height}</output>
+            <input id="skin-height" type="number" inputmode="numeric" aria-label="Height in pixels" min={MIN_SIDE} max={MAX_SIDE} value={height} onchange={(e) => enterSize(e.currentTarget, false)} />
             <button id="height-more" aria-label="Taller" disabled={height >= MAX_SIDE} onclick={() => resize(width, height + 1)}>＋</button></span
           >
         </div>
@@ -702,13 +750,15 @@
   .grid-box {
     min-width: 0;
     display: flex;
-    justify-content: center;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
   }
   #skin-grid {
     display: block;
+    box-sizing: content-box;
     touch-action: none;
-    /* an outline, not a border: the CSS box is exactly the cells, so cells stay square and a
-       touch maps to the cell under it */
+    /* no border to offset a drawing touch */
     outline: 1px solid var(--line);
     cursor: crosshair;
   }
@@ -787,8 +837,13 @@
     padding: 0;
     font-size: 20px;
   }
-  .size-row output {
-    min-width: 2ch;
+  .size-row input {
+    width: 4.5rem;
+    min-height: 44px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    color: var(--ink);
+    background: var(--surface-sunk);
     text-align: center;
     font: 800 16px var(--font-mono);
   }

@@ -51,6 +51,49 @@ test('My Levels preserves a legacy draft, creates independent levels and reopens
   expect((await stored(page)).draft).toEqual(before.draft); expect(errors).toEqual([]);
 });
 
+test('a 1000 by 1000 trail keeps a block in its far upper corner after a reload', async ({ page }) => {
+  await page.setViewportSize({ width: 932, height: 430 });
+  await page.goto('/');
+  await page.locator('#editor-open').click();
+  const length = page.locator('#level-length'), height = page.locator('#level-height');
+  await length.fill('1000'); await length.blur();
+  await expect(length).toHaveValue('1000');
+  await page.locator('#level-settings').click();
+  await height.fill('1000'); await height.blur();
+  await expect(height).toHaveValue('1000');
+  await page.locator('#jump-x').fill('666'); await page.locator('#jump-x').blur();
+  await page.locator('#jump-y').fill('777'); await page.locator('#jump-y').blur();
+  await page.locator('#sheet-close').click();
+  await expect(page.locator('#pan')).toHaveValue('666');
+  await expect(page.locator('#pan-y')).toHaveValue('777');
+  await place(page, 668, 780);
+  await expect(page.locator('#selection')).toContainText('x 668.00 / y 780.00');
+  await page.locator('#pan').press('End'); await page.locator('#pan-y').press('End');
+  await expect(page.locator('#pan')).toHaveValue('992');
+  await expect(page.locator('#pan-y')).toHaveValue('993');
+  await place(page, 998, 999);
+  await expect(page.locator('#selection')).toContainText('x 998.00 / y 999.00');
+  await length.fill('999'); await length.blur(); await expect(length).toHaveValue('1000');
+  await page.locator('#level-settings').click();
+  await height.fill('999'); await height.blur(); await expect(height).toHaveValue('1000');
+  await page.reload(); await page.locator('#my-levels').click();
+  await expect(page.locator('.custom-card')).toContainText('1000 × 1000 blocks');
+  const { draft } = await stored(page);
+  expect(draft.objects).toContainEqual(expect.objectContaining({ type: 'block', x: 998, y: 999 }));
+});
+
+test('shrinking a long trail keeps the old length when it would invalidate a trigger move', async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.setItem('clonedash.v1', JSON.stringify({ version: 1, best: {}, sound: false,
+      draft: { name: 'Long move', length: 1000, objects: [{ type: 'move-trigger', x: 5, y: 0, rotation: 0, flipX: false, flipY: false, moveX: 990 }] } }));
+  });
+  await page.goto('/'); await page.locator('#editor-open').click();
+  const length = page.locator('#level-length');
+  await length.fill('900'); await length.blur();
+  await expect(length).toHaveValue('1000');
+  expect((await stored(page)).draft.objects[0].moveX).toBe(990);
+});
+
 test('malformed library is never overwritten by creating or editing', async ({ page }) => {
   await page.addInitScript(() => localStorage.setItem('clonedash.v1', JSON.stringify({ version: 1, best: {}, sound: false, draft: { name: 'Keep me', length: 40, objects: [] }, customLevels: [], activeLevel: 1 })));
   await page.goto('/'); const before = await page.evaluate(() => localStorage.getItem('clonedash.v1'));

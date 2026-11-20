@@ -9,9 +9,9 @@ export const SKINS = "clonedash.skins.v1";
 export const MAX_SKINS = 100,
   MAX_NAME = 40,
   MIN_SIDE = 4,
-  MAX_SIDE = 32,
+  MAX_SIDE = 100,
   MAX_COLOURS = 16,
-  MAX_SKIN_BYTES = 8 * 1024;
+  MAX_SKIN_BYTES = 11 * 1024; // 10,000 pixel indices plus the name, palette and JSON
 const MAX_ID = 1_000_000_000;
 const PREFIX = "cds1.";
 // a pixel is one character: 0 is empty, 1 is palette[0] ... g is palette[15]

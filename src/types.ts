@@ -1,5 +1,5 @@
 import type { Loop } from "./loop-schema.ts";
-export type GameMode = "square" | "plane" | "wheel" | "pogo" | "angle" | "croissant";
+export type GameMode = "square" | "plane" | "wheel" | "pogo" | "angle" | "croissant" | "door";
 // What the player SEES for an id whose upper-cased form is not the label. Stored ids that were
 // renamed for real (jumper became pogo) are mapped on read instead: engine.ts LEGACY_TYPES.
 const LABELS: Partial<Record<string, string>> = {
@@ -98,7 +98,7 @@ export interface Piece {
 // Outline variants, in the block's own frame (rotation and flips turn them): edge = the top
 // side, parallel = top and bottom, outer = top and left meeting at a corner, inner = a short
 // corner mark at the top left. Drawing only; collision is the full block either way.
-export type Edges = "edge" | "parallel" | "outer" | "inner" | "none";
+export type Edges = "edge" | "parallel" | "outer" | "inner" | "three" | "none";
 export interface Level {
   name: string;
   length: number;
@@ -119,6 +119,7 @@ export interface GameState {
   speed: number; // forward speed multiplier, 1 until a speed portal changes it
   wall: number | null; // the wall face a W is holding the run against this step, else null
   dash: number | null; // the climb (rise per block forward) of the dash orb being held, else null
+  doorLift?: true; // only the uninterrupted hold that started this door jump can lift it
   inputHeld: boolean;
   grounded: boolean;
   status: "playing" | "dead" | "complete";
