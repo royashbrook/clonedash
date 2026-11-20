@@ -1,4 +1,4 @@
-import { test, expect } from "./quiet.mjs";
+import { test, expect, tool } from "./quiet.mjs";
 
 // Loops from 8 to 32 steps in the loop maker (#140, docs/loops.md), both engines unless noted.
 const LOOPS = "clonedash.loops.v1";
@@ -16,30 +16,30 @@ test("a new loop is 8 steps; growing adds silent steps; a cut that loses notes a
   expect(await columns(page)).toBe(8);
   await expect(page.locator("#loop-length-8")).toHaveAttribute("aria-pressed", "true");
   const before = await page.locator("#loop-grid .cell[aria-pressed=true]").evaluateAll((all) => all.map((c) => c.getAttribute("aria-label")));
-  await page.locator("#loop-length-16").click();
+  await tool(page, "#loop-length-16");
   expect(await columns(page)).toBe(16);
   const after = await page.locator("#loop-grid .cell[aria-pressed=true]").evaluateAll((all) => all.map((c) => c.getAttribute("aria-label")));
   expect(after).toEqual(before);
   await cell(page, 5, 12).click();
-  await page.locator("#loop-length-8").click();
+  await tool(page, "#loop-length-8");
   const sheet = page.locator("#sheet");
   await expect(sheet).toContainText("Cut the loop to 8 steps?");
   await sheet.getByRole("button", { name: "KEEP IT", exact: true }).click();
   expect(await columns(page)).toBe(16);
   await expect(cell(page, 5, 12)).toHaveAttribute("aria-pressed", "true");
-  await page.locator("#loop-length-8").click();
+  await tool(page, "#loop-length-8");
   await sheet.getByRole("button", { name: "CUT TO 8", exact: true }).click();
   expect(await columns(page)).toBe(8);
   // a cut that loses nothing does not ask
-  await page.locator("#loop-length-32").click();
-  await page.locator("#loop-length-16").click();
+  await tool(page, "#loop-length-32");
+  await tool(page, "#loop-length-16");
   await expect(sheet).toBeHidden();
   expect(await columns(page)).toBe(16);
 });
 
 test("a 24 step loop saves, reloads and shares as a code that imports exactly", async ({ page, browser, baseURL }) => {
   await open(page);
-  await page.locator("#loop-length-24").click();
+  await tool(page, "#loop-length-24");
   await cell(page, 5, 20).click();
   await page.locator("#loop-name").fill("Long one");
   await page.locator("#save-loop").click();
@@ -59,7 +59,7 @@ test("a 24 step loop saves, reloads and shares as a code that imports exactly", 
 
 test("PLAY wraps at the loop's length: the playhead reaches step 16, then starts again at 1", async ({ page }) => {
   await open(page);
-  await page.locator("#loop-length-16").click();
+  await tool(page, "#loop-length-16");
   await page.locator("#loop-play").click();
   const now = () => page.locator("#loop-grid .loop-row.steps b.now").textContent();
   await expect.poll(now, { timeout: 8000 }).toBe("16");
@@ -98,7 +98,7 @@ test("a phone with swipe on: the step numbers drag a 32 step grid sideways, and 
   await page.goto("/");
   await page.locator("#loops-open").click();
   await page.locator("#new-loop").click();
-  await page.locator("#loop-length-32").click();
+  await tool(page, "#loop-length-32");
   await page.locator("#loop-swipe").click();
   const box = page.locator(".loop-grid-box");
   await box.scrollIntoViewIfNeeded();

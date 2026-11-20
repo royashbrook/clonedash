@@ -1,4 +1,4 @@
-import { test, expect } from "./quiet.mjs";
+import { test, expect, tool } from "./quiet.mjs";
 
 // SWIPE NOTES in the loop maker (#139): off, nothing changes from before; on, a stroke paints or
 // erases what it crosses, once per cell, decided by the first cell.
@@ -21,7 +21,7 @@ async function open(page, desktop = true) {
   await page.locator("#loops-open").click();
   await page.locator("#new-loop").click();
   // a new loop starts from a preset: clear its notes so every cell below starts empty
-  await page.locator("#loop-clear").click();
+  await tool(page, "#loop-clear");
   await page.locator("#sheet").getByRole("button", { name: "CLEAR NOTES", exact: true }).click();
   await expect(page.locator("#loop-grid .cell[data-kind=note][aria-pressed=true]")).toHaveCount(0);
 }
@@ -68,7 +68,7 @@ test("a finger: a touch swipe paints, and a cancelled touch ends the stroke", as
   await page.goto("/");
   await page.locator("#loops-open").click();
   await page.locator("#new-loop").click();
-  await page.locator("#loop-clear").click();
+  await tool(page, "#loop-clear");
   await page.locator("#sheet").getByRole("button", { name: "CLEAR NOTES", exact: true }).click();
   await page.locator("#loop-swipe").click();
   await cell(page, 5, 1).scrollIntoViewIfNeeded();

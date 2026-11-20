@@ -232,6 +232,7 @@
     const from = loop.notes.length;
     if (n === from) return;
     const next = resize(loop, n);
+    panel = null;
     if (n < from && cutLoses(loop, n))
       sheet(() =>
         confirm(
@@ -247,6 +248,7 @@
   // first whenever there are notes to lose; KEEP IT leaves the draft exactly as it was
   // `lose` is whether the replacement throws away anything the player made
   function replace(next: Loop, lose: boolean, title: string, yes: string, what: string) {
+    panel = null; // a tool that replaces the notes shows the grid it changes
     if (!lose) return set(next);
     sheet(() => confirm(title, `${what} will be replaced. This cannot be undone.`, yes, () => set(next)));
   }
@@ -258,6 +260,7 @@
   function startFrom(event: Event) {
     const select = event.currentTarget as HTMLSelectElement;
     if (select.value === "") return;
+    panel = null;
     const song = Number(select.value);
     select.value = "";
     replace({ ...loopFromSong(song), name: loop.name }, changed(), `Start from ${trackFor(song).name}?`, "START FROM IT", "Everything in this loop but its name");

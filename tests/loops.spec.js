@@ -1,4 +1,4 @@
-import { test, expect } from "./quiet.mjs";
+import { test, expect, tool } from "./quiet.mjs";
 import { encodeBackup } from "../src/backup.ts";
 import { LEVELS } from "../src/levels.ts";
 import { emptyLoops, addLoop, blankLoop, encodeLoop, loopLink } from "../src/loop.ts";
@@ -76,13 +76,13 @@ test("make a loop, hear it, save it, and find it after a reload", async ({ brows
   await expect(page.locator("#loops h1")).toHaveText("My loops");
   await page.locator("#new-loop").click();
   await page.locator("#loop-name").fill("Night drive");
-  await page.locator("#loop-clear").click();
+  await tool(page, "#loop-clear");
   await page.locator("#sheet").getByRole("button", { name: "CLEAR NOTES", exact: true }).click();
   await page.getByRole("button", { name: "note 10 step 1", exact: true }).click();
   await page.getByRole("button", { name: "note 1 step 3", exact: true }).click();
   await page.getByRole("button", { name: "snare step 7", exact: true }).click();
-  await page.locator("#key-up").click();
-  await page.locator("#loop-drop").click();
+  await tool(page, "#key-up");
+  await tool(page, "#loop-drop");
   await page.locator("#save-loop").click();
   await expect(page.locator("#loop-message")).toHaveText("Saved.");
   const saved = JSON.parse(await stored(page, LOOPS)).loops[0].loop;
@@ -122,14 +122,14 @@ test("replacing notes asks first, KEEP IT changes nothing, and a blank draft is 
     await page.locator("#sheet").getByRole("button", { name: "KEEP IT", exact: true }).click();
     expect(await pressed(page)).toEqual(before);
   }
-  await page.locator("#loop-song").selectOption({ label: "Air Time" });
+  await tool(page, "#loop-song", (c) => c.selectOption({ label: "Air Time" }));
   await page.locator("#sheet").getByRole("button", { name: "START FROM IT", exact: true }).click();
   expect(await pressed(page)).not.toEqual(before);
-  await page.locator("#loop-clear").click();
+  await tool(page, "#loop-clear");
   await page.locator("#sheet").getByRole("button", { name: "CLEAR NOTES", exact: true }).click();
   expect((await pressed(page)).some((l) => l.startsWith("note"))).toBe(false);
   // nothing left to lose: SURPRISE ME just does it
-  await page.locator("#loop-surprise").click();
+  await tool(page, "#loop-surprise");
   await expect(page.locator("#sheet")).not.toBeVisible();
   await ctx.close();
 });
@@ -140,20 +140,20 @@ test("START FROM asks for a drum-only loop too: KEEP IT keeps every field, START
   await page.goto("/");
   await page.locator("#loops-open").click();
   await page.locator("#new-loop").click();
-  await page.locator("#loop-clear").click();
+  await tool(page, "#loop-clear");
   await page.locator("#sheet").getByRole("button", { name: "CLEAR NOTES", exact: true }).click();
   // no notes at all, but drums, key and drop of its own
   for (const cell of ["kick step 2", "kick step 8", "snare step 3", "hat step 1"]) await page.getByRole("button", { name: cell, exact: true }).click();
-  await page.locator("#key-up").click();
-  await page.locator("#loop-drop").click();
+  await tool(page, "#key-up");
+  await tool(page, "#loop-drop");
   const state = async () => ({ cells: await pressed(page), key: await page.locator("#loop-key").textContent(), drop: await page.locator("#loop-drop").textContent() });
   const before = await state();
   expect(before.cells.some((l) => l.startsWith("note"))).toBe(false);
-  await page.locator("#loop-song").selectOption({ label: "Air Time" });
+  await tool(page, "#loop-song", (c) => c.selectOption({ label: "Air Time" }));
   await expect(page.locator("#sheet-title")).toHaveText("Start from Air Time?");
   await page.locator("#sheet").getByRole("button", { name: "KEEP IT", exact: true }).click();
   expect(await state()).toEqual(before);
-  await page.locator("#loop-song").selectOption({ label: "Air Time" });
+  await tool(page, "#loop-song", (c) => c.selectOption({ label: "Air Time" }));
   await page.locator("#sheet").getByRole("button", { name: "START FROM IT", exact: true }).click();
   const after = await state();
   expect(after.key).toBe("A"); // Air Time's root, 45
@@ -175,7 +175,7 @@ test("a tapped cell's sound is cut by a sheet, by PLAY taking over and by the pa
     await expect.poll(() => page.evaluate(() => window.liveOutputs())).toBe(1);
   };
   await tap();
-  await page.locator("#loop-surprise").click(); // a sheet
+  await tool(page, "#loop-surprise"); // a sheet
   expect(await page.evaluate(() => window.liveOutputs())).toBe(0);
   await page.locator("#sheet").getByRole("button", { name: "KEEP IT", exact: true }).click();
   await tap();
