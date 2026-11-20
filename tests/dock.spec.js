@@ -35,27 +35,60 @@ test("the bar is gone while playing and in the editor, and back on the menus", a
   await expect(page.locator("#dock")).toBeVisible();
 });
 
-// a tab would leave an open skin or loop without its editor's own ask, so the bar steps aside there
-for (const [tab, screen, start, name, done] of [
-  ["#loops-open", "#loops", "#new-loop", "#loop-name", "#loop-done"],
-  ["#skins-open", "#skins", "#new-skin", "#skin-name", "#skin-done"],
-])
-  test(`an open draft hides the bar and its own back still asks: ${screen}`, async ({ page }) => {
-    await page.goto("/");
-    await page.locator(tab).click();
-    await expect(page.locator("#dock")).toBeVisible();
-    await page.locator(start).click();
-    await expect(page.locator(name)).toBeVisible();
-    await expect(page.locator("#dock")).toHaveCount(0);
-    expect(await page.locator(screen).evaluate((e) => parseFloat(getComputedStyle(e).paddingBottom))).toBeLessThan(60);
-    await page.locator(name).fill("Mine");
-    await page.locator(done).click();
-    const sheet = page.locator("#sheet");
-    await expect(sheet).toContainText("Leave without saving?");
-    await sheet.getByRole("button", { name: "LEAVE", exact: true }).click();
-    await expect(page.locator(start)).toBeVisible();
-    await expect(page.locator("#dock")).toBeVisible();
-  });
+// a tab would leave an open skin without its editor's own ask, so the bar steps aside there
+test("an open skin hides the bar and its own back still asks", async ({ page }) => {
+  await page.goto("/");
+  await page.locator("#skins-open").click();
+  await expect(page.locator("#dock")).toBeVisible();
+  await page.locator("#new-skin").click();
+  await expect(page.locator("#skin-name")).toBeVisible();
+  await expect(page.locator("#dock")).toHaveCount(0);
+  expect(await page.locator("#skins").evaluate((e) => parseFloat(getComputedStyle(e).paddingBottom))).toBeLessThan(60);
+  await page.locator("#skin-name").fill("Mine");
+  await page.locator("#skin-done").click();
+  const sheet = page.locator("#sheet");
+  await expect(sheet).toContainText("Leave without saving?");
+  await sheet.getByRole("button", { name: "LEAVE", exact: true }).click();
+  await expect(page.locator("#new-skin")).toBeVisible();
+  await expect(page.locator("#dock")).toBeVisible();
+});
+
+// the loop editor keeps the bar (#140): a tab leaves through the editor's own ask
+test("an open loop keeps the bar; a tab asks before leaving changes, KEEP IT keeps them, LEAVE goes there", async ({ page }) => {
+  await page.goto("/");
+  await page.locator("#loops-open").click();
+  await page.locator("#new-loop").click();
+  await expect(page.locator("#dock")).toBeVisible();
+  await expect(page.locator("#dock [aria-current=page]")).toHaveText(/MUSIC/);
+  // an unchanged loop: a tab just goes
+  await page.locator("#my-levels").click();
+  await expect(page.locator("#library")).toBeVisible();
+  await page.locator("#loops-open").click();
+  await page.locator("#new-loop").click();
+  await page.locator("#loop-name").fill("Keep me");
+  await page.getByRole("button", { name: "note 5 step 2", exact: true }).click();
+  const notes = () => page.locator("#loop-grid .cell[aria-pressed=true]").evaluateAll((all) => all.map((c) => c.getAttribute("aria-label")));
+  const before = await notes();
+  // HELP and MORE open over the draft and keep it
+  await page.locator("#loop-help").click();
+  await page.locator("#loop-help-panel").getByRole("button", { name: "GOT IT", exact: true }).click();
+  await page.locator("#more").click();
+  await page.locator("#sheet-close").click();
+  await expect(page.locator("#loop-name")).toHaveValue("Keep me");
+  expect(await notes()).toEqual(before);
+  // a tab asks; KEEP IT stays with everything as it was
+  const sheet = page.locator("#sheet");
+  await page.locator("#skins-open").click();
+  await expect(sheet).toContainText("Leave without saving?");
+  await sheet.getByRole("button", { name: "KEEP IT", exact: true }).click();
+  await expect(page.locator("#loop-name")).toHaveValue("Keep me");
+  expect(await notes()).toEqual(before);
+  // LEAVE goes to the tab that was tapped
+  await page.locator("#skins-open").click();
+  await sheet.getByRole("button", { name: "LEAVE", exact: true }).click();
+  await expect(page.locator("#skins")).toBeVisible();
+  await expect(page.locator("#dock [aria-current=page]")).toHaveText(/LOOKS/);
+});
 
 test("MORE over the loop list silences a loop that is playing", async ({ page }) => {
   await page.addInitScript((store) => {
@@ -116,26 +149,64 @@ for (const [name, viewport, insets] of phones)
     expect(await head.evaluate((e) => e.getBoundingClientRect().top)).toBe(before);
   });
 
-for (const [name, viewport, insets] of phones)
-  test(`the loop editor's name, PLAY and SAVE stay on screen through scrolling, typing and coming back: ${name}`, async ({ page, browserName }) => {
+// the loop editor on a phone held upright (#140): a new loop's 8 steps and all 13 rows fit between
+// the toolbar and the bar, nothing scrolls, the edge cells take taps, and that holds through typing a
+// name and coming back to the loop. a short sideways screen scrolls the grid under a fixed toolbar.
+const uprightPhones = [
+  ["390x844", { width: 390, height: 844 }, { top: 47, bottom: 34, left: 0, right: 0 }],
+  ["420x912", { width: 420, height: 912 }, { top: 62, bottom: 34, left: 0, right: 0 }],
+  ["320x568", { width: 320, height: 568 }, { top: 20, bottom: 0, left: 0, right: 0 }],
+];
+for (const [name, viewport, insets] of uprightPhones)
+  test(`a new loop fits a phone held upright, through typing and coming back: ${name}`, async ({ page, browserName }) => {
     test.skip(browserName !== "chromium", "safe-area insets can only be emulated in Chromium");
     await phone(page, viewport, insets);
     await page.goto("/");
     await page.locator("#loops-open").click();
     await page.locator("#new-loop").click();
-    const bar = [page.locator("#loop-name"), page.locator("#loop-play"), page.locator("#save-loop")];
-    const check = async () => { for (const b of bar) await inside(b, viewport, insets); };
-    await check();
-    await scrollOver(page, page.locator("#loop-grid"));
-    expect(await page.locator(".loop-body").evaluate((e) => e.scrollTop), "the body scrolled").toBeGreaterThan(0);
-    await check();
+    const fits = async () => {
+      const m = await page.evaluate(() => {
+        const cells = [...document.querySelectorAll("#loop-grid .cell")].map((c) => c.getBoundingClientRect());
+        const r = (s) => document.querySelector(s).getBoundingClientRect();
+        return { n: cells.length, left: Math.min(...cells.map((c) => c.left)), right: Math.max(...cells.map((c) => c.right)), bottom: Math.max(...cells.map((c) => c.bottom)), top: Math.min(...cells.map((c) => c.top)), toolbar: r(".loop-toolbar").bottom, dock: r("#dock").top, scroll: document.querySelector(".loop-stage").scrollHeight - document.querySelector(".loop-stage").clientHeight };
+      });
+      expect(m.n).toBe(8 * 13);
+      expect(m.left).toBeGreaterThanOrEqual(0);
+      expect(m.right).toBeLessThanOrEqual(viewport.width);
+      expect(m.top).toBeGreaterThanOrEqual(m.toolbar);
+      expect(m.bottom).toBeLessThanOrEqual(m.dock);
+      expect(m.scroll, "nothing scrolls").toBeLessThanOrEqual(0);
+      for (const b of [page.locator("#loop-name"), page.locator("#loop-play"), page.locator("#save-loop")]) await inside(b, viewport, insets);
+    };
+    await fits();
+    // the corner cells take taps
+    for (const label of ["note 10 step 1", "note 10 step 8", "kick step 1", "kick step 8"]) {
+      const c = page.getByRole("button", { name: label, exact: true });
+      const was = await c.getAttribute("aria-pressed");
+      await c.click();
+      await expect(c).not.toHaveAttribute("aria-pressed", was);
+    }
     await page.locator("#loop-name").focus();
     await page.locator("#loop-name").fill("Phone loop");
     await page.locator("#loop-name").blur();
-    await check();
-    // back to the list and into the loop again, without turning the phone
+    await fits();
     await page.locator("#loop-done").click();
-    await page.locator("#sheet").getByRole("button", { name: "LEAVE", exact: true }).click(); // the name changed
+    await page.locator("#sheet").getByRole("button", { name: "LEAVE", exact: true }).click();
     await page.locator("#new-loop").click();
-    await check();
+    await fits();
   });
+
+test("sideways on a phone: the toolbar stays and the grid scrolls to its last row", async ({ page, browserName }) => {
+  test.skip(browserName !== "chromium", "safe-area insets can only be emulated in Chromium");
+  const [, viewport, insets] = phones[1];
+  await phone(page, viewport, insets);
+  await page.goto("/");
+  await page.locator("#loops-open").click();
+  await page.locator("#new-loop").click();
+  const stage = page.locator(".loop-stage");
+  await scrollOver(page, stage);
+  for (const b of [page.locator("#loop-name"), page.locator("#loop-play"), page.locator("#save-loop")]) await inside(b, viewport, insets);
+  const last = page.getByRole("button", { name: "kick step 8", exact: true });
+  const r = await last.boundingBox(), dock = await page.locator("#dock").boundingBox();
+  expect(r.y + r.height).toBeLessThanOrEqual(dock.y);
+});

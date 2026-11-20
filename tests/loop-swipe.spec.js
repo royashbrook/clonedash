@@ -129,17 +129,22 @@ test("a second finger neither steers, erases nor ends the first finger's stroke"
   await context.close();
 });
 
-test("swipe off on a narrow phone: a finger drag scrolls the grid sideways and changes no note", async ({ browser, baseURL, browserName }) => {
+// the phone layout (#140): the 8 steps fit a 320px phone, so nothing scrolls sideways, and with swipe
+// off a finger drag across them changes no note
+test("swipe off on a narrow phone: all 8 steps are on screen and a finger drag changes no note", async ({ browser, baseURL, browserName }) => {
   test.skip(browserName !== "chromium", "touch is driven through Chromium's devtools input");
   const { context, page, touch } = await phone(browser, baseURL, 320);
   const box = page.locator(".loop-grid-box");
-  expect(await box.evaluate((e) => e.scrollWidth > e.clientWidth), "the grid is wider than the phone").toBe(true);
-  await cell(page, 5, 4).scrollIntoViewIfNeeded();
-  const start = await centre(page, 5, 4), before = await box.evaluate((e) => e.scrollLeft);
-  await touch("touchStart", [[0, start]]);
-  for (let i = 1; i <= 10; i++) await touch("touchMove", [[0, [start[0] - i * 15, start[1]]]]);
+  expect(await box.evaluate((e) => e.scrollWidth <= e.clientWidth), "no sideways scroll").toBe(true);
+  for (const s of [1, 8]) {
+    const r = await cell(page, 5, s).boundingBox();
+    expect(r.x).toBeGreaterThanOrEqual(0);
+    expect(r.x + r.width).toBeLessThanOrEqual(320);
+  }
+  const a = await centre(page, 5, 1), b = await centre(page, 5, 8);
+  await touch("touchStart", [[0, a]]);
+  for (let i = 1; i <= 10; i++) await touch("touchMove", [[0, [a[0] + ((b[0] - a[0]) * i) / 10, a[1]]]]);
   await touch("touchEnd", []);
-  await expect.poll(() => box.evaluate((e) => e.scrollLeft)).toBeGreaterThan(before);
   await expect(page.locator("#loop-grid .cell[data-kind=note][aria-pressed=true]")).toHaveCount(0);
   await context.close();
 });

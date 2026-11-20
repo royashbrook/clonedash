@@ -113,9 +113,9 @@ test("replacing notes asks first, KEEP IT changes nothing, and a blank draft is 
   const before = await pressed(page);
   expect(before.some((l) => l.startsWith("note"))).toBe(true);
   for (const [open, title] of [
-    [() => page.locator("#loop-surprise").click(), "Make new notes?"],
-    [() => page.locator("#loop-clear").click(), "Clear the notes?"],
-    [() => page.locator("#loop-song").selectOption({ label: "Air Time" }), "Start from Air Time?"],
+    [() => tool(page, "#loop-surprise"), "Make new notes?"],
+    [() => tool(page, "#loop-clear"), "Clear the notes?"],
+    [() => tool(page, "#loop-song", (c) => c.selectOption({ label: "Air Time" })), "Start from Air Time?"],
   ]) {
     await open();
     await expect(page.locator("#sheet-title")).toHaveText(title);
@@ -146,7 +146,15 @@ test("START FROM asks for a drum-only loop too: KEEP IT keeps every field, START
   for (const cell of ["kick step 2", "kick step 8", "snare step 3", "hat step 1"]) await page.getByRole("button", { name: cell, exact: true }).click();
   await tool(page, "#key-up");
   await tool(page, "#loop-drop");
-  const state = async () => ({ cells: await pressed(page), key: await page.locator("#loop-key").textContent(), drop: await page.locator("#loop-drop").textContent() });
+  // key and drop live in TOOLS (#140): read them there, then the cells
+  const state = async () => {
+    let key, drop;
+    await tool(page, "#loop-key", async (c) => {
+      key = await c.textContent();
+      drop = await page.locator("#loop-drop").textContent();
+    });
+    return { cells: await pressed(page), key, drop };
+  };
   const before = await state();
   expect(before.cells.some((l) => l.startsWith("note"))).toBe(false);
   await tool(page, "#loop-song", (c) => c.selectOption({ label: "Air Time" }));
@@ -287,6 +295,8 @@ test("a save carries loops, and loading one without loops removes them", async (
   }
 });
 
+// every control is a 44px target; the step cells shrink to fit a phone (#140), never below 22px tall
+// and 30px wide
 test("the loops list and editor fit 320 wide and phone landscape with 44px targets", async ({ browser, baseURL }) => {
   for (const viewport of [{ width: 320, height: 568 }, { width: 844, height: 390 }]) {
     const ctx = await device(browser, baseURL, { [LOOPS]: JSON.stringify(storeOf("A loop with a long name that wraps")) }, viewport);
@@ -303,7 +313,11 @@ test("the loops list and editor fit 320 wide and phone landscape with 44px targe
           page: document.documentElement.scrollWidth - innerWidth,
           screen: screen.scrollWidth - screen.clientWidth,
           grid: box ? box.getBoundingClientRect().right - innerWidth : 0,
-          small: visible.filter((e) => { const r = e.getBoundingClientRect(); return r.height < 44 || (r.width < 44 && e.type !== "range"); }).map((e) => e.id || e.ariaLabel || e.textContent),
+          small: visible.filter((e) => {
+            const r = e.getBoundingClientRect();
+            if (e.classList.contains("cell")) return r.height < 22 || r.width < 30;
+            return r.height < 44 || (r.width < 44 && e.type !== "range");
+          }).map((e) => e.id || e.ariaLabel || e.textContent),
         };
       });
       expect([m.page, m.screen], `${viewport.width} ${view}`).toEqual([0, 0]);

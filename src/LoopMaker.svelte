@@ -645,6 +645,7 @@
     flex: 1 1 auto;
     min-height: 0;
     display: flex;
+    overflow-y: auto;
   }
   /* TOOLS and HELP open over the grid; the draft stays as it is underneath */
   .loop-panel {
@@ -677,7 +678,8 @@
     flex: 1 1 auto;
     display: grid;
     grid-template-columns: repeat(8, minmax(0, 1fr));
-    grid-template-rows: 16px repeat(10, minmax(0, 1fr)) 4px repeat(3, minmax(0, 1fr));
+    /* rows never below 22px: a phone held upright fits them all; a short sideways screen scrolls */
+    grid-template-rows: 16px repeat(10, minmax(22px, 1fr)) 4px repeat(3, minmax(22px, 1fr));
     gap: 3px;
     max-width: calc(8 * 44px + 7 * 3px);
     max-height: calc(16px + 4px + 13 * 44px + 14 * 3px);
