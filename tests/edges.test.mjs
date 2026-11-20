@@ -5,14 +5,14 @@ const { createState, step, object, validateLevel, duplicateObject, BLOCKS } = en
 import { render } from '../src/render.ts';
 import { encodeLevel, decodeLevel } from '../src/transfer.ts';
 // spelled out here, not imported, so this file runs (and fails) against a tree without them
-const OUTLINED = ['block', 'grid', 'black', 'outline'], EDGES = ['edge', 'parallel', 'outer', 'inner', 'none'];
+const OUTLINED = ['block', 'grid', 'black', 'outline'], EDGES = ['edge', 'parallel', 'outer', 'inner', 'three', 'none'];
 const level = (objects) => ({ name: 'Edges', length: 40, height: 10, objects });
 
-test('edges validate: outlined blocks only, one of the five values', () => {
+test('edges validate: outlined blocks only, one of the six values', () => {
   for (const type of OUTLINED)
     for (const edges of EDGES) {
       const ok = level([{ ...object(type, 10, 1), edges, rotation: 90 }]);
-      assert.deepEqual(validateLevel(ok), ok);
+      assert.doesNotThrow(() => assert.deepEqual(validateLevel(ok), ok), `${type} ${edges}`);
     }
   for (const edges of ['', 'top', 'EDGE', 1, null, ['edge']])
     assert.throws(() => validateLevel(level([{ ...object('block', 10, 1), edges }])), /Invalid block edges/);
@@ -82,6 +82,7 @@ test('a variant strokes only its own sides, turned with the block', () => {
   assert.deepEqual(strokes(at({ edges: 'parallel' })), lines([[10, 2], [11, 2]], [[10, 1], [11, 1]]), 'parallel: top and bottom');
   assert.deepEqual(strokes(at({ edges: 'outer' })), lines([[10, 1], [10, 2]], [[10, 2], [11, 2]]), 'outer: left and top');
   assert.deepEqual(strokes(at({ edges: 'inner' })), lines([[10, 1.75], [10, 2]], [[10, 2], [10.25, 2]]), 'inner: a short L at the top left');
+  assert.deepEqual(strokes(at({ edges: 'three' })), lines([[10, 1], [10, 2]], [[10, 2], [11, 2]], [[11, 2], [11, 1]]), 'three: left, top and right, the bottom open');
   assert.deepEqual(strokes(at({ edges: 'none' })), [], 'none: no line at all');
   // rotation and flips turn the outline with the block
   assert.deepEqual(strokes(at({ edges: 'edge', rotation: 90 })), lines([[10, 2], [10, 1]]), 'edge turned a quarter: the left side');
@@ -90,7 +91,27 @@ test('a variant strokes only its own sides, turned with the block', () => {
   assert.deepEqual(strokes(at({ edges: 'outer', flipX: true })), lines([[11, 1], [11, 2]], [[11, 2], [10, 2]]), 'outer flipped: right and top');
   assert.deepEqual(strokes(at({ edges: 'inner', flipY: true })), lines([[10, 1.25], [10, 1]], [[10, 1], [10.25, 1]]), 'inner flipped: the bottom left corner');
   assert.deepEqual(strokes(at({ edges: 'edge', scale: 2 })), lines([[9.5, 3], [11.5, 3]]), 'a scaled edge spans its whole top');
+  assert.deepEqual(strokes(at({ edges: 'three', rotation: 180 })), lines([[11, 2], [11, 1]], [[11, 1], [10, 1]], [[10, 1], [10, 2]]), 'three turned over: open at the top');
+  assert.deepEqual(strokes(at({ edges: 'three', rotation: 90 })), lines([[10, 1], [11, 1]], [[10, 1], [10, 2]], [[10, 2], [11, 2]]), 'three turned a quarter: open on the right');
+  assert.deepEqual(strokes(at({ edges: 'three', flipY: true })), lines([[10, 2], [10, 1]], [[10, 1], [11, 1]], [[11, 1], [11, 2]]), 'three flipped: open at the top');
   // every outlined type takes them, the transparent outline block too
   for (const type of OUTLINED)
     assert.deepEqual(strokes({ ...object(type, 10, 1), edges: 'edge' }), lines([[10, 2], [11, 2]]), type);
+});
+
+// #139: a copy of the game from before the three-sided outline refuses a level with one, rather
+// than drawing it some other way
+test('a copy of the game from before three sides refuses a level with one', async () => {
+  const { execFileSync } = await import('node:child_process');
+  const { mkdtemp, writeFile } = await import('node:fs/promises');
+  const { tmpdir } = await import('node:os');
+  const { join } = await import('node:path');
+  const dir = await mkdtemp(join(tmpdir(), 'cube-153f4a9-'));
+  await writeFile(join(dir, 'src.tar'), execFileSync('git', ['archive', '--format=tar', '153f4a923e29a2e20e769a0ee1336be33329983e', 'src']));
+  execFileSync('tar', ['-xf', join(dir, 'src.tar'), '-C', dir]);
+  const old = await import(join(dir, 'src', 'engine.ts'));
+  const three = level([{ ...object('block', 10, 1), edges: 'three' }]);
+  assert.doesNotThrow(() => old.validateLevel(level([{ ...object('block', 10, 1), edges: 'outer' }])));
+  assert.throws(() => old.validateLevel(three), /Invalid block edges/);
+  assert.deepEqual(validateLevel(three), three);
 });

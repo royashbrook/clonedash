@@ -36,6 +36,7 @@ try {
     "music-lifetime.test.mjs",
     "spin.test.mjs",
     "canvas-log.mjs",
+    "edges.test.mjs",
     "framing.test.mjs",
     "loop-length.test.mjs",
     "loop-song.test.mjs",
@@ -259,6 +260,9 @@ try {
     ["spin.ts", "return { angle: s.from, side: s.side };", "return { angle: s.from, side: odd(s.rest) };", "carries the angle and the side", "spin.test.mjs"],
     ["render.ts", "(X(cx + (sx - cx) * turn.side) - x) / k,\n          ((Y(cy + (sy - cy) * turn.side) - y) / k) * flip,", "(X(cx) - x) / k,\n          ((Y(cy) - y) / k) * flip,", "swapped box", "spin.test.mjs"],
     ["render.ts", "      if (!reduced) {\n        let s = SPINS.get(state);", "      if (true) {\n        let s = SPINS.get(state);", "render turns the cube", "spin.test.mjs"],
+    // the three-sided outline (#139)
+    ["render.ts", "                        ? [[bl, tl, tr, br]] // left, top and right, the bottom open (#139)", "                        ? [[tl, tr, br]] // left, top and right, the bottom open (#139)", "a variant strokes only", "edges.test.mjs"],
+    ["engine.ts", "\"inner\", \"three\", \"none\"]", "\"inner\", \"none\"]", "six values", "edges.test.mjs"],
     // the upright framing eases across a turn (#138)
     ["framing.ts", "a + (b - a) * k", "b", "settles in about a third", "framing.test.mjs"],
     ["framing.ts", "const TAU = 0.06;", "const TAU = 0.3;", "settles in about a third", "framing.test.mjs"],

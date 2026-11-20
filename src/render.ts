@@ -497,7 +497,9 @@ export function render(
                     ? [[bl, tl, tr]]
                     : o.edges === "inner"
                       ? [[at(tl, bl, 0.25), tl, at(tl, tr, 0.25)]]
-                      : []; // none: the middle of a big shape, no line at all
+                      : o.edges === "three"
+                        ? [[bl, tl, tr, br]] // left, top and right, the bottom open (#139)
+                        : []; // none: the middle of a big shape, no line at all
           ctx.beginPath();
           for (const line of lines)
             line.forEach(([x, y], i) =>

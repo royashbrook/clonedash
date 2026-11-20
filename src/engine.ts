@@ -134,7 +134,7 @@ export const usesNew = (o: Piece) =>
   o.scaleX !== undefined || o.scaleY !== undefined || o.touch !== undefined || o.multi !== undefined;
 // Blocks drawn with a white outline take an edges field (types.ts Edges); NO BORDER has none.
 export const OUTLINED = ["block", "grid", "black", "outline"];
-export const EDGES = ["edge", "parallel", "outer", "inner", "none"];
+export const EDGES = ["edge", "parallel", "outer", "inner", "three", "none"];
 // A ring with no bounce field is the original: JUMP, a 2.25 block peak. A set bounce is the peak
 // height in blocks, so the launch speed is the one that reaches it under level gravity.
 export const RING_BOUNCE = 2.25;

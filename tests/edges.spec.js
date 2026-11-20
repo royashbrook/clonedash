@@ -1,6 +1,6 @@
 import { test, expect } from "./quiet.mjs";
 
-// Outline variants: five presets on the BLOCKS tab (solid blocks) and the Edges control for any
+// Outline variants: six presets on the BLOCKS tab (solid blocks) and the Edges control for any
 // outlined block. FULL is stored as no field.
 const stored = page => page.evaluate(() => JSON.parse(localStorage.getItem('clonedash.v1')));
 
@@ -14,7 +14,7 @@ test('edge presets place solid blocks with an outline variant; the Edges control
     return { unit, floor };
   });
   const cell = (x, y) => page.mouse.click((x + .1) * point.unit, point.floor - (y + .5) * point.unit);
-  for (const [name, x, edges, label] of [['▔ EDGE', 4, 'edge', 'EDGE'], ['═ PARALLEL', 6, 'parallel', 'PARALLEL'], ['┌ OUTER CORNER', 8, 'outer', 'OUTER CORNER'], ['⌜ INNER CORNER', 10, 'inner', 'INNER CORNER'], ['▪ NO OUTLINE', 12, 'none', 'NO OUTLINE']]) {
+  for (const [name, x, edges, label] of [['▔ EDGE', 4, 'edge', 'EDGE'], ['═ PARALLEL', 6, 'parallel', 'PARALLEL'], ['┌ OUTER CORNER', 8, 'outer', 'OUTER CORNER'], ['⌜ INNER CORNER', 10, 'inner', 'INNER CORNER'], ['⊓ THREE SIDES', 14, 'three', 'THREE SIDES'], ['▪ NO OUTLINE', 12, 'none', 'NO OUTLINE']]) {
     await page.getByRole('button', { name, exact: true }).click();
     await cell(x, 0);
     await expect(page.locator('#selection')).toContainText(`BLOCK · x ${x}.00`);
@@ -27,17 +27,19 @@ test('edge presets place solid blocks with an outline variant; the Edges control
   expect((await stored(page)).draft.objects.at(-1)).toMatchObject({ edges: 'none', rotation: 270 });
   // a grid block takes a variant from the Edges control, and FULL takes it away again
   await page.getByRole('button', { name: '▦ GRID', exact: true }).click();
-  await cell(14, 0);
+  await cell(16, 0);
   await expect(page.locator('#edges')).toBeEnabled(); await expect(page.locator('#edges')).toHaveValue('');
   await page.locator('#edges').selectOption('OUTER CORNER');
   await expect.poll(async () => (await stored(page)).draft.objects.at(-1)).toMatchObject({ type: 'grid', edges: 'outer' });
+  await page.locator('#edges').selectOption('THREE SIDES');
+  await expect.poll(async () => (await stored(page)).draft.objects.at(-1)).toMatchObject({ type: 'grid', edges: 'three' });
   await page.locator('#edges').selectOption('FULL');
   await expect.poll(async () => 'edges' in (await stored(page)).draft.objects.at(-1)).toBe(false);
   // NO BORDER has no outline to vary
   await page.getByRole('button', { name: '■ NO BORDER', exact: true }).click();
-  await cell(16, 0);
+  await cell(18, 0);
   await expect(page.locator('#selection')).toContainText('PLAIN-BLACK');
   await expect(page.locator('#edges')).toBeDisabled();
   await page.reload(); await page.locator('#editor-open').click();
-  expect((await stored(page)).draft.objects.map(o => o.edges)).toEqual(['edge', 'parallel', 'outer', 'inner', 'none', undefined, undefined]);
+  expect((await stored(page)).draft.objects.map(o => o.edges)).toEqual(['edge', 'parallel', 'outer', 'inner', 'three', 'none', undefined, undefined]);
 });
