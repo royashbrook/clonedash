@@ -44,7 +44,12 @@ bottom bar. TOOLS (start from a song, key, wobble, length, drop, surprise, clear
 the grid and leave the draft as it is; a tool that replaces the notes or the length closes the panel.
 The grid shows 8 steps, 10 note rows and 3 drum rows (hi-hat, snare, kick, top to bottom) with no
 legend; cells grow to 44px and shrink to fit a phone held upright, never below 22px tall (a short
-sideways screen scrolls the grid under the fixed toolbar). A longer loop shows its steps 8 at a time.
+sideways screen scrolls the grid under the fixed toolbar). Narrow screens page eight steps at a time.
+
+On a wider editor (#142), bars of eight sit side by side and can wrap onto a second row. The editor
+measures the space above the dock, shows as many bars as fit, then favors larger pads. A partial
+page uses the same step numbers and note positions. Resizing changes the view, not the loop or its
+playback clock.
 
 The bottom bar stays in the loop editor. A tab leaves through the editor's own ask: with changes it
 asks "Leave without saving?", KEEP IT keeps everything, LEAVE goes to the tab that was tapped. MORE
