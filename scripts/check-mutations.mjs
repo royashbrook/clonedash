@@ -17,6 +17,7 @@ try {
     "remix-inputs.mjs",
     "version.test.mjs",
     "pogo.test.mjs",
+    "door.test.mjs",
     "coins.test.mjs",
     "triggers.test.mjs",
     "parity.test.mjs",
@@ -263,6 +264,9 @@ try {
     // the three-sided outline (#139)
     ["render.ts", "                        ? [[bl, tl, tr, br]] // left, top and right, the bottom open (#139)", "                        ? [[tl, tr, br]] // left, top and right, the bottom open (#139)", "a variant strokes only", "edges.test.mjs"],
     ["engine.ts", "\"inner\", \"three\", \"none\"]", "\"inner\", \"none\"]", "six values", "edges.test.mjs"],
+    // door lift comes from one continuous ground press (#139)
+    ["engine.ts", "GRAVITY / 2 : GRAVITY", "GRAVITY / 3 : GRAVITY", "door starts with the square hop", "door.test.mjs"],
+    ["run.ts", "if (this.state.doorLift) delete this.state.doorLift;", "", "release between ticks", "door.test.mjs"],
     // the upright framing eases across a turn (#138)
     ["framing.ts", "a + (b - a) * k", "b", "settles in about a third", "framing.test.mjs"],
     ["framing.ts", "const TAU = 0.06;", "const TAU = 0.3;", "settles in about a third", "framing.test.mjs"],

@@ -66,6 +66,7 @@ export const PORTALS = [
   "pogo",
   "angle",
   "croissant",
+  "door",
   "gravity-up",
   "gravity-down",
   ...Object.keys(SPEEDS),
@@ -387,6 +388,7 @@ function distanceToOrigin(p: Point[]) {
 // What a ring or a booster does to the run; a booster does what its ring does (#106). A black ring
 // or booster sends you down at DROP_SPEED, a gray one stops your rise or fall, both once.
 function launch(s: GameState, e: Effect) {
+  if (s.doorLift) delete s.doorLift;
   if (e.flipsGravity) {
     s.gravity *= -1;
     s.vy = e.boost ? -s.gravity * ringSpeed(e) : s.gravity * FALL;
@@ -572,6 +574,7 @@ export function step(
     // (#94); the green one bounces you off the new gravity, a yellow ring jump turned over (#95)
     // the yellow dash orb flips gravity as the dash starts
     if (o.dash) {
+      if (s.doorLift) delete s.doorLift;
       s.dash = dashClimb(o);
       if (o.flipsGravity) s.gravity *= -1;
       s.grounded = false;
@@ -591,13 +594,16 @@ export function step(
     s.y = across(s);
     s.vy = 0;
   }
+  const doorJump = s.mode === "door" && s.grounded && (held || tapped) && ring < 0;
+  if (s.doorLift && (!held || s.vy * s.gravity >= 0)) delete s.doorLift;
   if (
     !halt &&
-    (((s.mode === "square" || s.mode === "pogo") && s.grounded && held) ||
+    (doorJump || ((s.mode === "square" || s.mode === "pogo") && s.grounded && held) ||
       (s.mode === "pogo" && tapped))
   ) {
     s.vy = -s.gravity * JUMP;
     s.grounded = false;
+    if (doorJump && held) s.doorLift = true;
   }
   // Angle: a true 45 degrees, so the climb and the dive both move up or down exactly as fast as
   // the trail moves forward. Gravity only picks which way "up" is.
@@ -611,7 +617,8 @@ export function step(
       ? -s.gravity * (held ? 14 : -12)
       : s.mode === "angle"
         ? 0
-        : s.gravity * GRAVITY;
+        // Take off on the square's exact first tick. Holding after it halves gravity on the rise.
+        : s.gravity * (s.doorLift && !doorJump ? GRAVITY / 2 : GRAVITY);
   s.x += forward * dt;
   s.time += dt;
   s.y += s.vy * dt + (acceleration * dt * dt) / 2;
@@ -642,12 +649,14 @@ function settle(
   // the boosters touched before the step and the dash a booster ends go back too, so a booster
   // fires in the second pass exactly when it really touches the moved pose (#106 rule 4f)
   const { x, y, vy, grounded, status, wall, speed, gravity, mode, touchingPortals, dash } = s,
+    doorLift = s.doorLift,
     coins = fx.coins,
     pads = fx.pads;
   fx.picked.length = 0;
   contact(s, oldX, oldY, wasGrounded, height, forward, dt);
   if (!runTriggers(s, fx)) return;
   Object.assign(s, { x, y, vy, grounded, status, wall, speed, gravity, mode, touchingPortals, dash });
+  if (doorLift) s.doorLift = true; // the first contact pass may have cancelled the jump
   fx.pads = pads;
   for (const i of fx.picked) fx.got[i] = 0;
   fx.coins = coins;
@@ -709,11 +718,13 @@ function contact(
         if (!s.touchingPortals.includes(i)) {
           if (o.type in SPEEDS) s.speed = SPEEDS[o.type];
           else if (o.type.startsWith("gravity-")) {
+            if (s.doorLift) delete s.doorLift;
             const flip = s.gravity !== (o.type === "gravity-up" ? 1 : -1);
             s.gravity = o.type === "gravity-up" ? 1 : -1;
             s.vy = flip ? s.gravity * FALL : 0;
             s.grounded = false;
           } else {
+            if (s.doorLift && s.mode !== o.type) delete s.doorLift;
             s.mode = o.type as GameMode;
             if (o.type === "plane") {
               s.y = Math.max(0.5, Math.min(height - SIZE - 0.5, s.y));

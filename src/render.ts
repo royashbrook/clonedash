@@ -56,6 +56,7 @@ const portalLook: Record<string, [string, string, string]> = {
   pogo: ["#53e3ff", "POGO", "⇈"],
   angle: ["#c77dff", "ANGLE", "◢"],
   croissant: ["#f4a259", "CROISSANT", "☾"],
+  door: ["#ffc582", "DOOR", "⚿"],
   "gravity-up": ["#53e3ff", "UP", "↑"],
   "gravity-down": ["#ffb477", "DOWN", "↓"],
   "speed-slow": ["#ffb477", "SLOW", "<"],
@@ -669,6 +670,18 @@ export function render(
           ctx.fillRect(a * 0.12, -a * 0.18, a * 0.15, a * 0.17);
           ctx.fillRect(-a * 0.22, a * 0.18, a * 0.44, a * 0.06);
         }
+      } else if (state.mode === "door") {
+        if (state.gravity > 0) ctx.scale(1, -1);
+        const a = SIZE * unit;
+        ctx.fillStyle = color;
+        ctx.strokeStyle = "#fff";
+        ctx.lineWidth = 2;
+        ctx.fillRect(-a * 0.36, -a / 2, a * 0.72, a);
+        ctx.strokeRect(-a * 0.36, -a / 2, a * 0.72, a);
+        ctx.strokeStyle = "#101825";
+        ctx.strokeRect(-a * 0.22, -a * 0.36, a * 0.44, a * 0.32);
+        ctx.fillStyle = "#101825";
+        ctx.fillRect(a * 0.16, a * 0.08, a * 0.13, a * 0.09);
       } else if (state.mode === "wheel") {
         const r = (SIZE * unit) / 2;
         ctx.save();

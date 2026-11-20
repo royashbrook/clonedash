@@ -177,6 +177,7 @@ test('old share codes captured on main decode exactly as main decoded them, and 
     // rule 7)
     for (const [piece, refusal] of [
       [object('yellow-pad', 6, 0), /Invalid object/],
+      [object('door', 6, 0), /Invalid object/],
       [{ ...object('drop-ring', 6, 1), color: '#000000' }, /Invalid object/],
       [{ ...object('stop-ring', 6, 1), color: '#9a9a9a' }, /Invalid object/],
       [{ ...object('ring', 6, 1), scale: 2 }, /Invalid scale/],
