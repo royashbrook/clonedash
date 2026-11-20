@@ -102,6 +102,8 @@ function rig() {
   music.enabled = true;
   music.context = {
     destination: {},
+    currentTime: 0,
+    createGain: () => ({connect(){},disconnect(){},gain:{setValueAtTime(){},linearRampToValueAtTime(){}}}),
     close: async () => {},
     createBufferSource: () => ({ connect() {}, disconnect() {}, stop() {}, start() { started.push(this.buffer); }, loop: false, buffer: null }),
   };

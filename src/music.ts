@@ -171,6 +171,9 @@ export class Soundtrack {
   buffers = new Map<number | string, AudioBuffer>();
   pending = new Set<number | string>();
   source: AudioBufferSourceNode | null = null;
+  private gain?: GainNode;
+  private tails = new Set<GainNode>();
+  private epoch = 0;
   context?: AudioContext;
   track: number | string = -1;
   intent: { music: Music; running: boolean; offset: number } = { music: 0, running: false, offset: 0 };
@@ -221,11 +224,27 @@ export class Soundtrack {
       this.enabled = false;
     }
   }
-  stop() {
-    if (this.source) {
-      this.source.stop();
-      this.source.disconnect();
-      this.source = null;
+  stop(fade = false) {
+    if (!fade) {
+      for (const tail of this.tails) tail.disconnect();
+      this.tails.clear();
+    }
+    const source = this.source, gain = this.gain;
+    if (!source || !gain || !this.context) return;
+    this.source = null;
+    this.gain = undefined;
+    if (fade && this.context.state === "running") {
+      const now = this.context.currentTime;
+      gain.gain.cancelScheduledValues(now);
+      gain.gain.setValueAtTime(Math.max(0, Math.min(1, (now - this.attackAt) / 0.008)), now);
+      gain.gain.linearRampToValueAtTime(0, now + 0.04);
+      this.tails.add(gain);
+      source.onended = () => { source.disconnect(); gain.disconnect(); this.tails.delete(gain); };
+      source.stop(now + 0.04);
+    } else {
+      gain.disconnect();
+      source.stop();
+      source.disconnect();
     }
   }
   dispose() {
@@ -239,20 +258,14 @@ export class Soundtrack {
   // The page hid or lost focus: stop, and drop the wish to play, so a render that finishes while
   // no frame runs (a hidden page may get none) cannot start sound again. The next frame that wants
   // music says so through sync.
-  interrupt() {
+  interrupt(fade = false) {
     this.intent = { ...this.intent, running: false };
-    this.stop();
+    this.stop(fade);
   }
-  sync(music: Music, running: boolean, offset: number) {
-    if (this.disposed) return;
-    this.intent = { music, running, offset };
-    if (!this.enabled || !this.context || !running) {
-      this.stop();
-      return;
-    }
+  private attackAt = 0;
+  prepare(music: Music) {
+    if (this.disposed || !this.enabled || !this.context) return;
     const key = keyOf(music);
-    if (this.source && this.track === key) return;
-    this.stop();
     if (!this.buffers.has(key)) {
       // One render at a time; a big level library must not turn into a big audio cache.
       if (!this.pending.size) {
@@ -263,8 +276,10 @@ export class Soundtrack {
           .then((buffer) => {
             this.pending.delete(key);
             if (this.disposed) return;
-            // Long recordings decode to tens of MB. Retain only the current track.
-            this.buffers.clear();
+            // Returning home should not decode the menu recording again. Keep it and one trail.
+            if (key !== 109) for (const cached of this.buffers.keys()) {
+              if (cached !== 109) this.buffers.delete(cached);
+            }
             this.buffers.set(key, buffer);
             const i = this.intent;
             this.sync(i.music, i.running, i.offset);
@@ -278,12 +293,33 @@ export class Soundtrack {
             else this.enabled = false;
           });
       }
+    }
+  }
+  sync(music: Music, running: boolean, offset: number, followRun = false) {
+    if (this.disposed) return;
+    this.intent = { music, running, offset };
+    if (!this.enabled || !this.context || !running) {
+      this.stop(true);
+      return;
+    }
+    const key = keyOf(music), now = this.context.currentTime;
+    if (this.source && this.track === key && (!followRun || this.context.state !== "running" ||
+      Math.abs(now - this.epoch - offset) <= 0.065)) return;
+    this.stop(true);
+    if (!this.buffers.has(key)) {
+      this.prepare(music);
       return;
     }
     this.source = this.context.createBufferSource();
     this.source.buffer = this.buffers.get(key)!;
     this.source.loop = true;
-    this.source.connect(this.context.destination);
+    this.gain = this.context.createGain();
+    this.attackAt = now;
+    this.epoch = now - offset;
+    this.gain.gain.setValueAtTime(0, now);
+    this.gain.gain.linearRampToValueAtTime(1, now + 0.008);
+    this.source.connect(this.gain);
+    this.gain.connect(this.context.destination);
     this.source.start(0, Math.max(0, offset) % this.source.buffer.duration);
     this.track = key;
   }
