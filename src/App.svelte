@@ -762,6 +762,21 @@
     last = performance.now();
     orientation();
   }
+  function hudMenu() {
+    if (custom) library();
+    else pause();
+  }
+  // A gameplay finger can still be down. That second tap need not produce a click.
+  function hudTouch(e: TouchEvent, action: () => void) {
+    e.preventDefault();
+    const button = e.currentTarget as HTMLButtonElement;
+    for (const touch of e.changedTouches) {
+      if (button.contains(document.elementFromPoint(touch.clientX, touch.clientY))) {
+        action();
+        return;
+      }
+    }
+  }
   function pause() {
     if (mode !== "play" || run.state.status === "complete") return;
     run.interrupt();
@@ -2138,7 +2153,8 @@
     id="menu"
     class:back-to-levels={custom}
     aria-label={custom ? "Return to My Levels" : "Pause and open menu"}
-    onclick={() => (custom ? library() : pause())}
+    ontouchend={(e) => hudTouch(e, hudMenu)}
+    onclick={hudMenu}
     >{custom ? "← MY LEVELS" : "☰"}</button
   >
   <div class="run-label">
@@ -2154,6 +2170,7 @@
   ><span id="attempt">TRY {hud.attempt}</span><button
     id="pause"
     aria-label="Pause"
+    ontouchend={(e) => hudTouch(e, pause)}
     onclick={pause}>Ⅱ</button
   >
 </section>
