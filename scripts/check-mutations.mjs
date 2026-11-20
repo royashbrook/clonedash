@@ -187,7 +187,7 @@ try {
     ["engine.ts", "const [cx, cy] = pointOf(o, 0.5, 0.5);", "const [cx, cy] = [o.x + 0.5, o.y + 0.5];", "a sized ring is reached at its drawn centre", "size.test.mjs"],
     ["engine.ts", "r = 0.6 * scaleOf(o);", "r = 0.6;", "a sized ring is reached at its drawn centre", "size.test.mjs"],
     ["engine.ts", "if (o.x - r > s.x + SIZE + 1 || o.x + r < s.x - 1) continue;", "if (o.x > s.x + 2 * scaleOf(o) || o.x < s.x - 2 * scaleOf(o)) continue;", "a sized portal, coin and booster are touched by their real shape", "size.test.mjs"],
-    ["engine.ts", "if ((raw.height !== undefined || sizedNew) && bounds", "if ((raw.height !== undefined) && bounds", "the ceiling covers sized rings", "size.test.mjs"],
+    ["engine.ts", "(raw.height !== undefined || sizedNew) && bounds", "(raw.height !== undefined) && bounds", "the ceiling covers sized rings", "size.test.mjs"],
     ["render.ts", "[mx, my] = pointOf(o, 0.5, 0.5),", "[mx, my] = [o.x + 0.5, o.y + 0.5],", "drawn at the centre and size they are touched at", "size.test.mjs"],
     ["render.ts", "ctx.arc(X(mx), Y(my), unit * 0.45 * s, 0, Math.PI * 2);", "ctx.arc(X(mx), Y(my), unit * 0.45, 0, Math.PI * 2);", "drawn at the centre and size they are touched at", "size.test.mjs"],
     ["gesture.ts", "angleStep = turnable ?", "angleStep = scalable ?", "the pinch starts from the piece as it is", "gesture.test.mjs"],
