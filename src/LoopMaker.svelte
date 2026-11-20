@@ -381,6 +381,7 @@
     <div class="loop-grid-box" class:swiping={swipe}>
       <div
         id="loop-grid"
+        style:--steps={loop.notes.length}
         role="group"
         aria-label="Loop steps"
         onpointerdown={strokeDown}
@@ -595,8 +596,9 @@
   }
   .loop-row {
     display: grid;
-    grid-template-columns: 52px repeat(8, 44px);
-    gap: 4px;
+    /* 16 steps fit an ipad held upright (42 + 16 x 46 = 778px), cells stay 44px targets */
+    grid-template-columns: 42px repeat(var(--steps, 8), 44px);
+    gap: 4px 2px;
     align-items: center;
   }
   .loop-row.gap {
