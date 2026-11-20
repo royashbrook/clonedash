@@ -156,11 +156,17 @@
   // on, a finger stroke paints: the first cell decides paint (it was off) or erase (it was on), and
   // every cell the stroke crosses is set to that, so coming back over a cell never flips it again.
   // the path between two pointer events is sampled, so a fast swipe cannot jump a cell, and
-  // lifting the finger or a cancel ends the stroke. the stroke holds the pointer, so the click that
-  // follows lands on the grid, not a cell; a keyboard press still clicks, and toggles, one cell.
+  // lifting the finger, a cancel or losing the pointer ends the stroke. a stroke belongs to the one
+  // pointer that started it (a primary press with the main button): a second finger, or any other
+  // pointer, neither starts, moves nor ends it. in swipe mode a pointer's click on a cell does
+  // nothing (strokes set cells); a keyboard press still clicks, and toggles, one cell.
   type Kind = "note" | "kick" | "snare" | "hat";
   let swipe = $state(false),
-    stroke: { paint: boolean; x: number; y: number } | null = null;
+    stroke: { id: number; paint: boolean; x: number; y: number } | null = null;
+  function press(e: MouseEvent, kind: Kind, step: number, degree = 0) {
+    if (swipe && e.detail !== 0) return;
+    tap(kind, step, degree);
+  }
   const isOn = (kind: Kind, step: number, degree: number) =>
     kind === "note" ? loop.notes[step].includes(degree) : loop[kind].includes(step);
   const cellAt = (x: number, y: number) =>
@@ -171,16 +177,16 @@
     if (stroke && isOn(kind, step, degree) !== stroke.paint) tap(kind, step, degree);
   }
   function strokeDown(e: PointerEvent) {
-    if (!swipe) return;
+    if (!swipe || stroke || !e.isPrimary || e.button !== 0) return;
     const c = cellAt(e.clientX, e.clientY);
     if (!c) return;
     e.preventDefault();
     (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
-    stroke = { paint: !isOn(...read(c)), x: e.clientX, y: e.clientY };
+    stroke = { id: e.pointerId, paint: !isOn(...read(c)), x: e.clientX, y: e.clientY };
     paint(c);
   }
   function strokeMove(e: PointerEvent) {
-    if (!stroke) return;
+    if (!stroke || e.pointerId !== stroke.id) return;
     const dx = e.clientX - stroke.x,
       dy = e.clientY - stroke.y,
       n = Math.max(1, Math.ceil(Math.hypot(dx, dy) / 8));
@@ -191,8 +197,8 @@
     stroke.x = e.clientX;
     stroke.y = e.clientY;
   }
-  function strokeEnd() {
-    stroke = null;
+  function strokeEnd(e: PointerEvent) {
+    if (stroke && e.pointerId === stroke.id) stroke = null;
   }
   // START FROM, SURPRISE ME and CLEAR NOTES replace the notes, and there is no undo, so they ask
   // first whenever there are notes to lose; KEEP IT leaves the draft exactly as it was
@@ -353,6 +359,7 @@
         onpointermove={strokeMove}
         onpointerup={strokeEnd}
         onpointercancel={strokeEnd}
+        onlostpointercapture={strokeEnd}
       >
         <div class="loop-row steps">
           <span class="tag"></span>
@@ -370,7 +377,7 @@
                 data-kind="note"
                 data-step={s}
                 data-degree={degree}
-                onclick={() => tap("note", s, degree)}
+                onclick={(e) => press(e, "note", s, degree)}
               ></button>{/each}
           </div>
         {/each}
@@ -386,7 +393,7 @@
                 data-kind={kind}
                 data-step={s}
                 data-degree="0"
-                onclick={() => tap(kind, s)}
+                onclick={(e) => press(e, kind, s)}
               ></button>{/each}
           </div>
         {/each}
