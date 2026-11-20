@@ -41,6 +41,7 @@ try {
     "framing.test.mjs",
     "loop-length.test.mjs",
     "loop-song.test.mjs",
+    "start-settings.test.mjs",
   ]) {
     const testSource = (await readFile(join("tests", testFile), "utf8"))
       .replaceAll("../src/", "./src/")
@@ -60,6 +61,9 @@ try {
       { encoding: "utf8" },
     );
   for (const [file, from, to, pattern, testFile = "migration.test.mjs"] of [
+    ["engine.ts", "mode: level.startMode ?? \"square\"", "mode: \"square\"", "every starting mode", "start-settings.test.mjs"],
+    ["engine.ts", "speed: level.startSpeed ?? 1", "speed: 1", "every starting mode", "start-settings.test.mjs"],
+    ["engine.ts", "s.x >= s.level.length", "s.x >= s.level.length + (s.level.offMap ? 32 : 0)", "same finish", "start-settings.test.mjs"],
     ["engine.ts", "SPEED = 5,", "SPEED = 5.1,", "typed engine matches"],
     [
       "render.ts",
@@ -183,7 +187,7 @@ try {
     ["engine.ts", "const [cx, cy] = pointOf(o, 0.5, 0.5);", "const [cx, cy] = [o.x + 0.5, o.y + 0.5];", "a sized ring is reached at its drawn centre", "size.test.mjs"],
     ["engine.ts", "r = 0.6 * scaleOf(o);", "r = 0.6;", "a sized ring is reached at its drawn centre", "size.test.mjs"],
     ["engine.ts", "if (o.x - r > s.x + SIZE + 1 || o.x + r < s.x - 1) continue;", "if (o.x > s.x + 2 * scaleOf(o) || o.x < s.x - 2 * scaleOf(o)) continue;", "a sized portal, coin and booster are touched by their real shape", "size.test.mjs"],
-    ["engine.ts", "if ((raw.height !== undefined || sizedNew) && bounds", "if ((raw.height !== undefined) && bounds", "the ceiling covers sized rings", "size.test.mjs"],
+    ["engine.ts", "(raw.height !== undefined || sizedNew) && bounds", "(raw.height !== undefined) && bounds", "the ceiling covers sized rings", "size.test.mjs"],
     ["render.ts", "[mx, my] = pointOf(o, 0.5, 0.5),", "[mx, my] = [o.x + 0.5, o.y + 0.5],", "drawn at the centre and size they are touched at", "size.test.mjs"],
     ["render.ts", "ctx.arc(X(mx), Y(my), unit * 0.45 * s, 0, Math.PI * 2);", "ctx.arc(X(mx), Y(my), unit * 0.45, 0, Math.PI * 2);", "drawn at the centre and size they are touched at", "size.test.mjs"],
     ["gesture.ts", "angleStep = turnable ?", "angleStep = scalable ?", "the pinch starts from the piece as it is", "gesture.test.mjs"],
@@ -231,7 +235,7 @@ try {
     ["loop.ts", "if (storage.getItem(LOOPS) !== raw) throw Error", "if (false) throw Error", "refuses rather than drop", "loop.test.mjs"],
     ["loop.ts", "await unpackCode(code, PREFIX, MAX_LOOP_BYTES, \"loop\")", "await unpackCode(code, PREFIX, MAX_LOOP_BYTES * 100, \"loop\")", "bounded and refuse", "loop.test.mjs"],
     // a loop as a custom level's song (#121 slice B)
-    ["transfer.ts", "if ((raw !== null && typeof raw === \"object\" && \"loop\" in raw) !== third) throw Error(\"Invalid level code.\");", "", "refused before anything could drop it", "loop-level.test.mjs"],
+    ["transfer.ts", "if (!fourth && (raw !== null && typeof raw === \"object\" && \"loop\" in raw) !== third) throw Error(\"Invalid level code.\");", "", "refused before anything could drop it", "loop-level.test.mjs"],
     ["transfer.ts", "(level.loop ? PREFIX3 : level.objects.some(usesNew) ? PREFIX2 : PREFIX)", "(level.objects.some(usesNew) ? PREFIX2 : PREFIX)", "travels as cdl3", "loop-level.test.mjs"],
     ["transfer.ts", "...(level.loop ? { loop: level.loop } : { song: level.song ?? 9 }),", "song: level.song ?? 9,", "one song source", "loop-level.test.mjs"],
     ["engine.ts", "    if (raw.song !== undefined) throw Error(\"Invalid level settings\");\n    // the loop's own bound", "    // the loop's own bound", "one song source", "loop-level.test.mjs"],

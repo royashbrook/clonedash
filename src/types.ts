@@ -1,5 +1,6 @@
 import type { Loop } from "./loop-schema.ts";
-export type GameMode = "square" | "plane" | "wheel" | "pogo" | "angle" | "croissant" | "door";
+export const GAME_MODES = ["square", "plane", "wheel", "pogo", "angle", "croissant", "door"] as const;
+export type GameMode = typeof GAME_MODES[number];
 // What the player SEES for an id whose upper-cased form is not the label. Stored ids that were
 // renamed for real (jumper became pogo) are mapped on read instead: engine.ts LEGACY_TYPES.
 const LABELS: Partial<Record<string, string>> = {
@@ -104,6 +105,9 @@ export interface Level {
   length: number;
   objects: Piece[];
   height?: number;
+  startMode?: GameMode;
+  startSpeed?: number;
+  offMap?: true;
   song?: number;
   // a custom level's own music, a copy of a loop (#121); a level has a song or a loop, never both
   loop?: Loop;

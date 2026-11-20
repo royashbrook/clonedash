@@ -8,6 +8,7 @@ import type {
   RunEffects,
   Transform,
 } from "./types.ts";
+import { GAME_MODES } from "./types.ts";
 import { recordingFor } from "./recordings.ts";
 import { MAX_LOOP_BYTES, validateLoop } from "./loop-schema.ts";
 // Quarter-block clearance makes a two-block ledge landable, not just reachable at one instant.
@@ -142,6 +143,11 @@ export const RING_BOUNCE = 2.25;
 export const ringSpeed = (o: Pick<Piece, "bounce">) =>
   o.bounce === undefined ? JUMP : Math.sqrt(2 * GRAVITY * o.bounce);
 export const levelHeight = (level: Level) => level.height ?? 7;
+// Authoring room only. The simulation still uses the actual length and height.
+export const BUILD_MARGIN = 32;
+export const buildBounds = (level: Level) => level.offMap
+  ? { left: -BUILD_MARGIN, right: level.length + BUILD_MARGIN, bottom: -BUILD_MARGIN, top: levelHeight(level) + BUILD_MARGIN }
+  : { left: 3, right: level.length - 2, bottom: -0.5, top: levelHeight(level) - 1 };
 export const COIN_RADIUS = 0.3; // a coin is a disc in the middle of its cell
 export const coinCount = (level: Level) => {
   let n = 0;
@@ -324,9 +330,9 @@ function baseState(level: Level): GameState {
     x: 1,
     y: 0,
     vy: 0,
-    mode: "square",
+    mode: level.startMode ?? "square",
     gravity: -1,
-    speed: 1,
+    speed: level.startSpeed ?? 1,
     wall: null,
     dash: null,
     inputHeld: false,
@@ -890,6 +896,9 @@ export function validateLevel(input: unknown): Level {
     throw Error("Invalid level");
   const height = levelHeight(raw);
   if (
+    (raw.startMode !== undefined && !GAME_MODES.includes(raw.startMode)) ||
+    (raw.startSpeed !== undefined && !Object.values(SPEEDS).includes(raw.startSpeed)) ||
+    (raw.offMap !== undefined && raw.offMap !== true) ||
     !Number.isInteger(height) ||
     height < 7 ||
     height > MAX_HEIGHT ||
@@ -902,6 +911,7 @@ export function validateLevel(input: unknown): Level {
   // Renamed ids are mapped on the copy before any check, so a legacy piece is measured and
   // bounded as what it is now; the input itself is never written to.
   const level = structuredClone(raw);
+  const area = buildBounds(level);
   // A level's own loop (#121) is its one song source: never beside a numbered song, and kept as
   // the validated copy, so nothing a loop does not hold rides along in it.
   if (raw.loop !== undefined) {
@@ -918,10 +928,8 @@ export function validateLevel(input: unknown): Level {
       !TYPES.includes(o.type) ||
       !Number.isFinite(o.x) ||
       !Number.isFinite(o.y) ||
-      o.x < 3 ||
-      o.x > raw.length - 2 ||
-      o.y < -0.5 ||
-      o.y > height - 1 ||
+      o.x < area.left || o.x > area.right ||
+      o.y < area.bottom || o.y > area.top ||
       (TURNABLE.includes(o.type) || o.dash === true // a dash orb aims at any angle
         ? !(Number.isFinite(o.rotation) && o.rotation >= 0 && o.rotation < 360)
         : ![0, 90, 180, 270].includes(o.rotation)) ||
@@ -1031,7 +1039,7 @@ export function validateLevel(input: unknown): Level {
     // Other pieces keep the check they had, only on a level that sets its height, so a default
     // height level saved before still loads.
     const sizedNew = (o.scale !== undefined && !TURNABLE.includes(o.type)) || o.scaleX !== undefined;
-    if ((raw.height !== undefined || sizedNew) && bounds(o).top > height + 0.00001)
+    if (!level.offMap && (raw.height !== undefined || sizedNew) && bounds(o).top > height + 0.00001)
       throw Error("Object above ceiling");
   }
   // every reader comes through here (saves, share codes, copies), so the cap holds for all of them
@@ -1083,7 +1091,7 @@ export function duplicateObject(level: Level, index: number) {
     stride = Math.max(1, b.right - b.left);
   do {
     copy.x = Math.round((copy.x + stride) * 20) / 20;
-    if (copy.x > level.length - 2)
+    if (copy.x > buildBounds(level).right)
       throw Error(
         "No room to the right. Move the object or lengthen the trail.",
       );

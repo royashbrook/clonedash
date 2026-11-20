@@ -53,7 +53,7 @@ recipients need the current app to open levels longer than 200 blocks or using t
 recorded soundtracks; older versions reject those values rather than silently changing them.
 lengths above 600 and heights above 40 use the same fields. a 1.0.129 reader refuses either
 on import rather than shortening the trail; levels within the old limits keep the same codes.
-on those larger trails, **height / song** also takes exact scroll coordinates for the left and
+on those larger trails, **level settings** also takes exact scroll coordinates for the left and
 bottom edges of the editor, so a narrow phone slider cannot skip the row you want to edit.
 coins, group ids and triggers (#101, docs/coins-and-triggers.md) are new optional piece fields
 (`group`, `target`, `moveX`, `moveY`, `duration`, and `color` on a colour trigger) inside the

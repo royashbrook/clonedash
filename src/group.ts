@@ -1,4 +1,4 @@
-import { scaleOf, bounds, intersects, pieceSize, polygon, transform, validateLevel } from "./engine.ts";
+import { buildBounds, scaleOf, bounds, intersects, pieceSize, polygon, transform, validateLevel } from "./engine.ts";
 import type { Level, Piece, Transform } from "./types.ts";
 
 // Multi-select (#87): the editor acts on several pieces at once. These are the pure parts, so
@@ -89,7 +89,7 @@ export function duplicateGroup(level: Level, indices: number[]) {
   do {
     shift += stride;
     copies = pieces.map((o) => ({ ...structuredClone(o), x: snap(o.x + shift) }));
-    if (copies.some((c) => c.x > level.length - 2))
+    if (copies.some((c) => c.x > buildBounds(level).right))
       throw Error("No room to the right. Move the group or lengthen the trail.");
   } while (
     copies.some((c) =>

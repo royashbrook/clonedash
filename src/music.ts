@@ -166,6 +166,22 @@ export async function composeLoop(loop: Loop, Offline = globalThis.OfflineAudioC
   return c.startRendering();
 }
 
+// WebKit can report a closed live context as running again during rapid teardown.
+// Stop the output first. Even if the device never acknowledges suspend, still ask it to close.
+export function closeGameAudio(context?: AudioContext) {
+  if (!context || context.state === "closed") return;
+  if (context.state !== "running") { void context.close(); return; }
+  let requested = false;
+  const close = () => {
+    if (requested) return;
+    requested = true;
+    clearTimeout(timer);
+    if (context.state !== "closed") void context.close();
+  };
+  const timer = setTimeout(close, 250);
+  void context.suspend().then(close, close);
+}
+
 export class Soundtrack {
   enabled = false;
   buffers = new Map<number | string, AudioBuffer>();
@@ -248,12 +264,13 @@ export class Soundtrack {
     }
   }
   dispose() {
+    if (this.disposed) return;
     this.disposed = true;
     this.request?.abort();
     this.enabled = false;
     this.stop();
     this.buffers.clear();
-    void this.context?.close();
+    closeGameAudio(this.context);
   }
   // The page hid or lost focus: stop, and drop the wish to play, so a render that finishes while
   // no frame runs (a hidden page may get none) cannot start sound again. The next frame that wants
