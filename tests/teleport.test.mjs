@@ -23,13 +23,13 @@ function run(s, limit = 4000, press = () => false) {
 
 test('the destination: the group piece furthest left, then lowest, then first placed; none is null', () => {
   const objects = [marker(30, 4, 1), marker(30, 2, 1), marker(31, 0, 1), marker(30, 2, 1), marker(12, 0, 2)];
-  assert.deepEqual(destination(objects, 1), [30, 2]);
-  assert.deepEqual(destination(objects, 2), [12, 0]);
-  assert.equal(destination(objects, 3), null, 'a group with no pieces');
-  assert.equal(destination(objects, undefined), null, 'no target');
+  assert.deepEqual(destination(level(objects), 1), [30, 2]);
+  assert.deepEqual(destination(level(objects), 2), [12, 0]);
+  assert.equal(destination(level(objects), 3), null, 'a group with no pieces');
+  assert.equal(destination(level(objects), undefined), null, 'no target');
   // the run's own group map gives the same answer
   const s = createState(level([trigger(5, 1), ...objects]));
-  assert.deepEqual(destination(s.level.objects, 1, s.fx.groups), [30, 2]);
+  assert.deepEqual(destination(s.level, 1, s.fx.groups), [30, 2]);
 });
 
 test('a teleport trigger sends you to its destination once the step is done, still running, no rise or fall', () => {
@@ -141,4 +141,32 @@ test('a teleport ring onto a block top: the step starts at the landing, so you s
   assert.equal(s.status, 'playing');
   assert.equal(s.y, 1, 'standing on the block');
   assert.equal(s.grounded, true);
+});
+
+// #149 lets a level keep pieces outside the trail; a teleport only ever lands on the trail
+// (docs/teleport.md rule 2), whatever the group holds and wherever a move left it
+const offMap = (objects) => ({ name: 'Off map', length: 30, height: 10, offMap: true, objects });
+test('a landing spot outside the trail is no landing spot: past the finish, below the floor, a mixed group, a moved marker', () => {
+  for (const [x, y, where] of [[40, 2, 'past the finish'], [12, -4, 'below the floor'], [-5, 2, 'before the start'], [12, 20, 'above the ceiling']]) {
+    const level = validateLevel(offMap([trigger(3, 1), marker(x, y, 1)]));
+    const s = createState(level);
+    assert.deepEqual(run(s), [], `${where}: no teleport`);
+    assert.equal(s.fx.fired[0], 1, `${where}: the trigger still fired, and did nothing`);
+    assert.ok(s.y >= 0, `${where}: never below the floor`);
+  }
+  // a mixed group: the piece on the trail wins, even though the one outside is further left
+  const mixed = createState(validateLevel(offMap([trigger(3, 1), marker(-5, 2, 1), marker(20, 3, 1)])));
+  assert.deepEqual(run(mixed).map(([, to]) => to), [20]);
+  // a marker a move trigger carried off the trail counts from where it is now
+  const move = { ...object('move-trigger', 2, 0), target: 1, moveX: 20 };
+  const moved = createState(validateLevel(offMap([move, trigger(5, 1), marker(15, 0, 1)])));
+  assert.deepEqual(run(moved), [], 'moved past the finish: no teleport');
+  // the ring is no ring when its only landing spot is off the trail, and the editor shows the same
+  const ring = { ...object('teleport-ring', 5, 0), target: 1 };
+  const r = createState(validateLevel(offMap([ring, marker(40, 2, 1)])));
+  while (r.x < 4.6) step(r, false);
+  step(r, true);
+  assert.ok(r.vy > 0, 'the tap jumped');
+  assert.deepEqual(r.usedRings, []);
+  assert.equal(destination(offMap([ring, marker(40, 2, 1)]), 1), null, 'the editor preview reads NO DESTINATION');
 });

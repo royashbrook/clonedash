@@ -9,7 +9,10 @@ How they fire is their own; where they send you is one shared rule (`destination
    it sends you to" on the ring). The landing spot is any piece given that group id; a NO TOUCH piece
    is the usual marker, so nothing is in the way when you arrive.
 2. The destination is the group's piece furthest left, then the lowest, then the first one placed,
-   where it stands at that moment, after any move trigger has moved it.
+   where it stands at that moment, after any move trigger has moved it. Only pieces on the trail
+   count: a piece in the building room outside it (#149, "Build outside the trail") or one a move
+   carried off it is never a landing spot. A group with none on the trail is nowhere to go (rule 4).
+   The trigger, the ring and the editor's preview all ask the same question.
 3. You land in that piece's cell (its x and y). You keep your speed, shape, gravity and size, with no
    rise or fall; a held Door lift, a dash and a jump in progress end. Landing in a solid block is the
    level's own crash.
