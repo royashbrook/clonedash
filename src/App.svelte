@@ -321,6 +321,7 @@
     editorControls: HTMLDivElement;
   let music = new Soundtrack(),
     audio: AudioContext | undefined;
+  let effects: GainNode | undefined;
   let installer: ReturnType<typeof installControl> | undefined,
     updater: ReturnType<typeof updateControl> | undefined;
   let last = 0,
@@ -430,6 +431,10 @@
     if (!save.sound || document.hidden || !alive) return;
     try {
       audio ??= new AudioContext();
+      if (!effects) {
+        effects = audio.createGain();
+        effects.connect(audio.destination);
+      }
       void audio.resume();
       const osc = audio.createOscillator(),
         gain = audio.createGain();
@@ -440,7 +445,7 @@
         0.001,
         audio.currentTime + duration,
       );
-      osc.connect(gain).connect(audio.destination);
+      osc.connect(gain).connect(effects);
       osc.start();
       osc.stop(audio.currentTime + duration);
     } catch {
@@ -449,8 +454,12 @@
   }
   function toggleSound() {
     save = { ...save, sound: !save.sound };
-    persist();
     music.unlock(save.sound);
+    if (!save.sound) {
+      effects?.disconnect();
+      effects = undefined;
+    }
+    persist();
   }
   function nextTrail() {
     current = COURSE_ORDER.find((i) => save.best[i] !== 100) ?? COURSE_ORDER[0];
@@ -460,6 +469,8 @@
     mode = next;
     testing = false;
     document.body.dataset.mode = next;
+    if (next === "home" || next === "library" || next === "skins")
+      music.sync(109, !document.hidden, performance.now() / 1000);
     run.interrupt();
     orientation();
   }
@@ -514,9 +525,10 @@
   }
   function home() {
     closeSheet();
-    if (mode === "play") record();
+    const leaving = mode === "play";
     paused = false;
     setMode("home");
+    if (leaving) record();
     nextTrail();
   }
   function library() {
@@ -708,11 +720,12 @@
     toast("Level added. Find it in My Levels.");
   }
   function start(index: number, isCustom = false) {
+    music.interrupt(true);
     music.unlock(save.sound);
-    music.stop();
     current = index;
     custom = isCustom;
     run = new Run(isCustom ? draft : LEVELS[index]);
+    music.prepare(isCustom ? draftMusic() : courseSong(index));
     paused = false;
     closeSheet();
     setMode("play");
@@ -781,7 +794,7 @@
     if (mode !== "play" || run.state.status === "complete") return;
     run.interrupt();
     paused = true;
-    music.interrupt();
+    music.interrupt(true);
     void sheet(
       "Paused",
       "Your run is right where you left it.",
@@ -1037,24 +1050,29 @@
         }
       }
     }
-    music.sync(
+    const onTrail = live() && run.state.status === "playing";
+    const song =
       mode === "editor" || (mode === "play" && custom)
         ? draftMusic()
         : mode === "play"
           ? courseSong(current)
-          : 109,
+          : 109;
+    if (onTrail && run.readyTime > 0 && !paused && !rotate && !document.hidden) music.prepare(song);
+    music.sync(
+      song,
       !document.hidden &&
         (mode === "home" ||
           mode === "library" ||
           mode === "skins" ||
-          (mode === "editor" && !rotate) ||
+          (mode === "editor" && !rotate && (!testing || (onTrail && run.readyTime <= 0))) ||
           (mode === "play" &&
             !paused &&
             !rotate &&
             // a completed trail keeps its song going through the complete screen
             ((run.state.status === "playing" && run.readyTime <= 0) ||
               run.state.status === "complete"))),
-      mode === "play" ? run.state.time : now / 1000,
+      live() ? run.state.time : now / 1000,
+      onTrail,
     );
     draw();
     if (live()) snapshot();
