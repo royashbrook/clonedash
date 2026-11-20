@@ -135,11 +135,11 @@ test("swipe off on a narrow phone: a finger drag scrolls the grid sideways and c
   const box = page.locator(".loop-grid-box");
   expect(await box.evaluate((e) => e.scrollWidth > e.clientWidth), "the grid is wider than the phone").toBe(true);
   await cell(page, 5, 4).scrollIntoViewIfNeeded();
-  const start = await centre(page, 5, 4);
+  const start = await centre(page, 5, 4), before = await box.evaluate((e) => e.scrollLeft);
   await touch("touchStart", [[0, start]]);
   for (let i = 1; i <= 10; i++) await touch("touchMove", [[0, [start[0] - i * 15, start[1]]]]);
   await touch("touchEnd", []);
-  await expect.poll(() => box.evaluate((e) => e.scrollLeft)).toBeGreaterThan(0);
+  await expect.poll(() => box.evaluate((e) => e.scrollLeft)).toBeGreaterThan(before);
   await expect(page.locator("#loop-grid .cell[data-kind=note][aria-pressed=true]")).toHaveCount(0);
   await context.close();
 });
