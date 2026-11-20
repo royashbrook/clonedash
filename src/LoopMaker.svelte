@@ -12,12 +12,14 @@
     MAX_WOBBLE,
     MIN_ROOT,
     MIN_WOBBLE,
-    STEPS,
+    LENGTHS,
     addLoop,
     blankLoop,
+    cutLoses,
     deleteLoop,
     loopFromSong,
     loopName,
+    resize,
     saveLoop,
     surprise,
     toggleDrum,
@@ -200,6 +202,23 @@
   function strokeEnd(e: PointerEvent) {
     if (stroke && e.pointerId === stroke.id) stroke = null;
   }
+  // LENGTH (#140): growing adds silent steps at the end; shrinking asks first when the cut steps
+  // hold notes or drum hits (KEEP IT leaves the draft exactly as it was)
+  function setLength(n: number) {
+    const from = loop.notes.length;
+    if (n === from) return;
+    const next = resize(loop, n);
+    if (n < from && cutLoses(loop, n))
+      sheet(() =>
+        confirm(
+          `Cut the loop to ${n} steps?`,
+          `The notes and drum hits after step ${n} will be removed. This cannot be undone.`,
+          `CUT TO ${n}`,
+          () => set(next),
+        ),
+      );
+    else set(next);
+  }
   // START FROM, SURPRISE ME and CLEAR NOTES replace the notes, and there is no undo, so they ask
   // first whenever there are notes to lose; KEEP IT leaves the draft exactly as it was
   // `lose` is whether the replacement throws away anything the player made
@@ -343,12 +362,21 @@
       <button
         id="loop-clear"
         onclick={() =>
-          replace({ ...loop, notes: Array.from({ length: STEPS }, () => []) }, hasNotes(), "Clear the notes?", "CLEAR NOTES", "The notes in this loop")}
+          replace({ ...loop, notes: Array.from({ length: loop.notes.length }, () => []) }, hasNotes(), "Clear the notes?", "CLEAR NOTES", "The notes in this loop")}
         >CLEAR NOTES</button
       >
       <button id="loop-swipe" aria-pressed={swipe} onclick={() => (swipe = !swipe)}
         >{swipe ? "SWIPE NOTES ON" : "SWIPE NOTES OFF"}</button
       >
+      <div class="length" role="group" aria-label="Loop length in steps">
+        <span aria-hidden="true">STEPS</span>
+        {#each LENGTHS as n}<button
+            id={`loop-length-${n}`}
+            aria-label={`${n} steps`}
+            aria-pressed={loop.notes.length === n}
+            onclick={() => setLength(n)}>{n}</button
+          >{/each}
+      </div>
     </div>
     <div class="loop-grid-box" class:swiping={swipe}>
       <div
@@ -363,12 +391,12 @@
       >
         <div class="loop-row steps">
           <span class="tag"></span>
-          {#each { length: STEPS } as _, s}<b class:now={now === s}>{s + 1}</b>{/each}
+          {#each { length: loop.notes.length } as _, s}<b class:now={now === s}>{s + 1}</b>{/each}
         </div>
         {#each [...DEGREES].reverse() as degree, r}
           <div class="loop-row" style:--c={COLOURS[DEGREES.length - 1 - r]}>
             <span class="tag" aria-hidden="true"><i></i></span>
-            {#each { length: STEPS } as _, s}<button
+            {#each { length: loop.notes.length } as _, s}<button
                 class="cell"
                 class:now={now === s}
                
@@ -384,7 +412,7 @@
         {#each DRUM_ROWS as [kind, label], r}
           <div class="loop-row" class:gap={r === 0} style:--c={kind === "kick" ? "#ffd166" : kind === "snare" ? "#ffffff" : "#b6c5d8"}>
             <span class="tag">{label}</span>
-            {#each { length: STEPS } as _, s}<button
+            {#each { length: loop.notes.length } as _, s}<button
                 class="cell"
                 class:now={now === s}
                
@@ -544,9 +572,21 @@
     overflow-x: auto;
     padding-bottom: 8px;
   }
-  /* SWIPE NOTES on: a finger on the grid paints instead of scrolling it */
-  .loop-grid-box.swiping #loop-grid {
+  /* SWIPE NOTES on: a finger on the cells paints instead of scrolling; the row of step numbers
+     still drags the grid sideways, so a long loop's later steps stay in reach on a phone */
+  .loop-grid-box.swiping #loop-grid .loop-row:not(.steps) {
     touch-action: none;
+  }
+  .length {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-weight: 800;
+  }
+  .length button {
+    min-width: 44px;
+    min-height: 44px;
+    padding-inline: 8px;
   }
   #loop-grid {
     display: grid;

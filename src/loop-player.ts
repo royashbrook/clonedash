@@ -27,7 +27,7 @@ export function playDrum(play: Voices, kind: "kick" | "snare" | "hat", step: num
 }
 export function playLoopStep(play: Voices, loop: Loop, bar: number, step: number, t: number) {
   const root = loop.root + chordAt(bar);
-  if (step === 0) play.pad(t, root, loop.drop);
+  if (step % 8 === 0) play.pad(t, root, loop.drop); // each bar of 8 steps, in loops of any length (#140)
   const lfo = step % 2 === 0 ? play.bass(t, root, loop.wobble, loop.drop).lfo : null;
   for (const kind of ["kick", "snare", "hat"] as const) if (loop[kind].includes(step)) playDrum(play, kind, step, t);
   for (const degree of loop.notes[step]) play.lead(t, loop.root + 24 + degree, loop.drop, step % 2 === 0);
@@ -151,6 +151,8 @@ export class LoopPlayer {
     // their place in the bar and the chord kept, and none of their voices is built
     while (this.next < c.currentTime) this.advance();
     while (this.next < c.currentTime + AHEAD) {
+      // a loop cut shorter while it plays carries on from its start
+      if (this.step >= this.loop().notes.length) this.step = 0;
       this.playStep(s, this.step, this.next);
       this.marks.push([this.next, this.step]);
       this.advance();
@@ -162,10 +164,9 @@ export class LoopPlayer {
   }
   private advance() {
     this.next += STEP;
-    if (++this.step === 8) {
-      this.step = 0;
-      this.bar++;
-    }
+    // a bar is 8 steps (the chord moves per bar); the loop wraps at its own length (#140)
+    if (++this.step % 8 === 0) this.bar++;
+    if (this.step >= this.loop().notes.length) this.step = 0;
   }
   // where the loop is: step in the bar and bar count (the chord follows the bar)
   get phase() {
