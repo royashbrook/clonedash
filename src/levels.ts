@@ -3,7 +3,7 @@ import type { Level } from "./types.ts";
 import { COURSES } from "./courses.ts";
 import { REMIX } from "./remix.ts";
 import { EXPLORER } from "./explorer.ts";
-import { FINAL_DASH } from "./challenger.ts";
+import { catalog } from "./catalog.ts";
 export const LEVELS: Level[] = [
   {
     name: "First Spark",
@@ -177,7 +177,7 @@ export const LEVELS: Level[] = [
 LEVELS.push(...COURSES);
 LEVELS.push(...REMIX);
 LEVELS.push(...EXPLORER);
-LEVELS.push(FINAL_DASH);
+LEVELS.push(...catalog.levels);
 export const COLLECTIONS = [
   { name: "Easy", note: "Room to learn the rhythm", indices: [9, 10, 11] },
   {
@@ -203,7 +203,7 @@ export const COLLECTIONS = [
   {
     name: "Challenger",
     note: "Player-made trails",
-    indices: [30],
+    indices: catalog.levels.map((_, i) => 30 + i),
   },
   {
     name: "Warmups",
@@ -213,3 +213,4 @@ export const COLLECTIONS = [
 ];
 export const COURSE_ORDER = COLLECTIONS.flatMap((group) => group.indices);
 export const courseSong = (index: number) => LEVELS[index].song ?? index;
+export const courseMusic = (index: number) => LEVELS[index].arrangement ?? LEVELS[index].loop ?? courseSong(index);

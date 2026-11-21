@@ -1,4 +1,5 @@
 import { test, expect, openAbout } from "./quiet.mjs";
+import { LEVELS } from "../src/levels.ts";
 import { COURSES } from '../src/courses.ts';
 import { REMIX } from '../src/remix.ts';
 import { Run } from '../src/run.ts';
@@ -24,7 +25,7 @@ test('ranked courses show durations, keep warmups and remove the misleading frie
     'ChallengerPlayer-made trails',
     'WarmupsShort introductions to each shape',
   ]);
-  await expect(page.locator('.level-card')).toHaveCount(31);
+  await expect(page.locator('.level-card')).toHaveCount(LEVELS.length);
   await expect(page.getByRole('button', { name: 'Play Final Dash', exact: true })).toContainText('Challenger');
   await expect(page.locator('#play')).toContainText('PULSEWAY');
   await expect(page.locator('#share')).toHaveCount(0);

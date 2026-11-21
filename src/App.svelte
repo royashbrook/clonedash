@@ -31,7 +31,7 @@
     toCentred,
     resized,
   } from "./engine.ts";
-  import { LEVELS, COLLECTIONS, COURSE_ORDER, courseSong } from "./levels.ts";
+  import { LEVELS, COLLECTIONS, COURSE_ORDER, courseSong, courseMusic } from "./levels.ts";
   import { easeFraming } from "./framing.ts";
   import { render } from "./render.ts";
   import { Run } from "./run.ts";
@@ -756,7 +756,7 @@
     current = index;
     custom = isCustom;
     run = new Run(isCustom ? draft : LEVELS[index]);
-    music.prepare(isCustom ? draftMusic() : courseSong(index));
+    music.prepare(isCustom ? draftMusic() : courseMusic(index));
     paused = false;
     closeSheet();
     setMode("play");
@@ -780,7 +780,7 @@
           ...source,
           name: `${source.name.slice(0, 33)} (copy)`,
           // one song source: a level with its own loop keeps it and gets no song beside it
-          ...(custom && (source.loop || source.arrangement) ? {} : { song: custom ? draftSong() : courseSong(current) }),
+          ...(source.loop || source.arrangement ? {} : { song: custom ? draftSong() : courseSong(current) }),
         },
         LEVELS.length,
         true,
@@ -1086,7 +1086,7 @@
       mode === "editor" || (mode === "play" && custom)
         ? draftMusic()
         : mode === "play"
-          ? courseSong(current)
+          ? courseMusic(current)
           : 109;
     if (onTrail && run.readyTime > 0 && !paused && !rotate && !document.hidden) music.prepare(song);
     music.sync(

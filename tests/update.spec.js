@@ -1,4 +1,5 @@
 import { test, expect, openAbout } from "./quiet.mjs";
+import { LEVELS } from "../src/levels.ts";
 import { execFileSync } from "node:child_process";
 import { mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -484,7 +485,7 @@ test("candidate download failure keeps the current build; consent installs a ful
       .toEqual(["clonedash-fedcba987654"]);
     server.offline();
     await page.reload();
-    await expect(page.locator(".level-card")).toHaveCount(31);
+    await expect(page.locator(".level-card")).toHaveCount(LEVELS.length);
     await expect(page.locator("meta[name=build]")).toHaveAttribute(
       "content",
       "fedcba987654",

@@ -2,6 +2,8 @@ import { build } from "vite";
 import { readdir, readFile, writeFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { releaseIdentity } from "./version.mjs";
+import { generate } from "./content.mjs";
+await generate();
 const identity = releaseIdentity(
   process.cwd(),
   process.env.RELEASE_BUILD === "1",

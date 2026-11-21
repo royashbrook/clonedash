@@ -33,6 +33,21 @@ Easy: Pulseway, Skyline, Runway (48 seconds each). Medium: Switchyard, Orbitwork
 
 Challenger is the player-made collection. Its first trail, **Final Dash**, is [trail 31](https://clonedash.royashbrook.com/?level=31). The catalog test decodes the original share and compares the entire level, including the soundtrack and object order.
 
+## Publish a submission
+
+Add one file to this repo. Use the original share text as the entire file, without a Markdown wrapper:
+
+| Item | Example path | Contents |
+| --- | --- | --- |
+| Challenger trail | `content/levels/challenger/0032-next-run.cdl` | Level share code. Use the next consecutive number; never renumber a released trail. |
+| Pixel skin | `content/skins/star-cat.cds` | Skin share code |
+| Music loop | `content/music/loops/night-beat.cdm` | Loop share code |
+| Full song | `content/music/songs/night-drive.cdl` | Level share with an embedded full song. Only the arrangement is published. A standalone arrangement object in a `.json` file also works. |
+
+Names come from the submission, not the filename. Skins, loops and songs show up as featured copies on their respective library screens. Opening one does not save, wear or replace anything. This path is for music made with the game, not uploaded audio recordings.
+
+Run `npm run build` then `npm run test:content` to preview the checks. The build packages the validated data with the offline app. Only additions of regular files matching the paths above take the quick release path. Edits, removals, mixed changes, manual releases and uncertain comparisons keep the full checks. The deploy compares against what is actually live and verifies the published build afterward. A local save alone does not publish: merge the accepted file to main.
+
 Pause any played level, or finish it, then choose **EDIT A COPY**. It saves a new independent entry and opens the editor. The source, prior draft and progress remain intact. Full or unavailable storage refuses the copy; nothing is replaced. This also works for imported levels. Copies preserve geometry and soundtrack and can be shared from My Levels.
 
 ## My levels

@@ -9,6 +9,7 @@ import {
   COLLECTIONS,
   COURSE_ORDER,
   courseSong,
+  courseMusic,
 } from "../src/levels.ts";
 import { Run } from "../src/run.ts";
 import {
@@ -156,14 +157,14 @@ test("the Explorer witnesses really collect every coin and take every teleport",
 });
 
 test("Challenger publishes the original Final Dash share in the next save slot", async () => {
-  const original = await readFile(new URL("./fixtures/final-dash.cdl", import.meta.url), "utf8");
-  assert.deepEqual(COLLECTIONS.find(g => g.name === "Challenger").indices, [30]);
+  const original = await readFile(new URL("../content/levels/challenger/0031-final-dash.cdl", import.meta.url), "utf8");
+  assert.equal(COLLECTIONS.find(g => g.name === "Challenger").indices[0], 30);
   assert.deepEqual(LEVELS[30], await decodeLevel(original));
   assert.equal(courseSong(30), 9);
 });
 
 test("groups preserve all old identities and show increasing course lengths", () => {
-  assert.equal(LEVELS.length, 31);
+  assert.ok(LEVELS.length >= 31);
   assert.deepEqual(
     LEVELS.slice(0, 9).map((l) => l.name),
     [
@@ -227,13 +228,14 @@ test("groups preserve all old identities and show increasing course lengths", ()
 test("every course can be independently copied, encoded and decoded with its own song", async () => {
   for (let i = 0; i < LEVELS.length; i++) {
     const original = structuredClone(LEVELS[i]);
-    const copy = { ...LEVELS[i], song: courseSong(i) };
+    assert.deepEqual(courseMusic(i), original.arrangement ?? original.loop ?? courseSong(i));
+    const copy = { ...LEVELS[i], ...(original.arrangement || original.loop ? {} : {song: courseSong(i)}) };
     const appended = appendLevel(readSave(null, LEVELS.length), copy);
     const decoded = await decodeLevel(
       await encodeLevel(appended.customLevels.at(-1).level),
     );
     assert.deepEqual(decoded, copy);
-    appended.customLevels.at(-1).level.objects[0].x++;
+    appended.customLevels.at(-1).level.objects.push({type:"spike",x:1,y:0});
     assert.deepEqual(LEVELS[i], original);
   }
 });
