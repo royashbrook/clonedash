@@ -321,7 +321,10 @@ try {
     ["engine.ts", "(TRIGGERS.includes(o.type) && o.touch)", "TRIGGERS.includes(o.type)", "rule 1b", "width-height-touch-multi.test.mjs"],
     ["engine.ts", "c = Math.cos(a),\n    n = Math.sin(a),", "c = 1,\n    n = 0,", "rule 1d", "width-height-touch-multi.test.mjs"],
     ["engine.ts", "rx = 0.6 * o.scaleX!,", "rx = 0.6 * o.scaleY!,", "rule 1d", "width-height-touch-multi.test.mjs"],
-    ["engine.ts", "!s.level.objects[i].multi || inReach(s, s.level.objects[i])", "!s.level.objects[i].multi || false", "rule 5", "width-height-touch-multi.test.mjs"],
+    ["engine.ts", "return !o.multi || (o.dash === true && inReach(s, o));", "return !o.multi || (o.dash === true && false);", "rule 5", "width-height-touch-multi.test.mjs"],
+    // a MULTI TOUCH tap ring fires on every fresh tap in its reach; a dash orb still waits to be left
+    ["engine.ts", "return !o.multi || (o.dash === true && inReach(s, o));", "return !o.multi || inReach(s, o);", "rule 5", "width-height-touch-multi.test.mjs"],
+    ["engine.ts", "return !o.multi || (o.dash === true && inReach(s, o));", "return !o.multi;", "rule 5", "width-height-touch-multi.test.mjs"],
     ["engine.ts", "entered = touching && !fx.inside[t];", "entered = touching;", "rule 4:", "width-height-touch-multi.test.mjs"],
     ["engine.ts", "if (!entered || (fx.fired[t] && !o.multi)) continue;", "if (!entered) continue;", "rule 4:", "width-height-touch-multi.test.mjs"],
     ["transfer.ts", ": level.objects.some(usesNew) ? PREFIX2 : PREFIX)", ": PREFIX)", "rule 6", "width-height-touch-multi.test.mjs"],

@@ -671,10 +671,14 @@ export function step(
   if (s.fx) s.fx.hopped = false;
   // A dash orb starts on a hold, not only a fresh tap, and lasts until the hold ends.
   if (!held) s.dash = null;
-  // a MULTI TOUCH ring (#117) works again once the player has left the reach that fired it, so it
-  // re-arms here, before this step picks a ring; a plain ring stays used for the run
+  // a MULTI TOUCH ring (#117) re-arms here, before this step picks a ring: a tap ring at once, so
+  // every fresh tap in its reach fires it again; a dash orb, which fires on a hold, once the player
+  // has left the reach that fired it. a plain ring stays used for the run
   if (s.usedRings.some((i) => s.level.objects[i].multi))
-    s.usedRings = s.usedRings.filter((i) => !s.level.objects[i].multi || inReach(s, s.level.objects[i]));
+    s.usedRings = s.usedRings.filter((i) => {
+      const o = s.level.objects[i];
+      return !o.multi || (o.dash === true && inReach(s, o));
+    });
   const ring = s.level.objects.findIndex(
     (o, i) => RINGS.includes(o.type) && (o.dash ? held : tapped) && ringReady(s, o, i),
   );

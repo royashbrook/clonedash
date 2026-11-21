@@ -117,26 +117,43 @@ test('rule 1d: a wide ring reaches an ellipse in its own frame, tested against t
   assert.equal(ringReady({ ...createState(level([wide])), x: 11.9, y: 2.2 }, wide, 0), true);
 });
 
-test('rule 5: a MULTI TOUCH ring works again once you have left it; inside it does nothing more; a plain ring stays used', () => {
+test('rule 5: a MULTI TOUCH ring fires on every fresh tap in its reach; holding does not repeat it; a plain ring stays used', () => {
   for (const multi of [true, false]) {
     const r = piece('ring', 5, 0, multi ? { multi: true } : {}),
       s = { ...createState(level([r], { height: 20 })), x: 4.8, y: 0.1, grounded: false };
     step(s, true, STEP, true);
     assert.deepEqual(s.usedRings, [0]);
     const vy = s.vy;
-    // still inside, another tap: nothing
+    // still inside and still held: no repeat, for either
+    step(s, true, STEP, false);
+    assert.ok(s.vy < vy, 'a hold does not launch it again');
+    // still inside, a fresh tap: a multi ring fires again, a plain one does nothing
     step(s, false, STEP);
     step(s, true, STEP, true);
     assert.deepEqual(s.usedRings, [0]);
-    assert.ok(s.vy < vy, 'falling, not launched again');
-    // out of its reach: re-armed only if multi
+    assert.equal(s.vy === vy, multi, multi ? 'launched again by the second tap' : 'falling, not launched again');
+    if (multi) continue;
+    // a plain ring stays used out of its reach and back in it
     Object.assign(s, { x: 8, y: 0.1 });
     step(s, false, STEP);
-    assert.deepEqual(s.usedRings, multi ? [] : [0]);
+    assert.deepEqual(s.usedRings, [0]);
     Object.assign(s, { x: 4.8, y: 0.1, vy: 0 });
     step(s, true, STEP, true);
-    assert.equal(s.vy > 0, multi, multi ? 'fires again' : 'a plain ring is once a run');
+    assert.equal(s.vy > 0, false, 'a plain ring is once a run');
   }
+  // a MULTI TOUCH dash orb fires on a hold, so it re-arms only once you have left its reach: a
+  // yellow one held inside flips gravity once, not on every step
+  const orb = piece('ring', 5, 0, { multi: true, dash: true, flipsGravity: true }),
+    d = { ...createState(level([orb], { height: 20 })), x: 4.8, y: 0.1, grounded: false };
+  step(d, true, STEP, true);
+  assert.deepEqual(d.usedRings, [0]);
+  const flipped = d.gravity;
+  step(d, true, STEP, false);
+  assert.equal(d.gravity, flipped, 'held inside: gravity flipped once');
+  assert.deepEqual(d.usedRings, [0], 'still inside: still used');
+  Object.assign(d, { x: 8, y: 0.1 });
+  step(d, false, STEP);
+  assert.deepEqual(d.usedRings, [], 'out of reach: re-armed');
   // a restart starts every ring fresh
   assert.deepEqual(createState(level([piece('ring', 5, 0, { multi: true })])).usedRings, []);
 });
