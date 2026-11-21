@@ -15,6 +15,7 @@ try {
     "courses.test.mjs",
     "course-input.mjs",
     "remix-inputs.mjs",
+    "explorer-inputs.mjs",
     "version.test.mjs",
     "pogo.test.mjs",
     "door.test.mjs",
@@ -133,6 +134,7 @@ try {
     ["library.ts", "s.draft = validateLevel(s.draft);", "validateLevel(s.draft);", "readSave loads a jumper save", "pogo.test.mjs"],
     ["levels.ts", "LEVELS.push(...COURSES)", "LEVELS.unshift(...COURSES)", "groups preserve", "courses.test.mjs"],
     ["levels.ts", "LEVELS.push(...REMIX)", "LEVELS.unshift(...REMIX)", "groups preserve", "courses.test.mjs"],
+    ["levels.ts", "LEVELS.push(...EXPLORER)", "LEVELS.unshift(...EXPLORER)", "groups preserve", "courses.test.mjs"],
     ["courses.ts", "song: 109", "song: 110", "groups preserve", "courses.test.mjs"],
     // Coins and triggers (#101, docs/coins-and-triggers.md): each rule fails its own test.
     ["engine.ts", "coinCount(level) > MAX_COINS", "coinCount(level) > MAX_COINS + 1", "coin cap", "coins.test.mjs"],

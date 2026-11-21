@@ -20,9 +20,10 @@ test('ranked courses show durations, keep warmups and remove the misleading frie
   await expect(page.locator('.course-heading')).toHaveText([
     'EasyRoom to learn the rhythm', 'MediumLonger combinations and gravity changes',
     'HardTighter timing and faster transitions','RemixEvery shape and trick, mixed up',
+    'ExplorerCoins, boosters, teleports and more',
     'WarmupsShort introductions to each shape',
   ]);
-  await expect(page.locator('.level-card')).toHaveCount(23);
+  await expect(page.locator('.level-card')).toHaveCount(30);
   await expect(page.locator('#play')).toContainText('PULSEWAY');
   await expect(page.locator('#share')).toHaveCount(0);
   const play=await page.locator('#play').boundingBox();

@@ -50,10 +50,12 @@ test('bigger trails round-trip; the last released reader refuses them instead of
 
 test('a level without coins or triggers plays exactly as on main, frame by frame, through deaths and restarts', async () => {
   await withMain(async (main) => {
-    assert.deepEqual(LEVELS, main.levels.LEVELS, 'every built-in course is unchanged');
+    // Trails are append only, so every trail main had is still here, first and unchanged.
+    const kept = LEVELS.slice(0, main.levels.LEVELS.length);
+    assert.deepEqual(kept, main.levels.LEVELS, 'every built-in course is unchanged');
     let frames = 0,
       restarts = 0;
-    for (const level of LEVELS)
+    for (const level of kept)
       for (const seed of [713, 4242]) {
         const a = new main.run.Run(level),
           b = new Run(level);
