@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import { COURSES } from "../src/courses.ts";
 import { REMIX } from "../src/remix.ts";
 import { EXPLORER } from "../src/explorer.ts";
@@ -154,8 +155,15 @@ test("the Explorer witnesses really collect every coin and take every teleport",
   assert.equal(replay("Blink Bridge").hops, 10);
 });
 
+test("Challenger publishes the original Final Dash share in the next save slot", async () => {
+  const original = await readFile(new URL("./fixtures/final-dash.cdl", import.meta.url), "utf8");
+  assert.deepEqual(COLLECTIONS.find(g => g.name === "Challenger").indices, [30]);
+  assert.deepEqual(LEVELS[30], await decodeLevel(original));
+  assert.equal(courseSong(30), 9);
+});
+
 test("groups preserve all old identities and show increasing course lengths", () => {
-  assert.equal(LEVELS.length, 30);
+  assert.equal(LEVELS.length, 31);
   assert.deepEqual(
     LEVELS.slice(0, 9).map((l) => l.name),
     [
@@ -202,7 +210,7 @@ test("groups preserve all old identities and show increasing course lengths", ()
     [18, 19, 20, 21, 22],
   );
   // The Explorer set comes after that, for the same reason, each with its own original song.
-  assert.deepEqual(LEVELS.slice(23), EXPLORER);
+  assert.deepEqual(LEVELS.slice(23, 30), EXPLORER);
   assert.deepEqual(
     COLLECTIONS.find((g) => g.name === "Explorer").indices,
     [23, 24, 25, 26, 27, 28, 29],

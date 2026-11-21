@@ -21,9 +21,11 @@ test('ranked courses show durations, keep warmups and remove the misleading frie
     'EasyRoom to learn the rhythm', 'MediumLonger combinations and gravity changes',
     'HardTighter timing and faster transitions','RemixEvery shape and trick, mixed up',
     'ExplorerCoins, boosters, teleports and more',
+    'ChallengerPlayer-made trails',
     'WarmupsShort introductions to each shape',
   ]);
-  await expect(page.locator('.level-card')).toHaveCount(30);
+  await expect(page.locator('.level-card')).toHaveCount(31);
+  await expect(page.getByRole('button', { name: 'Play Final Dash', exact: true })).toContainText('Challenger');
   await expect(page.locator('#play')).toContainText('PULSEWAY');
   await expect(page.locator('#share')).toHaveCount(0);
   const play=await page.locator('#play').boundingBox();
@@ -39,6 +41,14 @@ test('ranked courses show durations, keep warmups and remove the misleading frie
       expect((await card.boundingBox()).height).toBeGreaterThanOrEqual(44);
     }
   }
+});
+test('the Challenger card and trail 31 link both start Final Dash', async ({page}) => {
+  await page.goto('/');
+  await page.getByRole('button', {name:'Play Final Dash', exact:true}).click();
+  await expect(page.locator('#level-name')).toContainText(/final dash/i);
+  await page.goto('/?level=31');
+  await expect(page.locator('#hud')).toBeVisible();
+  await expect(page.locator('#level-name')).toContainText(/final dash/i);
 });
 test('a built-in copy opens independently in the editor with song, progress and prior draft intact', async ({page}) => {
   await seed(page); await page.goto('/');

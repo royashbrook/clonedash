@@ -3,6 +3,7 @@ import type { Level } from "./types.ts";
 import { COURSES } from "./courses.ts";
 import { REMIX } from "./remix.ts";
 import { EXPLORER } from "./explorer.ts";
+import { FINAL_DASH } from "./challenger.ts";
 export const LEVELS: Level[] = [
   {
     name: "First Spark",
@@ -176,6 +177,7 @@ export const LEVELS: Level[] = [
 LEVELS.push(...COURSES);
 LEVELS.push(...REMIX);
 LEVELS.push(...EXPLORER);
+LEVELS.push(FINAL_DASH);
 export const COLLECTIONS = [
   { name: "Easy", note: "Room to learn the rhythm", indices: [9, 10, 11] },
   {
@@ -197,6 +199,11 @@ export const COLLECTIONS = [
     name: "Explorer",
     note: "Coins, boosters, teleports and more",
     indices: [23, 24, 25, 26, 27, 28, 29],
+  },
+  {
+    name: "Challenger",
+    note: "Player-made trails",
+    indices: [30],
   },
   {
     name: "Warmups",
