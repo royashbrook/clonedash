@@ -3,8 +3,11 @@
   // saved until SAVE; every write goes through commit (loop.ts commitLoops). One player owns the
   // sound, and it stops whenever this screen is left, a sheet opens or the page hides.
   import { onMount } from "svelte";
+  import SongMaker from "./SongMaker.svelte";
+  import type { SongBook, Arrangement } from "./arrangement.ts";
   import { TRACKS, trackFor } from "./music.ts";
   import { LoopPlayer } from "./loop-player.ts";
+  import { BEAT } from "./voices.ts";
   import {
     DEGREES,
     MAX_NAME,
@@ -29,7 +32,7 @@
   } from "./loop.ts";
 
   let {
-    store,
+    store, songBook, songsBroken, commitSong,
     broken,
     commit,
     confirm,
@@ -39,6 +42,7 @@
     editing = $bindable(false),
   }: {
     store: LoopStore;
+    songBook: SongBook; songsBroken:boolean; commitSong:(id:number|null,s:Arrangement|null)=>number|null;
     broken: boolean;
     commit: (change: (latest: LoopStore) => void) => LoopStore;
     confirm: (title: string, text: string, yes: string, run: () => void) => void;
@@ -60,6 +64,8 @@
   const SONGS = Array.from({ length: TRACKS.length + 100 }, (_, i) => i);
 
   let view = $state<"list" | "edit">("list");
+  let songsTab=$state(false), arranger=$state<ReturnType<typeof SongMaker>>();
+  let saveSection: ((loop: Loop)=>void)|undefined;
   $effect(() => {
     editing = view !== "list";
   });
@@ -99,6 +105,9 @@
   // goes on; KEEP IT leaves the name and notes exactly as they were
   export function guard(go: () => void) {
     silence();
+    if (songsTab && (dirty || arranger?.hasChanges())) {
+      return confirm("Leave without saving?", "Unsaved song changes will be lost.", "LEAVE", () => {dirty=false; saveSection=undefined; arranger?.list(); go();});
+    }
     if (view === "list" || !dirty) return go();
     confirm("Leave without saving?", "Your changes to this loop will be lost.", "LEAVE", () => {
       dirty = false;
@@ -107,11 +116,13 @@
   }
   // the MUSIC tab while a loop is open: back to the list
   export function close() {
+    saveSection=undefined; arranger?.list();
     view = "list";
     say("");
   }
   // also called by the app before its own sheets (MORE) open over the loop list
   export function silence() {
+    arranger?.silence();
     player.stop();
     playing = false;
     playingId = null;
@@ -135,8 +146,9 @@
     sounding = next;
     dirty = true;
   }
-  function edit(id: number | null, from?: Loop) {
+  function edit(id: number | null, from?: Loop, bpm = 150) {
     silence();
+    player.beat = 60 / bpm;
     editingId = id;
     loop = from ? structuredClone(from) : { ...loopFromSong(0), name: `My loop ${store.next}`.slice(0, MAX_NAME) };
     sounding = loop;
@@ -151,6 +163,7 @@
       silence();
       dirty = false;
       view = "list";
+      saveSection=undefined;
       say("");
     };
     if (!dirty) return done();
@@ -158,6 +171,11 @@
     confirm("Leave without saving?", "Your changes to this loop will be lost.", "LEAVE", done);
   }
   function save() {
+    if (saveSection) {
+      try { saveSection(loop); saveSection=undefined; dirty=false; silence(); view="list"; say(""); }
+      catch(e) { fail(e); }
+      return;
+    }
     const was = editingId;
     let id = 0;
     if (write((s) => void (id = saveLoop(s, was, loop)), "Saved.")) {
@@ -306,10 +324,16 @@
 </script>
 
 <section id="loops" class="screen" class:editing={view !== "list"} aria-label="My loops">
-  {#if view === "list"}
+  {#if songsTab}
+    <div hidden={view !== "list"}><SongMaker bind:this={arranger} book={songBook} broken={songsBroken} loops={store} commit={commitSong} {confirm}
+      edit={(section,bpm,accept)=>{saveSection=accept;edit(null,section,bpm);}}
+      toLoops={()=>{silence();player.beat=BEAT;songsTab=false;}} /></div>
+  {/if}
+  {#if view === "list" && !songsTab}
     <header class="home-head">
       <button id="loops-back" onclick={() => (silence(), back())}>← MENU</button>
       <h1>My loops</h1>
+      <button id="my-songs" onclick={()=>{silence();dirty=false;songsTab=true;}}>MY SONGS</button>
       <button id="new-loop" class="primary" onclick={() => edit(null)}>＋ NEW LOOP</button>
       <button id="import-loop" onclick={() => sheet(importLoop)}>IMPORT LOOP</button>
     </header>
@@ -352,9 +376,9 @@
         <p class="empty">No loops yet. Tap ＋ NEW LOOP to make one.</p>
       {/each}
     </div>
-  {:else}
+  {:else if view === "edit"}
     <header class="home-head loop-head">
-      <button id="loop-done" onclick={leave}>← LOOPS</button>
+      <button id="loop-done" onclick={leave}>{songsTab ? "← SONG" : "← LOOPS"}</button>
       <label class="loop-name"
         ><span class="sr">Loop name</span><input
           id="loop-name"
@@ -368,7 +392,7 @@
       <button id="loop-play" class="primary" aria-pressed={playing} onclick={() => play(loop, editingId)}
         >{playing ? "■ STOP" : "▶ PLAY"}</button
       >
-      <button id="save-loop" onclick={save}>SAVE</button>
+      <button id="save-loop" onclick={save}>{songsTab ? "USE SECTION" : "SAVE"}</button>
     </header>
     <!-- the phone layout (#140): one toolbar row; the rest of the tools and the help open over the grid -->
     <div class="loop-toolbar">

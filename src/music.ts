@@ -134,7 +134,10 @@ export async function compose(
 // What a level plays: a numbered song, or a custom level's own loop (#121). A buffer is kept under
 // what it sounds like: the song's number, or the loop's whole content, so two levels with
 // different loops never share one, whatever their ids.
-export type Music = number | Loop;
+import { playSong } from "./song-player.ts";
+import type { Arrangement } from "./arrangement.ts";
+export type Music = number | Loop | Arrangement;
+const arranged = (music: Music): music is Arrangement => typeof music !== "number" && "sections" in music;
 const keyOf = (music: Music) => (typeof music === "number" ? music : `l${JSON.stringify(music)}`);
 
 // A loop level's song (#121, docs/loops.md): the loop exactly as PLAY plays it, through the same step
@@ -194,9 +197,10 @@ export class Soundtrack {
   track: number | string = -1;
   intent: { music: Music; running: boolean; offset: number } = { music: 0, running: false, offset: 0 };
   private disposed = false;
+  private liveSong?: { song: Arrangement; stop: ReturnType<typeof playSong> };
   private request: AbortController | null = null;
   fallback = false;
-  private async load(music: Music) {
+  private async load(music: number | Loop) {
     if (typeof music !== "number") return composeLoop(music);
     const index = music,
       song = recordingFor(index);
@@ -241,6 +245,12 @@ export class Soundtrack {
     }
   }
   stop(fade = false) {
+    if (this.liveSong) {
+      const { stop } = this.liveSong;
+      this.liveSong = undefined;
+      if (fade) this.tails.add(stop.output);
+      stop(fade, () => this.tails.delete(stop.output));
+    }
     if (!fade) {
       for (const tail of this.tails) tail.disconnect();
       this.tails.clear();
@@ -281,6 +291,7 @@ export class Soundtrack {
   }
   private attackAt = 0;
   prepare(music: Music) {
+    if (arranged(music)) return;
     if (this.disposed || !this.enabled || !this.context) return;
     const key = keyOf(music);
     if (!this.buffers.has(key)) {
@@ -319,7 +330,15 @@ export class Soundtrack {
       this.stop(true);
       return;
     }
-    const key = keyOf(music), now = this.context.currentTime;
+    const now = this.context.currentTime;
+    if (arranged(music)) {
+      if (this.liveSong?.song === music && (!followRun || Math.abs(now - this.epoch - offset) <= 0.065)) return;
+      this.stop(true);
+      this.epoch = now - offset;
+      this.liveSong = { song: music, stop: playSong(this.context, music, Math.max(0, offset), true) };
+      return;
+    }
+    const key = keyOf(music);
     if (this.source && this.track === key && (!followRun || this.context.state !== "running" ||
       Math.abs(now - this.epoch - offset) <= 0.065)) return;
     this.stop(true);

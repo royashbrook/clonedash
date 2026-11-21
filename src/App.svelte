@@ -56,6 +56,18 @@
   import { importLevel } from "./transfer.ts";
   import SkinCreator from "./SkinCreator.svelte";
   import LoopMaker from "./LoopMaker.svelte";
+  import { arrangement, readSongs, SONG_KEY, writeSong, type Arrangement } from "./arrangement.ts";
+  let songBook = $state.raw(readSongs(null)), songsBroken = $state(false);
+  function refreshSongs() {
+    try { songBook = readSongs(localStorage.getItem(SONG_KEY)); songsBroken = false; }
+    catch { songBook = readSongs(null); songsBroken = true; }
+  }
+  function commitSong(id: number | null, song: Arrangement | null) {
+    guard();
+    const saved = writeSong(localStorage, id, song);
+    songBook = saved.book;
+    return saved.id;
+  }
   import { LOOPS, addLoop, commitLoops, emptyLoops, loopName, readLoops, validateLoop, type Loop, type LoopStore } from "./loop.ts";
   import {
     SKINS,
@@ -380,7 +392,7 @@
   const select = (index: number) => (group = index >= 0 ? [index] : []);
   const draftSong = () => draft.song ?? 8 + save.activeLevel;
   // what the level being edited or played plays: its own loop (#121), or its song
-  const draftMusic = () => draft.loop ?? draftSong();
+  const draftMusic = () => draft.arrangement ?? draft.loop ?? draftSong();
   const songs = $derived([
     ...new Set([
       ...RECORDINGS.map((song) => song.id),
@@ -614,11 +626,12 @@
   // loops ride along only when this device has a loop key, so a device that never made one sends
   // the same save 1.0.85 did (docs/loops.md)
   const storedSave = (): Backup => {
-    const raw = localStorage.getItem(LOOPS);
+    const raw = localStorage.getItem(LOOPS), songs = localStorage.getItem(SONG_KEY);
     return {
       game: readSave(localStorage.getItem(SAVE), LEVELS.length),
       skins: readSkins(localStorage.getItem(SKINS)),
       ...(raw === null ? {} : { loops: readLoops(raw) }),
+      ...(songs === null ? {} : { songs: readSongs(songs) }),
     };
   };
   // storageOK is also false when only the old save is unreadable, and replacing that is the point,
@@ -767,7 +780,7 @@
           ...source,
           name: `${source.name.slice(0, 33)} (copy)`,
           // one song source: a level with its own loop keeps it and gets no song beside it
-          ...(custom && source.loop ? {} : { song: custom ? draftSong() : courseSong(current) }),
+          ...(custom && (source.loop || source.arrangement) ? {} : { song: custom ? draftSong() : courseSong(current) }),
         },
         LEVELS.length,
         true,
@@ -1878,6 +1891,7 @@
     } catch {
       loopsBroken = true; // left as stored; every loop write is refused until it reads
     }
+    refreshSongs();
     nextTrail();
     orientation();
     document.body.dataset.mode = mode;
@@ -1909,6 +1923,7 @@
       "storage",
       (e) => {
         if (e.key === IMPORT && stale()) return;
+        if (e.key === SONG_KEY || e.key === null) refreshSongs();
         if (e.key === LOOPS || e.key === null)
           try {
             loops = readLoops(localStorage.getItem(LOOPS));
@@ -2136,7 +2151,7 @@
         <h2>{level.name}</h2>
         <p>
           {level.length} × {levelHeight(level)} blocks · {level.objects.length} pieces
-          · ♪ {level.loop ? loopName(level.loop) : trackName(level.song ?? 8 + id)}{#if coinCount(level)}
+          · ♪ {level.arrangement ? level.arrangement.name || "Untitled song" : level.loop ? loopName(level.loop) : trackName(level.song ?? 8 + id)}{#if coinCount(level)}
             · <span class="best-coins"
               >best {shownCoins(coins, level)} / {coinCount(level)} coins</span
             >{/if}
@@ -2158,7 +2173,7 @@
           >
           <button
             aria-label={`Share ${level.name}`}
-            onclick={() => sharing(level.loop ? level : { ...level, song: level.song ?? 8 + id })}
+            onclick={() => sharing(level.loop || level.arrangement ? level : { ...level, song: level.song ?? 8 + id })}
             >SHARE</button
           >
           <button
@@ -2182,6 +2197,7 @@
 {#if mode === "loops"}<LoopMaker
     bind:this={loopMaker}
     store={loops}
+    {songBook} {songsBroken} {commitSong}
     broken={loopsBroken}
     commit={commitLoop}
     confirm={askSkin}
@@ -2642,13 +2658,18 @@
           {/if}<label
             >Song<select
               id="level-song"
-              value={draft.loop ? "this-loop" : String(draftSong())}
+              value={draft.arrangement ? "this-song" : draft.loop ? "this-loop" : String(draftSong())}
               onchange={(e) => {
                 // one song source (#121): a loop is a copy of the saved one, so editing or
                 // deleting that loop later never changes this level; a song clears the loop
                 const value = e.currentTarget.value,
-                  { song: _song, loop: _loop, ...rest } = draft;
-                if (value === "this-loop") return;
+                  { song: _song, loop: _loop, arrangement: _arr, ...rest } = draft;
+                if (value === "this-loop" || value === "this-song") return;
+                if (value.startsWith("arr:")) {
+                  const picked = songBook.entries.find(e => e.id === Number(value.slice(4)));
+                  if (picked) { draft = { ...rest, arrangement: arrangement(picked.song) }; saveDraft(); }
+                  return;
+                }
                 const picked = value.startsWith("loop:")
                   ? loops.loops.find((entry) => entry.id === Number(value.slice(5)))
                   : undefined;
@@ -2657,7 +2678,9 @@
                   : { ...rest, song: Number(value) };
                 saveDraft();
               }}
-              >{#if draft.loop}<option value="this-loop"
+              >{#if draft.arrangement}<option value="this-song">♪ {draft.arrangement.name || "Untitled song"} · this level’s song</option>{/if}
+              {#if songBook.entries.length}<optgroup label="MY SONGS">{#each songBook.entries as e (e.id)}<option value={`arr:${e.id}`}>{e.song.name || "Untitled song"}</option>{/each}</optgroup>{/if}
+              {#if draft.loop}<option value="this-loop"
                   >♪ {loopName(draft.loop)} · this level’s loop</option
                 >{/if}{#if loops.loops.length}<optgroup label="MY LOOPS"
                   >{#each loops.loops as entry (entry.id)}<option value={`loop:${entry.id}`}

@@ -1,5 +1,18 @@
 # Loops (#121)
 
+## Build a whole song
+
+Open **Music → My songs → New song**. Add a section from **My loops**, paste a shared
+loop code or link, or start blank. Adding a loop copies its notes and drums. Duplicate
+a chorus and use **Edit notes → Use section** to change only its ending. **Plays**
+repeats that section. Use the arrows to move it, or **From here** to hear the rest.
+**Save song** keeps the arrangement on this device.
+
+A song has one tempo (60–200 BPM) and can run up to four minutes. The editor stops at
+the end. A custom level repeats from the beginning. Pick the song under **Level settings →
+Song → My songs**. The level keeps a copy, including when shared. Level codes with a
+song use `cdl5`; older games refuse them. **Move your save** also carries the song library.
+
 The loop maker lets a player write a short song loop, play it live, save it, and share it the way
 skins and levels are shared. It plays the same instruments every synthesized song uses
 (`src/voices.ts`), so a loop sounds like the game.

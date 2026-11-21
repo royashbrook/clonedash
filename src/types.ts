@@ -119,6 +119,7 @@ export interface Level {
   song?: number;
   // a custom level's own music, a copy of a loop (#121); a level has a song or a loop, never both
   loop?: Loop;
+  arrangement?: import("./arrangement.ts").Arrangement;
   note?: string;
   color?: string;
 }
