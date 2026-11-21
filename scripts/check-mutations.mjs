@@ -43,6 +43,7 @@ try {
     "framing.test.mjs",
     "loop-length.test.mjs",
     "loop-song.test.mjs",
+    "song-arranger.test.mjs",
     "start-settings.test.mjs",
   ]) {
     const testSource = (await readFile(join("tests", testFile), "utf8"))
@@ -221,7 +222,7 @@ try {
     // a whole save (#124)
     ["backup.ts", "if (Object.keys(v).some((k) => !known.includes(k))) throw Error(NEWER);", "", "every field is one this version knows", "backup.test.mjs"],
     ["backup.ts", "if (typeof game.sound !== \"boolean\" || ", "if (", "every field is one this version knows", "backup.test.mjs"],
-    ["backup.ts", "if (!same(portableLevel(level), level.loop ? level : { ...level, song: level.song ?? 9 })) throw Error(NEWER);", "", "every field is one this version knows", "backup.test.mjs"],
+    ["backup.ts", "if (!same(portableLevel(level), level.loop || level.arrangement ? level : { ...level, song: level.song ?? 9 })) throw Error(NEWER);", "", "every field is one this version knows", "backup.test.mjs"],
     ["backup.ts", "if (!same(readGame, game) || !same(readSkinStore, skins)) throw Error(DAMAGED);", "", "every field is one this version knows", "backup.test.mjs"],
     ["backup.ts", "const checked = checkBackup({ v: 1, ...backup }, trailCount);\n  // each part", "const checked = backup;\n  // each part", "the writer checks the whole save itself", "backup.test.mjs"],
     ["backup.ts", "if (parts.some(([key, value]) => storage.getItem(key) !== value))", "if (false)", "any failed write or readback", "backup.test.mjs"],
@@ -241,7 +242,8 @@ try {
     // a loop as a custom level's song (#121 slice B)
     ["transfer.ts", "if (!fourth && (raw !== null && typeof raw === \"object\" && \"loop\" in raw) !== third) throw Error(\"Invalid level code.\");", "", "refused before anything could drop it", "loop-level.test.mjs"],
     ["transfer.ts", "(level.loop ? PREFIX3 : level.objects.some(usesNew) ? PREFIX2 : PREFIX)", "(level.objects.some(usesNew) ? PREFIX2 : PREFIX)", "travels as cdl3", "loop-level.test.mjs"],
-    ["transfer.ts", "...(level.loop ? { loop: level.loop } : { song: level.song ?? 9 }),", "song: level.song ?? 9,", "one song source", "loop-level.test.mjs"],
+    ["transfer.ts", "level.loop ? { loop: level.loop } : { song: level.song ?? 9 }", "{ song: level.song ?? 9 }", "one song source", "loop-level.test.mjs"],
+    ["arrangement.ts", "duration(checked) > 240", "duration(checked) > 300", "four minutes", "song-arranger.test.mjs"],
     ["engine.ts", "    if (raw.song !== undefined) throw Error(\"Invalid level settings\");\n    // the loop's own bound", "    // the loop's own bound", "one song source", "loop-level.test.mjs"],
     ["engine.ts", "if (new TextEncoder().encode(JSON.stringify(raw.loop)).byteLength > MAX_LOOP_BYTES) throw", "if (false) throw", "bounded on what arrived", "loop-song.test.mjs"],
     ["backup.ts", "    if (plain(level) && \"loop\" in level) fields(level.loop, LOOP_FIELDS, LOOP_FIELDS);", "    ;", "field by field", "loop-song.test.mjs"],
@@ -304,7 +306,7 @@ try {
     ["voices.ts", "g.gain.exponentialRampToValueAtTime(amplitude, t + 0.008);", "g.gain.exponentialRampToValueAtTime(amplitude, t + 0.009);", "same graph, schedule and noise", "compose-graph.test.mjs"],
     ["voices.ts", "depth.gain.value = drop ? 160 : 40;", "depth.gain.value = drop ? 161 : 40;", "same graph, schedule and noise", "compose-graph.test.mjs"],
     ["voices.ts", "    out.connect(echo);\n", "", "same graph, schedule and noise", "compose-graph.test.mjs"],
-    ["voices.ts", "depth.gain.setValueAtTime(0, at + BEAT);", "lfo.stop(at + BEAT);", "same graph, schedule and noise", "compose-graph.test.mjs"],
+    ["voices.ts", "depth.gain.setValueAtTime(0, at + beat);", "lfo.stop(at + beat);", "same graph, schedule and noise", "compose-graph.test.mjs"],
     ["music.ts", "kick(t + 2.75 * BEAT, !drop);", "kick(t + 2.75 * BEAT, drop);", "same graph, schedule and noise", "compose-graph.test.mjs"],
     ["render.ts", "if (state.mode === \"square\" && skin) {", "if (skin) {", "a skin draws in square mode only", "skin.test.mjs"],
     ["skin.ts", "bottom = s.gravity > 0 ? s.y + SIZE - h : s.y;", "bottom = s.gravity > 0 ? s.y + SIZE - h : s.y + (1 - h) / 2;", "anchors feet", "skin.test.mjs"],

@@ -40,7 +40,7 @@ export function portableLevel(input: unknown): Level {
     ...(level.offMap ? { offMap: true as const } : {}),
     ...(level.height === undefined ? {} : { height: level.height }),
     // one song source: its own loop, or a numbered song (the original when none was picked)
-    ...(level.loop ? { loop: level.loop } : { song: level.song ?? 9 }),
+    ...(level.arrangement ? { arrangement: level.arrangement } : level.loop ? { loop: level.loop } : { song: level.song ?? 9 }),
     ...(level.note === undefined ? {} : { note: level.note }),
     ...(level.color === undefined ? {} : { color: level.color }),
     objects: level.objects.map(
@@ -211,7 +211,7 @@ export async function encodeLevel(input: Level): Promise<string> {
     }
   }
   const legacy = (level.loop ? PREFIX3 : level.objects.some(usesNew) ? PREFIX2 : PREFIX);
-  return (hasSetup(level) ? PREFIX4 : legacy) + flag + base64(payload);
+  return (level.arrangement ? "cdl5." : hasSetup(level) ? PREFIX4 : legacy) + flag + base64(payload);
 }
 
 export async function decodeLevel(text: string): Promise<Level> {
@@ -226,8 +226,9 @@ export async function decodeLevel(text: string): Promise<Level> {
   }
   const second = code.startsWith(PREFIX2),
     third = code.startsWith(PREFIX3), fourth = code.startsWith(PREFIX4);
-  if (!code.startsWith(PREFIX) && !second && !third && !fourth)
-    throw Error("Use a Cube Dash level code or link (cdl1 through cdl4).");
+  const fifth = code.startsWith("cdl5.");
+  if (!code.startsWith(PREFIX) && !second && !third && !fourth && !fifth)
+    throw Error("Use a Cube Dash level code or link (cdl1 through cdl5).");
   const flag = code[PREFIX.length],
     encoded = code.slice(PREFIX.length + 1);
   if (!/[01]/.test(flag ?? "") || !/^[\w-]+$/.test(encoded))
@@ -251,7 +252,9 @@ export async function decodeLevel(text: string): Promise<Level> {
   const raw = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(decoded));
   // a loop is checked on the raw data, before the whitelist could drop it: cdl1 and cdl2 never
   // carry one (null or malformed included), and cdl3 always does
-  if (!raw || typeof raw !== "object" || hasSetup(raw) !== fourth) throw Error("Invalid level code.");
+  if (!raw || typeof raw !== "object" || ("arrangement" in raw) !== fifth) throw Error("Invalid level code.");
+  if (fifth) return portableLevel(raw);
+  if (hasSetup(raw) !== fourth) throw Error("Invalid level code.");
   if (!fourth && (raw !== null && typeof raw === "object" && "loop" in raw) !== third) throw Error("Invalid level code.");
   const level = portableLevel(raw);
   // cdl3: the raw check above already required the loop, and validateLevel bounds and checks it

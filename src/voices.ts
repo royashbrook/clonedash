@@ -17,7 +17,7 @@ export function seededNoise(c: BaseAudioContext, start: number) {
   return noise;
 }
 
-export function voices(c: BaseAudioContext, master: AudioNode, noise: AudioBuffer, echo: AudioNode) {
+export function voices(c: BaseAudioContext, master: AudioNode, noise: AudioBuffer, echo: AudioNode, beat = BEAT) {
   function envelope(t: number, duration: number, amplitude: number, destination: AudioNode = master) {
     const g = c.createGain();
     g.gain.setValueAtTime(0.0001, t);
@@ -67,7 +67,7 @@ export function voices(c: BaseAudioContext, master: AudioNode, noise: AudioBuffe
     padFilter.type = "lowpass";
     padFilter.frequency.value = drop ? 800 : 1400;
     padFilter.connect(master);
-    for (const degree of [0, 3, 7]) note(hz(root + degree + 12), t, 4 * BEAT - 0.02, 0.022, "sawtooth", padFilter);
+    for (const degree of [0, 3, 7]) note(hz(root + degree + 12), t, 4 * beat - 0.02, 0.022, "sawtooth", padFilter);
   }
   // one beat of wobble bass and its sub. The LFO is not stopped at the beat's end: its depth goes
   // to zero instead, because a stopped source still feeding the filter's frequency closed WebKit's
@@ -78,17 +78,17 @@ export function voices(c: BaseAudioContext, master: AudioNode, noise: AudioBuffe
     f.Q.value = 5;
     f.frequency.setValueAtTime(140, at);
     f.frequency.exponentialRampToValueAtTime(drop ? 1900 : 450, at + 0.055);
-    f.frequency.exponentialRampToValueAtTime(100, at + BEAT - 0.02);
+    f.frequency.exponentialRampToValueAtTime(100, at + beat - 0.02);
     const lfo = c.createOscillator(),
       depth = c.createGain();
-    lfo.frequency.value = wobble / BEAT;
+    lfo.frequency.value = wobble / beat;
     depth.gain.value = drop ? 160 : 40;
     lfo.connect(depth).connect(f.frequency);
     lfo.start(at);
-    depth.gain.setValueAtTime(0, at + BEAT);
+    depth.gain.setValueAtTime(0, at + beat);
     f.connect(master);
-    note(hz(root), at, BEAT - 0.03, drop ? 0.2 : 0.09, "sawtooth", f);
-    note(hz(root - 12), at, BEAT - 0.03, 0.18, "sine");
+    note(hz(root), at, beat - 0.03, drop ? 0.2 : 0.09, "sawtooth", f);
+    note(hz(root - 12), at, beat - 0.03, 0.18, "sine");
     return { lfo, depth };
   }
   // one melody step: the lead, and in the drop a detuned saw an octave of brightness above it
@@ -97,8 +97,8 @@ export function voices(c: BaseAudioContext, master: AudioNode, noise: AudioBuffe
     out.gain.value = 1;
     out.connect(master);
     out.connect(echo);
-    note(hz(pitch), at, BEAT * 0.42, drop ? 0.055 : 0.04, "triangle", out);
-    if (drop && accent) note(hz(pitch) * 1.003, at, BEAT * 0.3, 0.018, "sawtooth", out);
+    note(hz(pitch), at, beat * 0.42, drop ? 0.055 : 0.04, "triangle", out);
+    if (drop && accent) note(hz(pitch) * 1.003, at, beat * 0.3, 0.018, "sawtooth", out);
   }
   return { note, hiss, kick, snare, pad, bass, lead };
 }

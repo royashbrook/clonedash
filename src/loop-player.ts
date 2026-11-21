@@ -46,6 +46,7 @@ export class LoopPlayer {
   private step = 0;
   private bar = 0;
   private next = 0;
+  beat = BEAT;
   private marks: [number, number][] = [];
   playing = false;
 
@@ -75,11 +76,11 @@ export class LoopPlayer {
     master.connect(volume).connect(out);
     const echo = c.createDelay(0.8),
       feedback = c.createGain();
-    echo.delayTime.value = BEAT * 0.75;
+    echo.delayTime.value = this.beat * 0.75;
     feedback.gain.value = 0.22;
     echo.connect(feedback).connect(echo);
     echo.connect(master);
-    return { out, play: voices(c, master, seededNoise(c, 701), echo), modulators: [] };
+    return { out, play: voices(c, master, seededNoise(c, 701), echo, this.beat), modulators: [] };
   }
   private async wake() {
     this.context ??= this.make();
@@ -141,7 +142,7 @@ export class LoopPlayer {
 
   private playStep(s: Session, step: number, t: number) {
     const lfo = playLoopStep(s.play, this.loop(), this.bar, step, t);
-    if (lfo) s.modulators.push({ lfo, end: t + BEAT });
+    if (lfo) s.modulators.push({ lfo, end: t + this.beat });
   }
   private tick() {
     const s = this.session,
@@ -163,7 +164,7 @@ export class LoopPlayer {
     if (shown > -2) this.onStep(shown);
   }
   private advance() {
-    this.next += STEP;
+    this.next += this.beat / 2;
     // a bar is 8 steps (the chord moves per bar); the loop wraps at its own length (#140)
     if (++this.step % 8 === 0) this.bar++;
     if (this.step >= this.loop().notes.length) this.step = 0;

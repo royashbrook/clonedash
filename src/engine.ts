@@ -11,6 +11,7 @@ import type {
 import { GAME_MODES } from "./types.ts";
 import { recordingFor } from "./recordings.ts";
 import { MAX_LOOP_BYTES, validateLoop } from "./loop-schema.ts";
+import { arrangement } from "./arrangement.ts";
 // Quarter-block clearance makes a two-block ledge landable, not just reachable at one instant.
 export const SPEED = 5,
   GRAVITY = 16,
@@ -1036,6 +1037,10 @@ export function validateLevel(input: unknown): Level {
   const area = buildBounds(level);
   // A level's own loop (#121) is its one song source: never beside a numbered song, and kept as
   // the validated copy, so nothing a loop does not hold rides along in it.
+  if (raw.arrangement !== undefined) {
+    if (raw.song !== undefined || raw.loop !== undefined) throw Error("Choose one soundtrack.");
+    level.arrangement = arrangement(raw.arrangement);
+  }
   if (raw.loop !== undefined) {
     if (raw.song !== undefined) throw Error("Invalid level settings");
     // the loop's own bound, measured on what arrived, before its check can drop anything
