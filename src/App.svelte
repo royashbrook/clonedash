@@ -1569,7 +1569,7 @@
     ["hidden", "HIDDEN", "it is invisible in play but still there", (o) => !ZONES.includes(o.type) && !TRIGGERS.includes(o.type)],
     ["wallPass", "WALL PASS", "its sides stop you instead of killing you", (o) => BLOCKS.includes(o.type) || SLOPES.includes(o.type)],
     ["roofPass", "ROOF PASS", "you bump your head on it instead of dying", (o) => BLOCKS.includes(o.type)],
-    ["multi", "MULTI TOUCH", "every new tap in its reach works it again, not just once", (o) => RINGS.includes(o.type)],
+    ["multi", "MULTI TOUCH", "every new tap in its reach works it again, not just once; a dash orb, once you have left it", (o) => RINGS.includes(o.type)],
   ];
   function editObject() {
     if (selected < 0) return;
