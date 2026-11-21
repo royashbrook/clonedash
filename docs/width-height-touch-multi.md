@@ -57,10 +57,12 @@ again on every touch, and rings that work again once you have left them.
        now, as before.
    4d. in the editor, TOUCH is a checkbox on the trigger's sheet and MULTI shows only while TOUCH
        is on. unchecking TOUCH clears MULTI.
-5. **multi touch rings.** MULTI TOUCH in EDIT OBJECT sets `multi: true` on a ring, black ring or
-   gray ring. a used multi ring re-arms at the start of a step, before that step picks a ring,
-   once the player is out of the reach that fired it. while still inside it does nothing more,
-   whatever is tapped. a plain ring still needs a fresh tap and a dash orb still needs a hold.
+5. **multi touch rings.** MULTI TOUCH in EDIT OBJECT sets `multi: true` on a ring, black ring,
+   gray ring or teleport ring. a used multi ring re-arms at the start of a step, before that step
+   picks a ring, so every fresh tap in its reach fires it again (2026-11-20, a player tapping a
+   multi ring twice expected the second tap to count); holding still fires nothing more, because
+   it is the fresh tap that fires a ring. a multi dash orb fires on a hold, so it re-arms only once
+   the player is out of the reach that fired it, and a held yellow orb flips gravity once.
    5a. default rings still work once a run. a restart starts every ring fresh.
    5b. boosters already fire on every landing, so `multi` on a booster or any other piece is
        refused.
