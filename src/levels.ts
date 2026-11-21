@@ -2,6 +2,7 @@ import { object as o } from "./engine.ts";
 import type { Level } from "./types.ts";
 import { COURSES } from "./courses.ts";
 import { REMIX } from "./remix.ts";
+import { EXPLORER } from "./explorer.ts";
 export const LEVELS: Level[] = [
   {
     name: "First Spark",
@@ -174,6 +175,7 @@ export const LEVELS: Level[] = [
 // Append only: persisted progress and old ?level= links use these indices.
 LEVELS.push(...COURSES);
 LEVELS.push(...REMIX);
+LEVELS.push(...EXPLORER);
 export const COLLECTIONS = [
   { name: "Easy", note: "Room to learn the rhythm", indices: [9, 10, 11] },
   {
@@ -190,6 +192,11 @@ export const COLLECTIONS = [
     name: "Remix",
     note: "Every shape and trick, mixed up",
     indices: [18, 19, 20, 21, 22],
+  },
+  {
+    name: "Explorer",
+    note: "Coins, boosters, teleports and more",
+    indices: [23, 24, 25, 26, 27, 28, 29],
   },
   {
     name: "Warmups",

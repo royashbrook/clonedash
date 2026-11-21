@@ -3,13 +3,13 @@ import type { Level, Piece, ObjectType } from "./types.ts";
 
 // The Remix set (#71): modes, mechanics and a finale. Built from short phrases like the
 // courses; every trail is replayed by tests/courses.test.mjs from its checked-in input timeline.
-const row = (type: ObjectType, x: number, width: number, y = 0) =>
+export const row = (type: ObjectType, x: number, width: number, y = 0) =>
   Array.from({ length: width }, (_, i) => o(type, x + i, y));
-const col = (type: ObjectType, x: number, height: number, y = 0) =>
+export const col = (type: ObjectType, x: number, height: number, y = 0) =>
   Array.from({ length: height }, (_, i) => o(type, x, y + i));
-const down = (x: number, width = 1): Piece[] =>
+export const down = (x: number, width = 1): Piece[] =>
   row("spike", x, width, 6).map((p) => ({ ...p, flipY: true }));
-const gate = (x: number, bottom: number, top: number) => [
+export const gate = (x: number, bottom: number, top: number) => [
   ...col("grid", x, bottom),
   ...col("grid", x, 7 - top, top),
 ];
@@ -27,7 +27,7 @@ const zigzag = (
   ];
 };
 // Rings: plain, purple (a one-block hop) and red (a five-block launch), as the editor presets.
-const ring = (x: number, y: number, kind?: "purple" | "red"): Piece =>
+export const ring = (x: number, y: number, kind?: "purple" | "red"): Piece =>
   kind === "purple"
     ? { ...o("ring", x, y), color: "#c77dff", bounce: 1 }
     : kind === "red"
@@ -66,7 +66,7 @@ const diamond = (x: number, size = 1) => turned("block", x, size, 45);
 const zone = (type: "w-block" | "r-block", pieces: Piece[]): Piece[] =>
   pieces.map((p) => ({ ...p, type }));
 // A portal tall enough that the run meets it at any height.
-const tall = (type: ObjectType, x: number) => [
+export const tall = (type: ObjectType, x: number) => [
   o(type, x, 0),
   o(type, x, 2.25),
   o(type, x, 4.5),

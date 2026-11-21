@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { COURSES } from "../src/courses.ts";
 import { REMIX } from "../src/remix.ts";
+import { EXPLORER } from "../src/explorer.ts";
 import {
   LEVELS,
   COLLECTIONS,
@@ -19,6 +20,7 @@ import {
 import { RECORDINGS, recordingFor } from "../src/recordings.ts";
 import { courseInput } from "./course-input.mjs";
 import { REMIX_INPUTS } from "./remix-inputs.mjs";
+import { EXPLORER_INPUTS } from "./explorer-inputs.mjs";
 import {
   appendLevel,
   encodeLevel,
@@ -68,10 +70,12 @@ for (const level of COURSES)
 // portals, zones), so each one replays its own input timeline: the 50 ms samples at which the
 // held input flips (tests/remix-inputs.mjs, written by scripts/remix-witness.mjs). The rules are
 // the ones above: input only, a decision every 50 ms, presses 100 ms apart, the first try.
-for (const level of REMIX)
+// The Explorer trails are held to the same witness, from tests/explorer-inputs.mjs.
+const TIMELINES = { ...REMIX_INPUTS, ...EXPLORER_INPUTS };
+for (const level of [...REMIX, ...EXPLORER])
   test(`human-rate completion witness: ${level.name}`, () => {
     assert.deepEqual(validateLevel(level), level);
-    const flips = REMIX_INPUTS[level.name];
+    const flips = TIMELINES[level.name];
     assert.ok(flips?.length, "every Remix trail has an input timeline");
     const run = new Run(level);
     let held = false,
@@ -121,8 +125,37 @@ for (const level of REMIX)
     assert.equal(holding.state.status, "dead", "nor is holding all the way");
   });
 
+test("the Explorer witnesses really collect every coin and take every teleport", () => {
+  const replay = (name) => {
+    const run = new Run(EXPLORER.find((l) => l.name === name)),
+      flips = EXPLORER_INPUTS[name];
+    let held = false,
+      sample = 0,
+      next = 0,
+      hops = 0;
+    for (let tick = 0; tick < 12000 && run.state.status === "playing"; tick++) {
+      if (tick % 6 === 0 && run.readyTime <= 0) {
+        if (flips[next] === sample) {
+          next++;
+          held = !held;
+          if (held) run.press();
+          else run.release();
+        }
+        sample++;
+      }
+      const x = run.state.x;
+      run.advance(STEP);
+      if (run.state.x - x > 2) hops++;
+    }
+    assert.equal(run.state.status, "complete", name);
+    return { coins: run.state.fx.coins, hops };
+  };
+  assert.equal(replay("Coin Canyon").coins, 10);
+  assert.equal(replay("Blink Bridge").hops, 10);
+});
+
 test("groups preserve all old identities and show increasing course lengths", () => {
-  assert.equal(LEVELS.length, 23);
+  assert.equal(LEVELS.length, 30);
   assert.deepEqual(
     LEVELS.slice(0, 9).map((l) => l.name),
     [
@@ -155,7 +188,7 @@ test("groups preserve all old identities and show increasing course lengths", ()
     RECORDINGS.slice(0, COURSES.length).map((r) => r.id),
   );
   // each remix trail has a song of its own: none shared, none borrowed from a course
-  const remixSongs = LEVELS.slice(18).map((l) => l.song);
+  const remixSongs = LEVELS.slice(18, 23).map((l) => l.song);
   assert.equal(new Set(remixSongs).size, remixSongs.length);
   assert.ok(remixSongs.every((s) => recordingFor(s) && !COURSES.some((c) => c.song === s)));
   assert.deepEqual(
@@ -163,11 +196,20 @@ test("groups preserve all old identities and show increasing course lengths", ()
     [0, 1, 2, 3, 4, 5, 6, 7, 8],
   );
   // The Remix set comes after every older trail, so saved bests keep their indices.
-  assert.deepEqual(LEVELS.slice(18), REMIX);
+  assert.deepEqual(LEVELS.slice(18, 23), REMIX);
   assert.deepEqual(
     COLLECTIONS.find((g) => g.name === "Remix").indices,
     [18, 19, 20, 21, 22],
   );
+  // The Explorer set comes after that, for the same reason, each with its own original song.
+  assert.deepEqual(LEVELS.slice(23), EXPLORER);
+  assert.deepEqual(
+    COLLECTIONS.find((g) => g.name === "Explorer").indices,
+    [23, 24, 25, 26, 27, 28, 29],
+  );
+  const explorerSongs = EXPLORER.map((l) => l.song);
+  assert.equal(new Set(explorerSongs).size, 7);
+  assert.ok(explorerSongs.every((s) => s >= 9 && s <= 108));
   // and each declares one of the licensed recordings, as the courses do
   assert.ok(
     REMIX.every((l, i) => courseSong(18 + i) === l.song && recordingFor(l.song)),
