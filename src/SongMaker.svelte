@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { catalog } from "./catalog.ts";
   import { onMount } from "svelte";
   import {
     blankLoop,
@@ -198,6 +199,10 @@
   {#if broken}<p role="alert">
       Your song library could not be read. Nothing was changed.
     </p>{/if}
+  {#each catalog.songs as featured}
+    <article><strong>{title(featured)}</strong><small>Featured song · {clock(duration(featured))}</small>
+      <div><button disabled={broken} onclick={() => open(featured)}>OPEN COPY</button></div></article>
+  {/each}
   {#each book.entries as entry (entry.id)}
     <article>
       <strong>{title(entry.song)}</strong><small

@@ -1,4 +1,5 @@
 import { test, expect, openAbout } from "./quiet.mjs";
+import { LEVELS } from "../src/levels.ts";
 import { COURSES } from '../src/courses.ts';
 import { REMIX } from '../src/remix.ts';
 import { Run } from '../src/run.ts';
@@ -21,9 +22,10 @@ test('ranked courses show durations, keep warmups and remove the misleading frie
     'EasyRoom to learn the rhythm', 'MediumLonger combinations and gravity changes',
     'HardTighter timing and faster transitions','RemixEvery shape and trick, mixed up',
     'ExplorerCoins, boosters, teleports and more',
+    ...(LEVELS.length > 30 ? ['ChallengerPlayer-made trails'] : []),
     'WarmupsShort introductions to each shape',
   ]);
-  await expect(page.locator('.level-card')).toHaveCount(30);
+  await expect(page.locator('.level-card')).toHaveCount(LEVELS.length);
   await expect(page.locator('#play')).toContainText('PULSEWAY');
   await expect(page.locator('#share')).toHaveCount(0);
   const play=await page.locator('#play').boundingBox();

@@ -29,7 +29,24 @@ Nine self-hosted electronic recordings by Of Far Different Nature accompany the 
 
 ## course progression
 
-Easy: Pulseway, Skyline, Runway (48 seconds each). Medium: Switchyard, Orbitworks, Airloom (60 seconds). Hard: Overdrive, Polarity, Afterburn (72 seconds). Remix: Shapeshifter and Quick Change switch between every shape and gravity; Ring Road and Block Party bring rings, ramps, speed portals, wall and roof passes, and sized or turned blocks; Grand Finale mixes all of it (62 to 75 seconds). They come after every other trail, so saved bests keep their indices, and each one's witness replays its own input timeline (`tests/remix-inputs.mjs`, written by `scripts/remix-witness.mjs`). Explorer: Coin Canyon, Booster Bay, Blink Bridge, Door to Door, Orb Garden, Flipside and Last Lap each feature a newer piece (52 to 67 seconds), come after Remix for the same reason, and replay `tests/explorer-inputs.mjs` (`scripts/remix-witness.mjs --explorer`). The original nine short layouts remain under Warmups, with unchanged save indices. Difficulty labels are authored design judgements, not a measured comparison to another game's rankings. Every new course has a completion witness using normal press/release controls through the shipped run loop. See `tests/courses.test.mjs`.
+Easy: Pulseway, Skyline, Runway (48 seconds each). Medium: Switchyard, Orbitworks, Airloom (60 seconds). Hard: Overdrive, Polarity, Afterburn (72 seconds). Remix: Shapeshifter and Quick Change switch between every shape and gravity; Ring Road and Block Party bring rings, ramps, speed portals, wall and roof passes, and sized or turned blocks; Grand Finale mixes all of it (62 to 75 seconds). They come after every other trail, so saved bests keep their indices, and each one's witness replays its own input timeline (`tests/remix-inputs.mjs`, written by `scripts/remix-witness.mjs`). Explorer: Coin Canyon, Booster Bay, Blink Bridge, Door to Door, Orb Garden, Flipside and Last Lap each feature a newer piece (52 to 67 seconds), come after Remix for the same reason, and replay `tests/explorer-inputs.mjs` (`scripts/remix-witness.mjs --explorer`). The original nine short layouts remain under Warmups, with unchanged save indices. Difficulty labels are authored design judgements, not a measured comparison to another game's rankings. Each Easy, Medium, Hard, Remix and Explorer course has a completion witness using normal press/release controls through the shipped run loop. See `tests/courses.test.mjs`.
+
+Challenger is the player-made collection. It appears when its first trail is published. New trails start at 31, after the original 30, so existing links and saves keep their meaning.
+
+## Publish a submission
+
+Add one file to this repo. Use the original share text as the entire file, without a Markdown wrapper:
+
+| Item | Example path | Contents |
+| --- | --- | --- |
+| Challenger trail | `content/levels/challenger/0031-first-run.cdl` | Level share code. Use the next consecutive number; never renumber a released trail. |
+| Pixel skin | `content/skins/star-cat.cds` | Skin share code |
+| Music loop | `content/music/loops/night-beat.cdm` | Loop share code |
+| Full song | `content/music/songs/night-drive.cdl` | Level share with an embedded full song. Only the arrangement is published. A standalone arrangement object in a `.json` file also works. |
+
+Names come from the submission, not the filename. Skins, loops and songs show up as featured copies on their respective library screens. Opening one does not save, wear or replace anything. This path is for music made with the game, not uploaded audio recordings.
+
+Run `npm run build` then `npm run test:content` to preview the checks. The build packages the validated data with the offline app. Only additions of regular files matching the paths above take the quick release path. Edits, removals, mixed changes, manual releases and uncertain comparisons keep the full checks. The deploy compares against what is actually live and verifies the published build afterward. A local save alone does not publish: merge the accepted file to main.
 
 Pause any played level, or finish it, then choose **EDIT A COPY**. It saves a new independent entry and opens the editor. The source, prior draft and progress remain intact. Full or unavailable storage refuses the copy; nothing is replaced. This also works for imported levels. Copies preserve geometry and soundtrack and can be shared from My Levels.
 
