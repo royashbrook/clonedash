@@ -62,6 +62,18 @@ test("a phone builds a song from a saved loop and a shared link, edits just the 
   page,
 }) => {
   await page.setViewportSize({ width: 390, height: 664 });
+  await page.addInitScript(() => {
+    const calls = new WeakMap();
+    for (const action of ["resume", "suspend", "close"]) {
+      const original = AudioContext.prototype[action];
+      AudioContext.prototype[action] = function (...args) {
+        if (!calls.has(this)) calls.set(this, []);
+        calls.get(this).push(action);
+        if (action === "resume") window.songAudioCalls = calls.get(this);
+        return original.apply(this, args);
+      };
+    }
+  });
   const original = { ...blankLoop(), name: "Bassline" };
   await page.addInitScript(
     ({ key, loop }) => {
@@ -110,6 +122,9 @@ test("a phone builds a song from a saved loop and a shared link, edits just the 
   await page.getByRole("button", { name: "STOP", exact: false }).click();
   await page.getByRole("button", { name: "SAVE SONG" }).click();
   await expect(page.getByText("Song saved.")).toBeVisible();
+  await page.getByRole("button", { name: "Play from section 3" }).click();
+  await page.locator("#my-levels").click();
+  await expect.poll(() => page.evaluate(() => window.songAudioCalls?.slice(-2))).toEqual(["suspend", "close"]);
   await page.reload();
   await page.locator("#loops-open").click();
   await page.locator("#my-songs").click();

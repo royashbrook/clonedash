@@ -15,6 +15,7 @@
     type SongBook,
   } from "./arrangement.ts";
   import { playSong } from "./song-player.ts";
+  import { closeGameAudio } from "./music.ts";
   let {
     book,
     broken,
@@ -178,7 +179,7 @@
       serial++;
       silence();
       document.removeEventListener("visibilitychange", hide);
-      void audio?.close();
+      closeGameAudio(audio);
     };
   });
 </script>
