@@ -15,6 +15,7 @@ try {
     "courses.test.mjs",
     "course-input.mjs",
     "remix-inputs.mjs",
+    "explorer-inputs.mjs",
     "version.test.mjs",
     "pogo.test.mjs",
     "door.test.mjs",
