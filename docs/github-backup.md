@@ -1,0 +1,15 @@
+# Private backup pilot
+
+More → Account is optional. Signing in enables automatic backup of progress, settings and saved levels, skins, loops and songs. Uncommitted editor changes are not part of a save. Guest play and file export still work offline. No leaderboard, uploads to the catalog or content license is involved.
+
+Use one initialized **private personal repo** with no collaborators for this pilot. The account owner installs the GitHub App on that repo only. Repository contents read/write is the only requested permission beyond implicit metadata. Enable expiring user tokens; leave webhooks, device flow, account email, administration and organization permissions off. Limit installation to the owner. Do not select all repositories.
+
+The server checks the one pilot user on login and the one installation, repository ID, owner and visibility on file operations. It writes only `cube-dash.cdb` on the default branch. Git keeps the previous commits. This is not encryption against the repository owner, its collaborators, or a subsequent visibility change. Do not make the repo public. The player may export their save without GitHub at any time.
+
+The client checks for changes every 30 seconds while connected, and at visibility changes. An app force-quit or offline device may not have uploaded its last change. Acknowledgement from GitHub is required to say it is backed up. The next session checks again. If the remote does not match the revision known to the device, pause for review. Restore replaces the device; it does not merge two games. Export local work first if needed. Signing out stops cloud saves and keeps both copies.
+
+## Operator checklist
+
+1. Register a private GitHub App with a fixed callback at the game origin, `/api/backup/callback`. Install on the intended save repo only. Record the non-secret client ID and numeric account/repo IDs. Use a secure input to set the client secret; do not put credentials, callbacks with query strings, save bodies or refresh tokens in logs, builds or issues.
+2. Bind a dedicated D1 database as `SESSIONS`, initialized with [the schema](../backup/session.sql). Store `PILOT_CLIENT_SECRET` as a Worker secret; configure `PILOT_CLIENT_ID`, `PILOT_USER_ID`, `PILOT_REPO_ID`, and the exact HTTPS `PILOT_ORIGIN`. Missing bindings or a different host disable the API. The DB holds opaque session hashes and private OAuth credentials, never game saves. Restrict access including backups; sign-out deletes the session, and sessions expire after 30 days. Set a retention policy for expired credentials and DB backups before widening the pilot.
+3. Before calling it live, check the deployed Worker with its real D1 binding, the OAuth return in an installed iOS PWA, correct private destination, two distinct browser sessions, conflict, logout and revocation. The browser tests use a simulated service; they do not establish that the GitHub or iOS authorization flow works. Leave the pilot off until the real integration and review are complete.

@@ -1,8 +1,9 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "clonedash",
+  "main": "./backup/worker.mjs",
   "account_id": "b13c1cf2483bdad430b91ae25126e984",
   "compatibility_date": "2026-09-11",
-  "assets": { "directory": "./dist" },
+  "assets": { "directory": "./dist", "binding": "ASSETS", "run_worker_first": ["/api/backup/*"] },
   "routes": [{ "pattern": "clonedash.royashbrook.com", "custom_domain": true }]
 }
