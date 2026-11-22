@@ -83,7 +83,8 @@ test('a 16 step loop (#140): PLAY and the level song play the same events, step 
   const offline = voiceEvents(await composeLoop(long, RecordingContext), 0);
   const played = voiceEvents(await live(LoopPlayer, 26, t, long), 0.06);
   assert.ok(played.length >= offline.length);
-  assert.deepEqual(played.slice(0, offline.length), offline);
+  // One event at a time keeps an incorrect wrap from printing a megabyte of later differences.
+  for (const [i, event] of offline.entries()) assert.deepEqual(played[i], event, 'scheduled event ' + i);
   assert.notDeepEqual(offline, voiceEvents(await composeLoop(tune, RecordingContext), 0), 'steps 9 to 16 sound');
 });
 

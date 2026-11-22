@@ -21,6 +21,9 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - name: Choose checks for this tree
+        id: lane
+        run: node scripts/content-lane.mjs >> "$GITHUB_OUTPUT"
       - name: Record the browser bundle
         # what the run really loads, not what a tag implies: the Playwright version and the
         # WebKit bundle's own libsoup
@@ -30,10 +33,16 @@ jobs:
           find "$PLAYWRIGHT_BROWSERS_PATH" -name 'libsoup*' -exec ls -l {} +
       - run: npm run check
       - run: npm test
+        if: steps.lane.outputs.content != 'true'
       - run: npm run test:mutations
+        if: steps.lane.outputs.content != 'true'
       - run: npm run build
       - run: npm run test:release
       - run: npm run test:browser
+        if: steps.lane.outputs.content != 'true'
+      - name: Check new content and open it in both browsers
+        if: steps.lane.outputs.content == 'true'
+        run: npm run test:content
       - uses: actions/upload-artifact@v7
         # every run, so a failure the retry hid still leaves its first attempt
         if: always()

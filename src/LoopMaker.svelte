@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { catalog } from "./catalog.ts";
   // The LOOPS screen (#121, docs/loops.md): saved loops, and a step grid to make one. Nothing is
   // saved until SAVE; every write goes through commit (loop.ts commitLoops). One player owns the
   // sound, and it stops whenever this screen is left, a sheet opens or the page hides.
@@ -343,6 +344,10 @@
         : "Saved on this device. Make a loop from the game's own sounds, then share it."}
     </p>
     <div id="loop-list">
+      {#each catalog.loops as featured}
+        <article class="loop-card"><div><h2>{loopName(featured)}</h2><p>Featured loop</p></div>
+          <button disabled={broken} onclick={() => edit(null, featured)}>OPEN COPY</button></article>
+      {/each}
       {#each store.loops as { id, loop: saved } (id)}
         <article class="loop-card">
           <div>

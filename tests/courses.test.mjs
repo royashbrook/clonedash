@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { catalog } from "../src/catalog.ts";
 import { COURSES } from "../src/courses.ts";
 import { REMIX } from "../src/remix.ts";
 import { EXPLORER } from "../src/explorer.ts";
@@ -8,6 +9,7 @@ import {
   COLLECTIONS,
   COURSE_ORDER,
   courseSong,
+  courseMusic,
 } from "../src/levels.ts";
 import { Run } from "../src/run.ts";
 import {
@@ -154,8 +156,14 @@ test("the Explorer witnesses really collect every coin and take every teleport",
   assert.equal(replay("Blink Bridge").hops, 10);
 });
 
+test("published trails append to the original save slots; no empty Challenger shelf", () => {
+  assert.deepEqual(LEVELS.slice(30), catalog.levels);
+  assert.deepEqual(COLLECTIONS.find(g => g.name === "Challenger")?.indices,
+    catalog.levels.length ? catalog.levels.map((_,i)=>30+i) : undefined);
+});
+
 test("groups preserve all old identities and show increasing course lengths", () => {
-  assert.equal(LEVELS.length, 30);
+  assert.equal(LEVELS.length, 30 + catalog.levels.length);
   assert.deepEqual(
     LEVELS.slice(0, 9).map((l) => l.name),
     [
@@ -202,7 +210,7 @@ test("groups preserve all old identities and show increasing course lengths", ()
     [18, 19, 20, 21, 22],
   );
   // The Explorer set comes after that, for the same reason, each with its own original song.
-  assert.deepEqual(LEVELS.slice(23), EXPLORER);
+  assert.deepEqual(LEVELS.slice(23, 30), EXPLORER);
   assert.deepEqual(
     COLLECTIONS.find((g) => g.name === "Explorer").indices,
     [23, 24, 25, 26, 27, 28, 29],
@@ -219,13 +227,14 @@ test("groups preserve all old identities and show increasing course lengths", ()
 test("every course can be independently copied, encoded and decoded with its own song", async () => {
   for (let i = 0; i < LEVELS.length; i++) {
     const original = structuredClone(LEVELS[i]);
-    const copy = { ...LEVELS[i], song: courseSong(i) };
+    assert.deepEqual(courseMusic(i), original.arrangement ?? original.loop ?? courseSong(i));
+    const copy = { ...LEVELS[i], ...(original.arrangement || original.loop ? {} : {song: courseSong(i)}) };
     const appended = appendLevel(readSave(null, LEVELS.length), copy);
     const decoded = await decodeLevel(
       await encodeLevel(appended.customLevels.at(-1).level),
     );
     assert.deepEqual(decoded, copy);
-    appended.customLevels.at(-1).level.objects[0].x++;
+    appended.customLevels.at(-1).level.objects.push({type:"spike",x:1,y:0});
     assert.deepEqual(LEVELS[i], original);
   }
 });

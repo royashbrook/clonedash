@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { catalog } from "./catalog.ts";
   // The SKINS screen (#107, docs/skins.md): saved skins, and a pixel editor for one. Nothing here
   // is saved or worn until SAVE or USE; every write goes through commit (skin.ts commitSkins).
   import { onMount } from "svelte";
@@ -479,6 +480,11 @@
         : "Saved on this device. A skin changes how your cube looks in cube mode. It never changes how it plays."}
     </p>
     <div id="skin-list">
+      {#each catalog.skins as skin}
+        <article class="skin-card"><div class="thumb"><canvas use:thumb={skin} aria-hidden="true"></canvas></div>
+          <div class="skin-info"><h2>{skinName(skin)}</h2><p>Featured skin</p></div>
+          <button disabled={broken} onclick={() => edit(null, skin)}>OPEN COPY</button></article>
+      {/each}
       <article class="skin-card" class:worn={store.selected === undefined}>
         <div class="thumb default-thumb" aria-hidden="true"><span></span></div>
         <div class="skin-info">
