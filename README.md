@@ -35,7 +35,7 @@ Challenger is the player-made collection. It appears when its first trail is pub
 
 ## Publish a submission
 
-Add one file to this repo. Use the original share text as the entire file, without a Markdown wrapper:
+For a new public submission, first [confirm permission and credit for that revision](content/README.md#rights-for-new-public-submissions). Then add one file to this repo. Use the original share text as the entire file, without a Markdown wrapper:
 
 | Item | Example path | Contents |
 | --- | --- | --- |
