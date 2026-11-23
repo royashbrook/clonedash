@@ -74,7 +74,7 @@
   });}
   onMount(()=>{
     alive=true;initialized=true;
-    if (location.hash==="#backup-account") {
+    if (location.hash==="#backup-account" || location.hash==="#backup-cancelled") {
       open=true; history.replaceState(null,"",location.pathname+location.search);
     } else {
       try {if(localStorage.getItem(active)) void start();} catch { /* guest without storage */ }
@@ -92,7 +92,7 @@
 <dialog bind:this={dialog} aria-label="Account" onclose={()=>open=false}>
   <h2>Account</h2>
   <p>{connected ? "Signed in with GitHub. Your progress and saved creations use one private backup file." :
-    "Optional adult pilot. Sign in and approve GitHub access. Cube Dash creates a private repository for your saves and backs up automatically. Guest play stays on this device."}</p>
+    "Optional adult pilot. Sign in to back up this game to com.royashbrook.dash in your own GitHub account. We create it privately or use the private repo you select with that name. If a different save is there, we ask before restoring it. You can keep playing without signing in."}</p>
   <p role="status">{notice}</p>
   {#if connected}
     {#if other}<p>GitHub: {summary(other.save).played} trails played, {summary(other.save).levels} levels, {summary(other.save).skins} skins, {summary(other.save).loops} loops, {other.save.songs?.entries.length??0} songs. Restore replaces this device. Export first in Move your save if you want to keep both.</p>
@@ -103,7 +103,7 @@
   {:else if enabled}
     <form action="/api/backup/login" method="post"><button type="submit">SIGN IN WITH GITHUB</button></form>
   {/if}
-  <button onclick={()=>open=false}>CLOSE</button>
+  <button onclick={()=>open=false}>{connected ? "CLOSE" : "CONTINUE WITHOUT BACKUP"}</button>
 </dialog>
 <style>
   dialog{width:min(90vw,28rem);max-height:85dvh;overflow:auto;background:#101e2e;color:white;border:1px solid #435468;border-radius:1rem;padding:1.25rem}

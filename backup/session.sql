@@ -1,7 +1,6 @@
 create table if not exists backup_vaults (
   user_id integer primary key,
-  nonce text not null unique,
-  repo_id integer unique
+  repo_id integer not null unique
 );
 create table if not exists github_sessions (
   id text primary key,

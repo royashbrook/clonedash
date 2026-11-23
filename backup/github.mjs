@@ -3,6 +3,7 @@ import { MAX_SAVE_TEXT } from '../src/transfer.ts';
 import { LEVELS } from '../src/levels.ts';
 
 const file = 'cube-dash.cdb';
+const name = 'com.royashbrook.dash';
 const sha = /^[0-9a-f]{40}$/;
 export class BackupError extends Error {
   constructor(status, message) { super(message); this.status = status; }
@@ -55,7 +56,7 @@ export function vault(binding, token, send = fetch) {
     return {repos:list.repositories, permissions:items[0].permissions};
   }
   function owned(repo) {
-    return repo?.private === true && repo.owner?.type === 'User' && repo.owner.id === binding.user &&
+    return repo?.name === name && repo.private === true && repo.owner?.type === 'User' && repo.owner.id === binding.user &&
       Number.isSafeInteger(repo.id) && repo.id > 0 && !repo.archived && !repo.fork && repo.default_branch;
   }
   async function verify() {
@@ -67,18 +68,12 @@ export function vault(binding, token, send = fetch) {
       branch: repo.default_branch};
   }
   return {
-    // Reserve a random suffix before the POST. Both devices (or a lost create reply)
-    // use the same name; never claim a pre-existing repo just because its name looks right.
     async provision(db) {
       const grant = await selected(true);
       if (!grant) return null;
-      await db.prepare('insert or ignore into backup_vaults (user_id, nonce) values (?, ?)').bind(
-        binding.user,crypto.randomUUID()).run();
-      const row = await db.prepare('select nonce, repo_id from backup_vaults where user_id=?').bind(binding.user).first();
-      const name = 'cube-dash-saves-' + row.nonce.slice(0,8);
-      const description = 'Cube Dash private backup ' + row.nonce;
+      const row = await db.prepare('select repo_id from backup_vaults where user_id=?').bind(binding.user).first();
       let repo = grant.repos[0];
-      if (row.repo_id) {
+      if (row) {
         if (!owned(repo) || repo.id !== row.repo_id)
           throw new BackupError(403,'Your original backup repository is unavailable. No replacement was created.');
         return repo.id;
@@ -86,20 +81,20 @@ export function vault(binding, token, send = fetch) {
       if (!repo) {
         if (grant.permissions.repository_creation !== 'write')
           throw new BackupError(403,'Approve the GitHub App repository creation permission to enable backups.');
-        const res = await request('/user/repos',{method:'POST',body:JSON.stringify({name,description,
+        const res = await request('/user/repos',{method:'POST',body:JSON.stringify({name,description:'Cube Dash private backup',
           private:true,auto_init:true,has_issues:false,has_projects:false,has_wiki:false})});
         if (res.status === 422) {
-          // Another login may just have created it; only accept our exact reservation.
+          // A concurrent login may have created it. A name collision alone is not a grant.
           repo = (await selected()).repos[0];
         } else if (res.status === 201) repo = await json(res);
         else throw new BackupError(503,'GitHub could not create your backup. No save was uploaded.');
       }
-      if (!owned(repo) || repo.name !== name || repo.description !== description)
-        throw new BackupError(409,'Could not confirm the new backup repository. Existing repositories were not changed.');
-      await db.prepare('update backup_vaults set repo_id=? where user_id=? and repo_id is null')
-        .bind(repo.id,binding.user).run();
+      if (!owned(repo))
+        throw new BackupError(409,'Select only your private com.royashbrook.dash repository on GitHub. No save was uploaded.');
+      await db.prepare('insert or ignore into backup_vaults (user_id, repo_id) values (?, ?)')
+        .bind(binding.user,repo.id).run();
       const saved=await db.prepare('select repo_id from backup_vaults where user_id=?').bind(binding.user).first();
-      if (saved.repo_id !== repo.id) throw new BackupError(409,'Backup destination changed.');
+      if (saved?.repo_id !== repo.id) throw new BackupError(409,'Backup destination changed.');
       return repo.id;
     },
     async read() {

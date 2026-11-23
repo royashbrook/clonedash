@@ -7,7 +7,7 @@ import { LEVELS } from '../src/levels.ts';
 import { readSave } from '../src/library.ts';
 import { readSkins } from '../src/skin.ts';
 
-const repo = {id:2,private:true,owner:{type:'User',id:1},default_branch:'main',full_name:'test/save'};
+const repo = {id:2,private:true,owner:{type:'User',id:1},default_branch:'main',name:'com.royashbrook.dash',full_name:'test/com.royashbrook.dash'};
 const revision = 'a'.repeat(40);
 function github(r=repo, selection='selected') {
   let entry=null, calls=[];
@@ -16,7 +16,7 @@ function github(r=repo, selection='selected') {
     if (p==='/user/installations') return Response.json({total_count:1,installations:[{
       id:8,account:{id:1},repository_selection:selection,permissions:{contents:'write'}}]});
     if (p==='/user/installations/8/repositories') return Response.json({total_count:1,repositories:[r]});
-    assert.equal(p,'/repos/test/save/contents/cube-dash.cdb');
+    assert.equal(p,'/repos/test/com.royashbrook.dash/contents/cube-dash.cdb');
     if (!opts.method) return entry?Response.json(entry):new Response(null,{status:404});
     const body=JSON.parse(opts.body);
     if (body.sha!==entry?.sha) return new Response(null,{status:409});
@@ -40,7 +40,7 @@ test('one file, create versus update, stale device refused, validated restore',a
 test('public, transferred, substituted or all-repos installation never reaches the file',async()=>{
   const code=await encodeBackup(save,LEVELS.length);
   for(const {store,calls} of [github({...repo,private:false}),github({...repo,id:3}),
-      github({...repo,owner:{id:4,type:'User'}}),github(repo,'all')]){
+      github({...repo,name:'renamed'}),github({...repo,owner:{id:4,type:'User'}}),github(repo,'all')]){
     await assert.rejects(store.read(),{status:403});
     await assert.rejects(store.write(code,null),{status:403});assert.deepEqual(calls,[]);
   }

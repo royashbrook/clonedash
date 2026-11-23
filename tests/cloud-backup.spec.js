@@ -4,6 +4,19 @@ import { encodeBackup } from '../src/backup.ts';
 import { readSkins } from '../src/skin.ts';
 import { LEVELS } from '../src/levels.ts';
 
+test('declining GitHub consent lets the player return to local play without writing',async({page})=>{
+  const paths=[];
+  await page.route('**/api/backup/**',async route=>{
+    paths.push(route.request().method()+' '+new URL(route.request().url()).pathname);
+    await route.fulfill({json:{enabled:true,connected:false}});
+  });
+  await page.goto('/#backup-cancelled');
+  const account=page.getByRole('dialog',{name:'Account'});
+  await expect(account.getByRole('button',{name:'SIGN IN WITH GITHUB'})).toBeVisible();
+  await account.getByRole('button',{name:'CONTINUE WITHOUT BACKUP'}).click();
+  await expect(account).not.toBeVisible();expect(paths).toEqual(['GET /api/backup/status']);
+});
+
 test('a signed-in phone checkpoints, a new tablet restores without uploading its empty state', async ({browser,baseURL})=>{
   let file=null, writes=0;
   const phone=await browser.newContext({baseURL,serviceWorkers:'block',viewport:{width:390,height:664}});

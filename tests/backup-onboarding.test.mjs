@@ -27,7 +27,8 @@ function setup(t) {
       total_count:+!!s.repo,repositories:s.repo?[s.repo]:[]});
     if(pathname==='/user/repos' && options.method==='POST'){
       const b=JSON.parse(options.body);s.posts.push(b);assert.equal(b.private,true);assert.equal(b.auto_init,true);
-      assert.match(b.name,/^cube-dash-saves-[0-9a-f]{8}$/);
+      assert.equal(b.name,'com.royashbrook.dash');
+      if(s.unselectedCollision) return new Response(null,{status:422});
       assert.equal(s.repo,null,'a second create request must not reach a provisioned vault');
       s.repo={id:101,owner:{id:7,type:'User'},default_branch:'main',full_name:'player/'+b.name,...b};s.creates++;
       if(s.loseReply) throw Error('connection broke after creation');
@@ -46,8 +47,8 @@ function setup(t) {
   const call=(path,init)=>worker.fetch(new Request(origin+'/api/backup/'+path,init),env);
   const start=()=>call('login',{method:'POST',headers:{Origin:origin}});
   const cookie=(res,key)=>res.headers.getSetCookie().find(v=>v.startsWith(key+'=')).split(';')[0];
-  const callback=(login)=>call('callback?code=fake&state='+new URL(login.headers.get('location')).searchParams.get('state'),
-    {headers:{cookie:cookie(login,'__Host-cd-login')}});
+  const callback=(login,headers={})=>call('callback?code=fake&state='+new URL(login.headers.get('location')).searchParams.get('state'),
+    {headers:{cookie:cookie(login,'__Host-cd-login'),...headers}});
   return {s,call,start,cookie,callback,origin};
 }
 test('empty account → GitHub consent → private repo + file → tablet restores the same file',async t=>{
@@ -66,11 +67,37 @@ test('empty account → GitHub consent → private repo + file → tablet restor
   assert.equal((await (await call('file',{headers:{cookie:b}})).json()).file.code,code);
   assert.equal(s.posts.length,1);assert.equal(s.creates,1);
 });
-test('lost create response reuses the reserved repo, and a substituted id stops the next login',async t=>{
+test('lost create response reuses the private repo, and a substituted id stops the next login',async t=>{
   const {s,start,callback}=setup(t);s.grant=true;s.loseReply=true;
   assert.equal((await callback(await start())).status,502);
   assert.equal((await callback(await start())).status,303);
   s.repo.id++;assert.equal((await callback(await start())).status,403);assert.equal(s.creates,1);
+});
+test('first login adopts a selected existing private Dash repo without replacing its save',async t=>{
+  const {s,start,callback,call,cookie}=setup(t);s.grant=true;s.creation='read';
+  s.repo={id:202,owner:{type:'User',id:7},private:true,name:'com.royashbrook.dash',
+    full_name:'player/com.royashbrook.dash',default_branch:'saved',description:'My game'};
+  const game=readSave(null,LEVELS.length);game.best={0:84};
+  const code=await encodeBackup({game,skins:readSkins(null)},LEVELS.length);
+  s.file={path:'cube-dash.cdb',type:'file',size:code.length,sha:'b'.repeat(40),content:btoa(code),encoding:'base64'};
+  const login=await callback(await start());assert.equal(login.status,303);
+  const read=await call('file',{headers:{cookie:cookie(login,'__Host-cd-session')}});
+  assert.deepEqual((await read.json()).file,{code,sha:'b'.repeat(40)});assert.equal(s.posts.length,0);
+});
+test('a taken but unselected name stops setup without a substitute repo',async t=>{
+  const {s,start,callback}=setup(t);s.grant=true;s.unselectedCollision=true;
+  assert.equal((await callback(await start())).status,409);assert.equal(s.posts.length,1);
+  assert.equal(s.repo,null);assert.equal(s.file,null);
+  const page=await callback(await start(),{accept:'text/html'});
+  assert.equal(page.status,409);assert.match(await page.text(),/href="\/#backup-account"/);assert.equal(s.file,null);
+});
+test('declining GitHub consent returns to the game without a session or save',async t=>{
+  const {s,start,call,origin,cookie}=setup(t), login=await start();
+  const state=new URL(login.headers.get('location')).searchParams.get('state');
+  const res=await call('callback?error=access_denied&state='+state,{headers:{cookie:cookie(login,'__Host-cd-login')}});
+  assert.equal(res.status,303);assert.equal(res.headers.get('location'),origin+'/#backup-cancelled');
+  assert.equal(res.headers.getSetCookie().length,1);assert.match(res.headers.get('set-cookie'),/__Host-cd-login=.*Max-Age=0/);
+  assert.equal(s.posts.length,0);assert.equal(s.file,null);
 });
 test('unexpected owner, blanket permission, missing creation permission and unrelated selection never create',async t=>{
   const {s,start,callback}=setup(t);s.grant=true;s.user=6;

@@ -49,8 +49,11 @@ export async function account(req, env) {
   }
   if (path === 'callback' && req.method === 'GET') {
     const [state, verifier, stage] = (getCookie(req,flow)||'').split('.');
-    if (!/^[a-f0-9]{64}$/.test(state) || !verifier || state !== url.searchParams.get('state') || !url.searchParams.get('code'))
+    if (!/^[a-f0-9]{64}$/.test(state) || !verifier || state !== url.searchParams.get('state'))
       return reply({error:'Login expired or cancelled. Return to the game and try again.'},400);
+    if (url.searchParams.get('error') === 'access_denied')
+      return redirect(url.origin+'/#backup-cancelled',cookie(flow,'',0));
+    if (!url.searchParams.get('code')) return reply({error:'Missing sign-in approval.'},400);
     const token = await exchange(env,{code:url.searchParams.get('code'),redirect_uri:callback,code_verifier:verifier});
     const who = await fetch('https://api.github.com/user',{redirect:'error',
       headers:{Authorization:'Bearer '+token.access_token,'User-Agent':'cube-dash-backup'}});
@@ -98,6 +101,12 @@ export default {async fetch(req, env) {
   if (!new URL(req.url).pathname.startsWith(prefix)) return env.ASSETS.fetch(req);
   try { return await account(req,env); }
   catch (error) {
+    if (new URL(req.url).pathname === prefix+'callback' && req.headers.get('accept')?.includes('text/html')) {
+      const status=error instanceof BackupError ? error.status : 502;
+      return new Response('<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><title>Cube Dash backup</title><h1>Backup not connected</h1><p>Your device save has not changed. If you already have a private com.royashbrook.dash repository, select only that repo in the GitHub installation settings.</p><p><a href="/#backup-account">Return to Cube Dash</a> to retry or play without backup.</p>',{
+        status,headers:{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store','Referrer-Policy':'no-referrer',
+          'Content-Security-Policy':"default-src 'none'; frame-ancestors 'none'; base-uri 'none'",'Set-Cookie':cookie(flow,'',0)}});
+    }
     return reply({error:error instanceof BackupError ? error.message : 'Backup unavailable. Your device save is unchanged.'},
       error instanceof BackupError ? error.status : 502);
   }
