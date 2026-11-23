@@ -92,7 +92,7 @@
 <dialog bind:this={dialog} aria-label="Account" onclose={()=>open=false}>
   <h2>Account</h2>
   <p>{connected ? "Signed in with GitHub. Your progress and saved creations use one private backup file." :
-    "Optional adult pilot. Signing in turns on automatic private backup. Guest play stays on this device."}</p>
+    "Optional adult pilot. Sign in and approve GitHub access. Cube Dash creates a private repository for your saves and backs up automatically. Guest play stays on this device."}</p>
   <p role="status">{notice}</p>
   {#if connected}
     {#if other}<p>GitHub: {summary(other.save).played} trails played, {summary(other.save).levels} levels, {summary(other.save).skins} skins, {summary(other.save).loops} loops, {other.save.songs?.entries.length??0} songs. Restore replaces this device. Export first in Move your save if you want to keep both.</p>

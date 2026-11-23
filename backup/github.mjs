@@ -41,23 +41,67 @@ export function vault(binding, token, send = fetch) {
       'GitHub could not complete the backup request.');
     return JSON.parse(await boundedText(response, cap));
   }
-  async function verify() {
+  async function selected(allowMissing = false) {
     const installation = await json(await request('/user/installations?per_page=2'));
     const items = installation.installations;
+    if (allowMissing && installation.total_count === 0 && items.length === 0) return null;
     if (installation.total_count !== 1 || items.length !== 1 ||
         items[0].account.id !== binding.user || items[0].repository_selection !== 'selected' ||
         items[0].suspended_at || items[0].permissions.contents !== 'write')
-      throw new BackupError(403, 'Install the app only on the private save repository.');
+      throw new BackupError(403, 'Backup requires a selected-repositories grant, not all repositories.');
     const list = await json(await request('/user/installations/' + items[0].id + '/repositories?per_page=2'));
-    const repo = list.repositories[0];
-    if (list.total_count !== 1 || list.repositories.length !== 1 || !repo?.private ||
-        repo.id !== binding.repo || repo.owner.type !== 'User' || repo.owner.id !== binding.user ||
-        repo.archived || repo.fork || !repo.default_branch)
+    if (list.total_count !== list.repositories.length || list.total_count > 1)
+      throw new BackupError(403, 'Backup will not access unrelated repositories.');
+    return {repos:list.repositories, permissions:items[0].permissions};
+  }
+  function owned(repo) {
+    return repo?.private === true && repo.owner?.type === 'User' && repo.owner.id === binding.user &&
+      Number.isSafeInteger(repo.id) && repo.id > 0 && !repo.archived && !repo.fork && repo.default_branch;
+  }
+  async function verify() {
+    const list = await selected();
+    const repo = list.repos[0];
+    if (!owned(repo) || repo.id !== binding.repo)
       throw new BackupError(403, 'The dedicated private save repository is not available.');
     return {root: '/repos/' + repo.full_name.split('/').map(encodeURIComponent).join('/'),
       branch: repo.default_branch};
   }
   return {
+    // Reserve a random suffix before the POST. Both devices (or a lost create reply)
+    // use the same name; never claim a pre-existing repo just because its name looks right.
+    async provision(db) {
+      const grant = await selected(true);
+      if (!grant) return null;
+      await db.prepare('insert or ignore into backup_vaults (user_id, nonce) values (?, ?)').bind(
+        binding.user,crypto.randomUUID()).run();
+      const row = await db.prepare('select nonce, repo_id from backup_vaults where user_id=?').bind(binding.user).first();
+      const name = 'cube-dash-saves-' + row.nonce.slice(0,8);
+      const description = 'Cube Dash private backup ' + row.nonce;
+      let repo = grant.repos[0];
+      if (row.repo_id) {
+        if (!owned(repo) || repo.id !== row.repo_id)
+          throw new BackupError(403,'Your original backup repository is unavailable. No replacement was created.');
+        return repo.id;
+      }
+      if (!repo) {
+        if (grant.permissions.repository_creation !== 'write')
+          throw new BackupError(403,'Approve the GitHub App repository creation permission to enable backups.');
+        const res = await request('/user/repos',{method:'POST',body:JSON.stringify({name,description,
+          private:true,auto_init:true,has_issues:false,has_projects:false,has_wiki:false})});
+        if (res.status === 422) {
+          // Another login may just have created it; only accept our exact reservation.
+          repo = (await selected()).repos[0];
+        } else if (res.status === 201) repo = await json(res);
+        else throw new BackupError(503,'GitHub could not create your backup. No save was uploaded.');
+      }
+      if (!owned(repo) || repo.name !== name || repo.description !== description)
+        throw new BackupError(409,'Could not confirm the new backup repository. Existing repositories were not changed.');
+      await db.prepare('update backup_vaults set repo_id=? where user_id=? and repo_id is null')
+        .bind(repo.id,binding.user).run();
+      const saved=await db.prepare('select repo_id from backup_vaults where user_id=?').bind(binding.user).first();
+      if (saved.repo_id !== repo.id) throw new BackupError(409,'Backup destination changed.');
+      return repo.id;
+    },
     async read() {
       const {root, branch} = await verify();
       const res = await request(root + '/contents/' + file + '?ref=' + encodeURIComponent(branch));

@@ -54,7 +54,7 @@ test('non-game bytes, share links and oversized streams refused',async()=>{
 });
 test('account endpoints stay off unconfigured, cross-origin writes and mismatched OAuth state fail closed',async()=>{
   const origin='https://example.test', env={PILOT_ORIGIN:origin,PILOT_CLIENT_ID:'fixture',
-    PILOT_CLIENT_SECRET:'fixture',PILOT_USER_ID:'1',PILOT_REPO_ID:'2',SESSIONS:{}};
+    PILOT_CLIENT_SECRET:'fixture',PILOT_USER_ID:'1',PILOT_APP_SLUG:'test-backup',SESSIONS:{}};
   const req=(p,init)=>new Request(origin+'/api/backup/'+p,init);
   assert.equal((await worker.fetch(req('status'),{})).status,503);
   assert.equal((await worker.fetch(req('login',{method:'POST'}),env)).status,403);
