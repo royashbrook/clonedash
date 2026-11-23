@@ -70,6 +70,7 @@ worker.addEventListener("fetch", (event) => {
   if (
     req.method !== "GET" ||
     url.origin !== worker.location.origin ||
+    url.pathname.startsWith("/api/backup/") ||
     url.searchParams.has("update-probe")
   )
     return;

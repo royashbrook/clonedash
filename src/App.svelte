@@ -52,6 +52,8 @@
   import { updateControl, type UpdateCheck } from "./pwa.ts";
   import LevelTransfer from "./LevelTransfer.svelte";
   import SaveMove from "./SaveMove.svelte";
+  import CloudAccount from "./CloudAccount.svelte";
+  let accountOpen = $state(false);
   import { IMPORT, writeBackup, type Backup } from "./backup.ts";
   import { importLevel } from "./transfer.ts";
   import SkinCreator from "./SkinCreator.svelte";
@@ -695,6 +697,7 @@
     if (mode === "loops") loopMaker?.silence(); // a sheet opens over silence, as the loop list's own do
     sheet("More", "", [
       ["HOW TO PLAY", how],
+      ["ACCOUNT", () => { closeSheet(); accountOpen = true; }],
       ...(installVisible ? [["INSTALL", () => installer?.prompt()] as Action] : []),
       ["ABOUT, UPDATES AND YOUR SAVE", about],
     ]);
@@ -2106,6 +2109,7 @@
     </div>
   </section>
 </main>
+<CloudAccount bind:open={accountOpen} trails={LEVELS.length} replace={replaceSave}/>
 <!-- the house bottom bar (kidgames STANDARD: menus only; play and the editor keep the whole screen) -->
 {#if mode === "home" || mode === "library" || mode === "loops" || (mode === "skins" && !drafting)}
   <nav id="dock" aria-label="Cube Dash">
@@ -2699,8 +2703,9 @@
           >
         </div>{/if}
       {#if panel.extra === "about"}<p>
-          no ads, no lives, no timers, nothing to buy, no accounts, no cookies,
-          nothing sold or shared.
+          no ads, no lives, no timers, nothing to buy. Guest progress stays on this device.
+          Optional GitHub sign-in uses a session cookie and backs up saved creations and progress
+          to your private repository. Sign out in Account to stop. Nothing is published.
         </p>
         <p class="build-detail">
           v{__APP_VERSION__} · build {__BUILD_ID__} · source {__SOURCE_SHA__}
